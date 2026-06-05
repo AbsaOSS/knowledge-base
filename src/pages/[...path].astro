@@ -1,0 +1,36 @@
+---
+// src/pages/[...path].astro
+//
+// Catchall route that serves every sub-app HTML file as a static Astro page.
+// getStaticPaths enumerates all HTML files under apps/{slug}/ for every entry
+// in apps.json, so `astro build` outputs them to dist/{slug}/...
+// In `astro dev` the same function runs on demand — no custom middleware needed.
+
+import { readFileSync } from 'node:fs';
+import { ClientRouter } from 'astro:transitions';
+import { getAppPages } from '../utils/apps.js';
+import { transformSubAppHtml } from '../utils/transform.js';
+
+const PREFIX = 'knowledge-base';
+
+export function getStaticPaths() {
+  const headless = process.env.MP_HEADLESS !== 'false';
+  return getAppPages(process.cwd(), headless).map(({ routePath, ...props }) => ({
+    params: { path: routePath },
+    props,
+  }));
+}
+
+const { file, slug, fileRelDir, appHeadless, apps, title, section } = Astro.props;
+const raw  = readFileSync(file, 'utf-8');
+const html = transformSubAppHtml(raw, apps, slug, fileRelDir, PREFIX, appHeadless);
+
+// Split at </head> so we can inject <ClientRouter /> before it closes.
+// This preserves all of transformSubAppHtml's output (URL rewrites, chrome,
+// fragment router, etc.) while making every sub-app page participate in
+// Astro's client-side routing for cross-page transitions.
+const headEnd = html.indexOf('</head>');
+const beforeHeadEnd = headEnd >= 0 ? html.slice(0, headEnd) : html;
+const afterHeadEnd  = headEnd >= 0 ? html.slice(headEnd)   : '';
+---
+<Fragment set:html={beforeHeadEnd} /><ClientRouter /><Fragment set:html={afterHeadEnd} />

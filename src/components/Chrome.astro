@@ -1,0 +1,97 @@
+---
+// src/components/Chrome.astro
+import AppIcon from './AppIcon.astro';
+
+interface App {
+  slug: string;
+  name: string;
+  icon?: string;
+}
+
+interface Props {
+  apps: App[];
+  activeSlug?: string;
+  base?: string;
+}
+
+const { apps, activeSlug = '', base = '/knowledge-base' } = Astro.props;
+const activeApp = apps.find(a => a.slug === activeSlug);
+
+const link = (path: string) => `${base}/${path}`;
+---
+
+<div id="mp-chrome" role="banner">
+  <!-- Brand -->
+  <div class="flex items-center gap-3">
+    <a href={link('index.html')} class="flex items-center gap-2 text-absa-500 hover:opacity-80 transition-opacity no-underline" aria-label="Knowledge base home">
+      <svg width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+        <rect class="logo-brick-1" x="1"  y="1"  width="8" height="8" rx="1.5" fill="currentColor"/>
+        <rect class="logo-brick-2" x="11" y="1"  width="8" height="8" rx="1.5" fill="currentColor" opacity="0.7"/>
+        <rect class="logo-brick-3" x="1"  y="11" width="8" height="8" rx="1.5" fill="currentColor" opacity="0.5"/>
+      </svg>
+    </a>
+    <span class="text-[13px] font-semibold tracking-[-0.01em] select-none" style="color:var(--text-heading)">Docs</span>
+    {activeApp && (
+      <>
+        <span class="text-[13px] select-none" style="color:var(--text-hint)">/</span>
+        <span class="text-[13px] font-medium" style="color:var(--text-body)">{activeApp.name}</span>
+      </>
+    )}
+  </div>
+
+  <!-- Right side: app switcher + theme toggle -->
+  <div class="flex items-center gap-1">
+    <!-- Home link -->
+    <a href={link('index.html')}
+       class="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors hover:bg-gray-100 dark:hover:bg-gray-800 no-underline"
+       style="color:var(--text-muted)"
+       aria-label="Back to marketplace">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+      <span>Marketplace</span>
+    </a>
+
+    <!-- App switcher -->
+    <div id="mp-app-switcher" class="relative">
+      <button
+        onclick="document.getElementById('mp-app-switcher').classList.toggle('open')"
+        class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors hover:bg-gray-100 dark:hover:bg-gray-800"
+        style="color:var(--text-body)"
+        aria-haspopup="listbox"
+        aria-expanded="false"
+        aria-label="Switch documentation app">
+        <AppIcon icon={activeApp?.icon || 'collection'} size={13} />
+        {activeApp
+          ? <span class="hidden sm:inline">{activeApp.name}</span>
+          : <span class="hidden sm:inline">All Apps</span>
+        }
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg>
+      </button>
+      <div id="mp-app-dropdown" role="listbox" aria-label="Documentation apps">
+        {apps.map(app => (
+          <a
+            href={link(`${app.slug}/`)}
+            class={`mp-app-item${app.slug === activeSlug ? ' active' : ''}`}
+            aria-current={app.slug === activeSlug ? 'page' : 'false'}
+          >
+            <AppIcon icon={app.icon || 'book-open'} size={14} />
+            <span>{app.name}</span>
+          </a>
+        ))}
+      </div>
+    </div>
+
+    <!-- Theme toggle -->
+    <button
+      onclick="toggleTheme()"
+      class="p-2 rounded-lg transition-colors hover:bg-gray-100 dark:hover:bg-gray-800"
+      style="color:var(--text-muted)"
+      aria-label="Toggle colour theme">
+      <span class="dark:hidden">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+      </span>
+      <span class="hidden dark:block">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+      </span>
+    </button>
+  </div>
+</div>

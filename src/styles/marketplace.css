@@ -1,0 +1,224 @@
+@import "tailwindcss";
+
+/* Scan templates for class names */
+@source "../src/templates/**/*.js";
+@source "../scripts/**/*.js";
+
+/* ── Class-based dark mode — also covers wf-html.dark used by web-fragments ── */
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* ── ABSA + data-gateway design tokens (canonical source) ───────────────── */
+@theme {
+  /* Brand palette — exact match to data-gateway */
+  --color-absa-25:  #fdf8f9;
+  --color-absa-50:  #f8eaee;
+  --color-absa-100: #f0d0da;
+  --color-absa-400: #d4547a;
+  --color-absa-500: #af144b;
+  --color-absa-600: #93103f;
+  --color-absa-950: #1b0e12;
+
+  /* Typography */
+  --font-sans: Inter, 'Noto Sans', ui-sans-serif, system-ui, sans-serif;
+  --font-mono: 'SF Mono', 'Fira Code', 'Fira Mono', ui-monospace, monospace;
+}
+
+/* ── Semantic CSS variables (light & dark) ─────────────────────────────── */
+/* Note: @tailwindcss/vite compiles :root to :root,:host automatically, so
+   custom properties are available inside shadow DOMs via :host inheritance.
+   Shadow DOM element-level declarations (wf-html, wf-document) and the
+   :host(.dark) dark-mode override are injected as an inline <style> tag by
+   the marketplace Vite plugin — see shadowCompatStyle() in chrome.js.      */
+:root {
+  --bg-page:         theme('colors.absa.25');
+  --bg-card:         #ffffff;
+  --bg-strong:       theme('colors.gray.50');
+  --bg-subtle:       theme('colors.gray.100');
+  --border:          theme('colors.gray.200');
+  --border-subtle:   #f3e7eb;
+  --text-heading:    theme('colors.absa.950');
+  --text-body:       theme('colors.gray.600');
+  --text-muted:      theme('colors.gray.500');
+  --text-hint:       theme('colors.gray.400');
+  --shadow-sm:       0 1px 2px rgba(0,0,0,0.04);
+  --shadow-md:       0 4px 12px rgba(0,0,0,0.08);
+  --shadow-lg:       0 8px 24px rgba(0,0,0,0.12);
+  --radius-sm:       6px;
+  --radius-md:       12px;
+  --radius-lg:       16px;
+  --radius-xl:       20px;
+  --transition:      0.2s;
+  --mp-chrome-h:     56px;
+}
+
+.dark, wf-html.dark {
+  --bg-page:         #0a0d14;
+  --bg-card:         #111827;
+  --bg-strong:       #1f2937;
+  --bg-subtle:       #1a2236;
+  --border:          #1f2937;
+  --border-subtle:   #1a2236;
+  --text-heading:    #ffffff;
+  --text-body:       #d1d5db;
+  --text-muted:      #9ca3af;
+  --text-hint:       #6b7280;
+  --shadow-sm:       0 1px 2px rgba(0,0,0,0.3);
+  --shadow-md:       0 4px 12px rgba(0,0,0,0.4);
+  --shadow-lg:       0 8px 24px rgba(0,0,0,0.5);
+}
+
+/* ── Global base ────────────────────────────────────────────────────────── */
+/* wf-html / wf-body are the web-fragments reframed equivalents of html/body */
+html, wf-html { font-family: var(--font-sans); }
+
+body, wf-body {
+  background-color: var(--bg-page);
+  color: var(--text-body);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* ── Marketplace chrome ─────────────────────────────────────────────────── */
+#mp-chrome {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: var(--mp-chrome-h);
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 1.5rem;
+  background-color: var(--bg-card);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+/* Navigation progress bar: shown while the router is fetching a new page */
+#mp-chrome::after {
+  content: '';
+  position: absolute;
+  bottom: -1px;
+  left: 0;
+  height: 2px;
+  width: 0;
+  background: var(--color-absa-500);
+  opacity: 0;
+  transition: opacity 0.1s, width 0s;
+}
+[data-mp-navigating] #mp-chrome::after {
+  opacity: 1;
+  width: 60%;
+  transition: opacity 0.1s, width 2s cubic-bezier(0.1, 0.05, 0, 1);
+}
+
+/* App-switcher dropdown */
+#mp-app-switcher { position: relative; }
+#mp-app-dropdown {
+  display: none;
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  min-width: 220px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lg);
+  padding: 0.375rem;
+  z-index: 70;
+}
+#mp-app-switcher.open #mp-app-dropdown { display: block; }
+.mp-app-item {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  padding: 0.5rem 0.625rem;
+  border-radius: var(--radius-sm);
+  font-size: 0.875rem;
+  color: var(--text-body);
+  text-decoration: none;
+  transition: background-color var(--transition);
+  white-space: nowrap;
+}
+.mp-app-item:hover  { background: var(--bg-subtle); }
+.mp-app-item.active { background: var(--bg-subtle); color: var(--color-absa-500); font-weight: 600; }
+
+/* Push content below fixed chrome */
+body.mp-wrapped > *:not(#mp-chrome),
+wf-body.mp-wrapped > *:not(#mp-chrome) { padding-top: var(--mp-chrome-h); }
+
+/* When sub-site has its own fixed sidebar, re-anchor it below chrome */
+body.mp-wrapped #sidebar,
+wf-body.mp-wrapped #sidebar { top: var(--mp-chrome-h) !important; }
+
+/* ── ABSA brick logo animations (from data-gateway) ─────────────────────── */
+@keyframes brick-1 {
+  from { transform: translate(8px, -8px); opacity: 0; }
+  to   { transform: translate(0, 0);      opacity: 1; }
+}
+@keyframes brick-2 {
+  from { transform: translateX(12px); opacity: 0; }
+  to   { transform: translate(0, 0);  opacity: 1; }
+}
+@keyframes brick-3 {
+  from { transform: translate(6px, 8px); opacity: 0; }
+  to   { transform: translate(0, 0);     opacity: 1; }
+}
+.logo-brick-1 { animation: brick-1 0.5s cubic-bezier(0.34,1.56,0.64,1) 0.05s both; }
+.logo-brick-2 { animation: brick-2 0.5s cubic-bezier(0.34,1.56,0.64,1) 0.18s both; }
+.logo-brick-3 { animation: brick-3 0.5s cubic-bezier(0.34,1.56,0.64,1) 0.31s both; }
+
+/* ── Fade-up animation ───────────────────────────────────────────────────── */
+@keyframes fade-up {
+  from { transform: translateY(28px); opacity: 0; }
+  to   { transform: translateY(0);    opacity: 1; }
+}
+.animate-fade-up { animation: fade-up 0.6s cubic-bezier(0.16,1,0.3,1) both; }
+.delay-1 { animation-delay: 0.1s; }
+.delay-2 { animation-delay: 0.2s; }
+.delay-3 { animation-delay: 0.3s; }
+.delay-4 { animation-delay: 0.4s; }
+
+/* ── Landing page card grid ──────────────────────────────────────────────── */
+.mp-card {
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 1.5rem;
+  text-decoration: none;
+  transition: box-shadow var(--transition), border-color var(--transition), transform var(--transition);
+  box-shadow: var(--shadow-sm);
+}
+.mp-card:hover {
+  box-shadow: var(--shadow-md);
+  border-color: var(--color-absa-100);
+  transform: translateY(-2px);
+}
+.dark .mp-card:hover { border-color: var(--color-absa-950); }
+
+.mp-card-icon {
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: var(--radius-md);
+  background: var(--bg-subtle);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 1rem;
+  color: var(--color-absa-500);
+}
+
+/* ── Tag pills ───────────────────────────────────────────────────────────── */
+.mp-tag {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 9999px;
+  font-size: 0.6875rem;
+  font-weight: 500;
+  background: var(--bg-subtle);
+  color: var(--text-muted);
+  border: 1px solid var(--border);
+}

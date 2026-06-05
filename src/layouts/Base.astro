@@ -1,0 +1,38 @@
+---
+// src/layouts/Base.astro
+import '../styles/marketplace.css';
+import { ClientRouter } from 'astro:transitions';
+import { shadowCompatStyle } from '../templates/chrome.js';
+
+interface Props {
+  title?: string;
+  headless?: boolean;
+  bodyClass?: string;
+}
+
+const {
+  title = 'ABSA Knowledge base',
+  headless = false,
+  bodyClass = '',
+} = Astro.props;
+
+const HEADLESS = process.env.MP_HEADLESS !== 'false';
+const effectiveHeadless = headless || HEADLESS;
+---
+
+<!DOCTYPE html>
+<html lang="en" data-mp-headless={effectiveHeadless ? 'true' : undefined}>
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="ABSA documentation marketplace — browse all internal doc sites in one place." />
+  <title>{title}</title>
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,400;0,14..32,500;0,14..32,600;0,14..32,700&display=swap" rel="stylesheet" />
+  <ClientRouter />
+</head>
+<body class={`${effectiveHeadless ? '' : 'mp-wrapped '}min-h-screen flex flex-col${bodyClass ? ' ' + bodyClass : ''}`} style="background-color:var(--bg-page)">
+  <slot />
+  <Fragment set:html={shadowCompatStyle} />
+</body>
+</html>

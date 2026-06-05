@@ -1,0 +1,10 @@
+node_modules/
+dist/
+tmp/
+apps/
+.env
+*.tar.gz
+playwright-report/
+test-results/
+.astro/
+public/
