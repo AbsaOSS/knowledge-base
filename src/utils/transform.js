@@ -36,7 +36,7 @@ function resolveUrl(url, base, prefix, slug) {
  *
  * @param {string} html
  * @param {string} prefix  - e.g. 'knowledge-base'
- * @param {string} slug    - app slug, e.g. 'lum'
+ * @param {string} slug    - app slug, e.g. 'my-app'
  * @param {string} fileRelDir - path of the HTML file relative to the app root,
  *                              e.g. '' for index.html, 'getting-started' for
  *                              getting-started/index.html

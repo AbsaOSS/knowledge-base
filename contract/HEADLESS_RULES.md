@@ -63,7 +63,7 @@ The optional `pages` array tells the marketplace the **exact set of routes** you
 | `order` | ✅ | Integer sort position (lower = higher up) |
 | `section` | ☐ | Optional sidebar section/group heading |
 
-> **Note:** `pages` should be written into `dist/marketplace.json` (not the root `marketplace.json`) by your build script at build time. See `cps-docs-example/pack.sh` for a reference implementation that generates this from MkDocs navigation config.
+> **Note:** `pages` should be written into `dist/marketplace.json` (not the root `marketplace.json`) by your build script at build time. See the example app for a reference implementation that generates this from MkDocs navigation config.
 >
 > If `pages` is absent the marketplace falls back to crawling all `.html` files in `dist/` — existing apps require no changes.
 
@@ -107,13 +107,13 @@ The `<body>` of each doc page must follow this structure:
 
 ---
 
-## Required: ABSA design tokens
+## Required: design tokens
 
-Your CSS must define (or import) the canonical ABSA design tokens.  
+Your CSS must define (or import) the canonical design tokens.  
 At minimum the following CSS custom properties must be present:
 
 ```css
---color-absa-500, --color-absa-600
+--color-kb-500, --color-kb-600
 --bg-page, --bg-card, --bg-subtle, --bg-strong
 --border, --border-subtle
 --text-heading, --text-body, --text-muted
@@ -141,7 +141,7 @@ on:
 
 jobs:
   release:
-    uses: absa-group/knowledge-base/.github/workflows/validate-doc-app.yml@main
+    uses: AbsaOSS/knowledge-base/.github/workflows/validate-doc-app.yml@main
     secrets: inherit
 ```
 
@@ -157,5 +157,5 @@ Before opening a PR to add your app to `apps.json`:
 - [ ] No `<header class="fixed top-0...">` present in any headless HTML page
 - [ ] `data-mp-headless="true"` is on the `<html>` element
 - [ ] All asset paths are relative (no leading `/`)
-- [ ] ABSA design tokens are defined in your CSS
+- [ ] Design tokens are defined in your CSS
 - [ ] A GitHub Release with `dist.tar.gz` exists on your repo

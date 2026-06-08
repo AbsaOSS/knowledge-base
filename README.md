@@ -1,16 +1,14 @@
 # knowledge-base
 
-> A unified ABSA documentation portal — wraps independently-maintained doc apps into
+> A unified documentation portal — wraps independently-maintained doc apps into
 > a single deployable with a persistent branded chrome.
-
-[![Build & Deploy](https://github.com/absa-group/knowledge-base/actions/workflows/build-deploy.yml/badge.svg)](https://github.com/absa-group/knowledge-base/actions/workflows/build-deploy.yml)
 
 ---
 
 ## What it is
 
 `knowledge-base` is a **build-time aggregator** for static documentation sites hosted
-across multiple GitHub repositories within the `absa-group` org.
+across multiple GitHub repositories.
 
 At build time it:
 1. Downloads each registered app's **GitHub Release artifact** (`dist.tar.gz`)
@@ -31,7 +29,7 @@ Browser  →  https://docs.internal/
                   ▼
        ┌──────────────────────────────┐
        │   Marketplace top chrome     │  ← injected at build time
-       │   [ABSA Logo] Docs / LUM ▾  │     persists on every page
+       │   [Logo] Docs / App ▾       │     persists on every page
        └──────────────────────────────┘
        │                              │
        │   Sub-site content           │  ← from dist/apps/{slug}/
@@ -51,7 +49,7 @@ Apps are listed in [`apps.json`](apps.json):
 
 | App | Slug | Repo | URL |
 |---|---|---|---|
-| LUM Documentation | `lum` | [absa-group/cps-docs](https://github.com/absa-group/cps-docs) | `/apps/lum/` |
+| Example Docs | `example` | `AbsaOSS/example-docs` | `/apps/example/` |
 
 ---
 
@@ -59,7 +57,7 @@ Apps are listed in [`apps.json`](apps.json):
 
 ### Prerequisites
 - Node.js ≥ 20
-- `gh` CLI authenticated to `absa-group` (or `GITHUB_TOKEN` env var set)
+- `gh` CLI authenticated (or `GITHUB_TOKEN` env var set)
 
 ### Build with live artifacts
 
@@ -75,8 +73,8 @@ If you've already run a full build or have manually placed artifacts:
 
 ```bash
 # Place a headless-built dist/ under tmp/apps/{slug}/dist/
-mkdir -p tmp/apps/lum
-# ... copy dist/ from cps-docs headless build ...
+mkdir -p tmp/apps/my-app
+# ... copy dist/ from a headless doc build ...
 
 npm run build:dev -- --local
 ```
@@ -91,7 +89,7 @@ npm run build:dev -- --local
 2. **In this repo:** add an entry to `apps.json`:
    ```json
    {
-     "repo": "absa-group/my-new-docs",
+     "repo": "AbsaOSS/my-new-docs",
      "slug": "my-app",
      "name": "My App Documentation",
      "description": "What this app documents.",
@@ -113,7 +111,7 @@ All apps must comply with the marketplace contract before they can be registered
 |---|---|
 | [`contract/schema.json`](contract/schema.json) | JSON Schema for `marketplace.json` |
 | [`contract/HEADLESS_RULES.md`](contract/HEADLESS_RULES.md) | Structural requirements (headless HTML, relative paths, etc.) |
-| [`contract/STYLE_GUIDE.md`](contract/STYLE_GUIDE.md) | Visual style requirements (ABSA tokens, typography, dark mode) |
+| [`contract/STYLE_GUIDE.md`](contract/STYLE_GUIDE.md) | Visual style requirements (design tokens, typography, dark mode) |
 
 ### Quick checklist
 - [ ] `marketplace.json` in repo root, validates against `contract/schema.json`
@@ -121,7 +119,7 @@ All apps must comply with the marketplace contract before they can be registered
 - [ ] `data-mp-headless="true"` on `<html>` in headless output
 - [ ] No fixed site-level `<header>` in headless output
 - [ ] All asset paths are relative (no leading `/`)
-- [ ] ABSA design tokens (`--color-absa-500` etc.) in CSS
+- [ ] Design tokens (`--color-kb-500` etc.) in CSS
 - [ ] GitHub Release tagged `v*` with `dist.tar.gz` asset
 - [ ] References the marketplace's reusable `validate-doc-app.yml` workflow
 
@@ -137,7 +135,7 @@ on: [push, pull_request]
 
 jobs:
   validate:
-    uses: absa-group/knowledge-base/.github/workflows/validate-doc-app.yml@main
+    uses: AbsaOSS/knowledge-base/.github/workflows/validate-doc-app.yml@main
     secrets: inherit
 ```
 
@@ -275,7 +273,7 @@ knowledge-base/
 ├── apps.json                    ← Registry of all doc apps
 ├── package.json
 ├── src/
-│   ├── input.css                ← ABSA design tokens + marketplace styles
+│   ├── input.css                ← Design tokens + marketplace styles
 │   └── templates/
 │       ├── chrome.js            ← Persistent top nav HTML template
 │       └── landing.js           ← Catalog landing page template

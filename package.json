@@ -1,7 +1,7 @@
 {
   "name": "knowledge-base",
   "version": "1.0.0",
-  "description": "ABSA Knowledge base — wraps multiple doc apps into a single deployable",
+  "description": "Knowledge base — wraps multiple doc apps into a single deployable",
   "type": "module",
   "engines": {
     "node": ">=24"

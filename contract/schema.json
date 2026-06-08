@@ -1,6 +1,6 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "$id": "https://github.com/absa-group/knowledge-base/contract/schema.json",
+  "$id": "contract/schema.json",
   "title": "marketplace.json",
   "description": "Metadata manifest required in every doc app repo to be included in the docs marketplace.",
   "type": "object",
