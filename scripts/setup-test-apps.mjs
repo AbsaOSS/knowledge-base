@@ -1,18 +1,18 @@
 /**
  * setup-test-apps.mjs
  *
- * Generates a hermetic apps.json for the E2E test harness.
+ * Regenerates the hermetic apps.json used by the E2E test harness.
  *
- * apps.json is gitignored (it normally points at private GitHub repos), so the
- * tests can't rely on a checked-in one. This script writes a registry that uses
- * the local `knowledge-base-docs-example` prebuilt artifact — twice, under two
- * slugs — so the suite can exercise both the landing catalog and cross-app
- * navigation without any network access or per-app build toolchain.
+ * The committed apps.json is this script's output; the Playwright webServer runs
+ * it before every build so the registry stays in sync. It registers the vendored
+ * docs-example fixture twice (two slugs) so the suite can exercise both the
+ * landing catalog and cross-app navigation — no network, no GITHUB_TOKEN, no
+ * sibling repo or per-app build toolchain.
  *
  * The `prebuilt` field is consumed by scripts/build-vite.js (preparePrebuilt).
  *
- * Override the example location with KB_EXAMPLE_ARTIFACT (absolute path or path
- * relative to the repo root) — e.g. to point at a different doc app's dist.tar.gz.
+ * Override the artifact with KB_EXAMPLE_ARTIFACT (absolute path or path relative
+ * to the repo root) — e.g. to point at a different doc app's dist.tar.gz / dist.
  */
 
 import { writeFileSync, existsSync } from 'node:fs';
@@ -22,14 +22,16 @@ import { fileURLToPath } from 'node:url';
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(__dirname, '..');
 
-const DEFAULT_ARTIFACT = '../knowledge-base-docs-example/dist.tar.gz';
+// Vendored fixture (committed under tests/fixtures/) keeps the build + tests fully
+// hermetic — no sibling repo, no network, no GITHUB_TOKEN.
+const DEFAULT_ARTIFACT = 'tests/fixtures/docs-example.dist.tar.gz';
 const artifact = process.env.KB_EXAMPLE_ARTIFACT || DEFAULT_ARTIFACT;
 const artifactAbs = isAbsolute(artifact) ? artifact : resolve(ROOT, artifact);
 
 if (!existsSync(artifactAbs)) {
   console.error(
     `\x1b[31m✗ Example artifact not found:\x1b[0m ${artifactAbs}\n` +
-    `  Expected the prebuilt docs example at ../knowledge-base-docs-example/dist.tar.gz\n` +
+    `  Expected the vendored fixture at tests/fixtures/docs-example.dist.tar.gz\n` +
     `  or set KB_EXAMPLE_ARTIFACT to a dist.tar.gz / dist directory.`,
   );
   process.exit(1);
@@ -41,7 +43,7 @@ const apps = [
   {
     slug: 'user-guide',
     name: 'User Guide',
-    description: 'Primary docs app — the knowledge-base-docs-example used as the integration guinea pig.',
+    description: 'Primary docs app — the vendored docs-example fixture used as the integration guinea pig.',
     icon: 'book-open',
     tags: ['guide', 'getting-started'],
     prebuilt: artifact,

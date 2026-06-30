@@ -2,9 +2,9 @@ node_modules/
 dist/
 tmp/
 apps/
-apps.json
 .env
 *.tar.gz
+!tests/fixtures/*.tar.gz
 playwright-report/
 test-results/
 .astro/
