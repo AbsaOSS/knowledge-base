@@ -45,7 +45,7 @@ export function chromeHtml(apps, activeSlug = '', rootRel = '/', prefix = '') {
   return `<div id="mp-chrome" role="banner">
   <!-- Brand -->
   <div class="flex items-center gap-3">
-    <a href="${link('index.html')}" class="flex items-center gap-2 text-absa-500 hover:opacity-80 transition-opacity no-underline" aria-label="Knowledge base home">
+    <a href="${link('index.html')}" class="flex items-center gap-2 text-kb-500 hover:opacity-80 transition-opacity no-underline" aria-label="Knowledge base home">
       ${BRICKS_SM}
     </a>
     <span class="text-[13px] font-semibold tracking-[-0.01em] select-none" style="color:var(--text-heading)">Knowledge base</span>
@@ -328,7 +328,7 @@ export const chromeScript = `
  */
 export const shadowCompatStyle = `
 <style>
-wf-html,wf-document{--color-absa-25:#fdf8f9;--color-absa-50:#f8eaee;--color-absa-100:#f0d0da;--color-absa-400:#d4547a;--color-absa-500:#af144b;--color-absa-600:#93103f;--color-absa-950:#1b0e12;--font-sans:Inter,"Noto Sans",ui-sans-serif,system-ui,sans-serif;--font-mono:"SF Mono","Fira Code","Fira Mono",ui-monospace,monospace;--bg-page:#fdf8f9;--bg-card:#fff;--bg-strong:oklch(98.5% .002 247.839);--bg-subtle:oklch(96.7% .003 264.542);--border:oklch(92.8% .006 264.531);--border-subtle:#f3e7eb;--text-heading:#1b0e12;--text-body:oklch(44.6% .03 256.802);--text-muted:oklch(55.1% .027 264.364);--text-hint:oklch(70.7% .022 261.325);--shadow-sm:0 1px 2px rgba(0,0,0,.04);--shadow-md:0 4px 12px rgba(0,0,0,.08);--shadow-lg:0 8px 24px rgba(0,0,0,.12);--radius-sm:6px;--radius-md:12px;--radius-lg:16px;--radius-xl:20px;--transition:.2s;--mp-chrome-h:56px}
+wf-html,wf-document{--color-kb-25:#fdf8f9;--color-kb-50:#f8eaee;--color-kb-100:#f0d0da;--color-kb-400:#d4547a;--color-kb-500:#af144b;--color-kb-600:#93103f;--color-kb-950:#1b0e12;--font-sans:Inter,"Noto Sans",ui-sans-serif,system-ui,sans-serif;--font-mono:"SF Mono","Fira Code","Fira Mono",ui-monospace,monospace;--bg-page:#fdf8f9;--bg-card:#fff;--bg-strong:oklch(98.5% .002 247.839);--bg-subtle:oklch(96.7% .003 264.542);--border:oklch(92.8% .006 264.531);--border-subtle:#f3e7eb;--text-heading:#1b0e12;--text-body:oklch(44.6% .03 256.802);--text-muted:oklch(55.1% .027 264.364);--text-hint:oklch(70.7% .022 261.325);--shadow-sm:0 1px 2px rgba(0,0,0,.04);--shadow-md:0 4px 12px rgba(0,0,0,.08);--shadow-lg:0 8px 24px rgba(0,0,0,.12);--radius-sm:6px;--radius-md:12px;--radius-lg:16px;--radius-xl:20px;--transition:.2s;--mp-chrome-h:56px}
 :host(.dark),wf-html.dark{--bg-page:#0a0d14;--bg-card:#111827;--bg-strong:#1f2937;--bg-subtle:#1a2236;--border:#1f2937;--border-subtle:#1a2236;--text-heading:#fff;--text-body:#d1d5db;--text-muted:#9ca3af;--text-hint:#6b7280;--shadow-sm:0 1px 2px rgba(0,0,0,.3);--shadow-md:0 4px 12px rgba(0,0,0,.4);--shadow-lg:0 8px 24px rgba(0,0,0,.5)}
 </style>`.trim();
 

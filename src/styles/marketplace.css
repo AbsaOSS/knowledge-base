@@ -7,16 +7,16 @@
 /* ── Class-based dark mode — also covers wf-html.dark used by web-fragments ── */
 @custom-variant dark (&:where(.dark, .dark *));
 
-/* ── ABSA + data-gateway design tokens (canonical source) ───────────────── */
+/* ── Design tokens ──────────────────────────────────────────────────────── */
 @theme {
-  /* Brand palette — exact match to data-gateway */
-  --color-absa-25:  #fdf8f9;
-  --color-absa-50:  #f8eaee;
-  --color-absa-100: #f0d0da;
-  --color-absa-400: #d4547a;
-  --color-absa-500: #af144b;
-  --color-absa-600: #93103f;
-  --color-absa-950: #1b0e12;
+  /* Brand palette */
+  --color-kb-25:  #fdf8f9;
+  --color-kb-50:  #f8eaee;
+  --color-kb-100: #f0d0da;
+  --color-kb-400: #d4547a;
+  --color-kb-500: #af144b;
+  --color-kb-600: #93103f;
+  --color-kb-950: #1b0e12;
 
   /* Typography */
   --font-sans: Inter, 'Noto Sans', ui-sans-serif, system-ui, sans-serif;
@@ -30,13 +30,13 @@
    :host(.dark) dark-mode override are injected as an inline <style> tag by
    the marketplace Vite plugin — see shadowCompatStyle() in chrome.js.      */
 :root {
-  --bg-page:         theme('colors.absa.25');
+  --bg-page:         theme('colors.kb.25');
   --bg-card:         #ffffff;
   --bg-strong:       theme('colors.gray.50');
   --bg-subtle:       theme('colors.gray.100');
   --border:          theme('colors.gray.200');
   --border-subtle:   #f3e7eb;
-  --text-heading:    theme('colors.absa.950');
+  --text-heading:    theme('colors.kb.950');
   --text-body:       theme('colors.gray.600');
   --text-muted:      theme('colors.gray.500');
   --text-hint:       theme('colors.gray.400');
@@ -102,7 +102,7 @@ body, wf-body {
   left: 0;
   height: 2px;
   width: 0;
-  background: var(--color-absa-500);
+  background: var(--color-kb-500);
   opacity: 0;
   transition: opacity 0.1s, width 0s;
 }
@@ -141,7 +141,7 @@ body, wf-body {
   white-space: nowrap;
 }
 .mp-app-item:hover  { background: var(--bg-subtle); }
-.mp-app-item.active { background: var(--bg-subtle); color: var(--color-absa-500); font-weight: 600; }
+.mp-app-item.active { background: var(--bg-subtle); color: var(--color-kb-500); font-weight: 600; }
 
 /* Push content below fixed chrome */
 body.mp-wrapped > *:not(#mp-chrome),
@@ -151,7 +151,7 @@ wf-body.mp-wrapped > *:not(#mp-chrome) { padding-top: var(--mp-chrome-h); }
 body.mp-wrapped #sidebar,
 wf-body.mp-wrapped #sidebar { top: var(--mp-chrome-h) !important; }
 
-/* ── ABSA brick logo animations (from data-gateway) ─────────────────────── */
+/* ── Logo brick animations ──────────────────────────────────────────────── */
 @keyframes brick-1 {
   from { transform: translate(8px, -8px); opacity: 0; }
   to   { transform: translate(0, 0);      opacity: 1; }
@@ -193,10 +193,10 @@ wf-body.mp-wrapped #sidebar { top: var(--mp-chrome-h) !important; }
 }
 .mp-card:hover {
   box-shadow: var(--shadow-md);
-  border-color: var(--color-absa-100);
+  border-color: var(--color-kb-100);
   transform: translateY(-2px);
 }
-.dark .mp-card:hover { border-color: var(--color-absa-950); }
+.dark .mp-card:hover { border-color: var(--color-kb-950); }
 
 .mp-card-icon {
   width: 2.5rem;
@@ -207,7 +207,7 @@ wf-body.mp-wrapped #sidebar { top: var(--mp-chrome-h) !important; }
   align-items: center;
   justify-content: center;
   margin-bottom: 1rem;
-  color: var(--color-absa-500);
+  color: var(--color-kb-500);
 }
 
 /* ── Tag pills ───────────────────────────────────────────────────────────── */

@@ -1,23 +1,23 @@
 # Style Guide
 
 All doc apps in the marketplace must produce pages that are visually consistent with the
-ABSA / data-gateway design system. This guide defines the required visual standards.
+the knowledge-base design system. This guide defines the required visual standards.
 
 ---
 
 ## Color palette
 
-Use only the canonical ABSA brand palette. Do **not** introduce custom brand colors.
+Use only the canonical brand palette. Do **not** introduce custom brand colors.
 
 | Token | Hex | Usage |
 |---|---|---|
-| `--color-absa-500` | `#af144b` | Primary brand, links, active states, focus rings |
-| `--color-absa-600` | `#93103f` | Hover state for primary elements |
-| `--color-absa-400` | `#d4547a` | Accents, secondary highlights |
-| `--color-absa-100` | `#f0d0da` | Subtle tint backgrounds (light mode) |
-| `--color-absa-50`  | `#f8eaee` | Very light tint |
-| `--color-absa-25`  | `#fdf8f9` | Page background (light mode) |
-| `--color-absa-950` | `#1b0e12` | Heading text (light mode) |
+| `--color-kb-500` | `#af144b` | Primary brand, links, active states, focus rings |
+| `--color-kb-600` | `#93103f` | Hover state for primary elements |
+| `--color-kb-400` | `#d4547a` | Accents, secondary highlights |
+| `--color-kb-100` | `#f0d0da` | Subtle tint backgrounds (light mode) |
+| `--color-kb-50`  | `#f8eaee` | Very light tint |
+| `--color-kb-25`  | `#fdf8f9` | Page background (light mode) |
+| `--color-kb-950` | `#1b0e12` | Heading text (light mode) |
 
 Do **not** use raw hex values for brand colors in your styles — always reference the tokens.
 
@@ -95,11 +95,11 @@ Required dark-mode variable overrides (copy from `src/input.css`):
 
 ### Links
 ```css
-color: var(--color-absa-500);
+color: var(--color-kb-500);
 text-decoration: none;
 /* hover */
 text-decoration: underline;
-color: var(--color-absa-600);
+color: var(--color-kb-600);
 ```
 
 ### Code blocks
@@ -130,7 +130,7 @@ background: var(--bg-strong);
 
 ### Blockquotes
 ```css
-border-left: 4px solid var(--color-absa-500);
+border-left: 4px solid var(--color-kb-500);
 background: var(--bg-subtle);
 border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
 padding: 0.75rem 1rem;
@@ -141,7 +141,7 @@ padding: 0.75rem 1rem;
 ## Accessibility
 
 - All interactive elements must have accessible names (`aria-label` or visible text)
-- Focus rings must use `--color-absa-500` with sufficient contrast
+- Focus rings must use `--color-kb-500` with sufficient contrast
 - Images must have `alt` attributes
 - Sidebar navigation must use `<nav>` with `aria-label="Documentation"`
 
@@ -149,7 +149,7 @@ padding: 0.75rem 1rem;
 
 ## Checklist
 
-- [ ] Only ABSA brand color tokens used (no raw hex brand colors)
+- [ ] Only brand color tokens used (no raw hex brand colors)
 - [ ] Inter font loaded
 - [ ] Both light and dark CSS variable sets defined
 - [ ] `id="sidebar"` present on the left navigation

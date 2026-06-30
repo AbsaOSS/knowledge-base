@@ -2,6 +2,7 @@ node_modules/
 dist/
 tmp/
 apps/
+apps.json
 .env
 *.tar.gz
 playwright-report/
