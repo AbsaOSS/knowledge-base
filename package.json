@@ -18,6 +18,9 @@
     "preview:local": "MP_HEADLESS=false astro preview",
     "preview:local:headless": "MP_HEADLESS=true astro preview",
     "preview:embedded": "MP_HEADLESS=true astro preview",
+    "test:apps": "node scripts/setup-test-apps.mjs",
+    "serve:test": "node tests/fragment-server.mjs",
+    "host:test": "node tests/host/server.mjs",
     "test": "npx playwright test",
     "test:ui": "npx playwright test --ui",
     "test:headed": "npx playwright test --headed",
@@ -36,7 +39,9 @@
     "@types/node": "^25.6.0",
     "astro": "^5.0.0",
     "chokidar": "^5.0.0",
+    "express": "^4.22.2",
     "tailwindcss": "^4.0.0",
-    "typescript": "^5.9.3"
+    "typescript": "^5.9.3",
+    "web-fragments": "^0.8.2"
   }
 }

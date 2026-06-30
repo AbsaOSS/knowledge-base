@@ -26,7 +26,7 @@ npm run dev:fetch                    # fetch artifacts then start dev
 npm run preview                      # preview built output
 npm run preview:embedded             # headless preview (no compression, for web-fragments)
 
-# Test (Playwright E2E — needs web-fragments gateway running on :4201)
+# Test (Playwright E2E — self-contained; auto-starts both servers)
 npm test                             # headless
 npm run test:ui                      # Playwright UI
 npm run test:headed                  # visible browser
@@ -90,9 +90,31 @@ Apps registered in `apps.json` must comply with:
 
 ## Testing
 
-Playwright tests run against the web-fragments gateway at `https://localhost:4201`. The `webServer` config auto-starts knowledge-base on `:3000` via `build:local:headless + preview:embedded`. The gateway must be started separately.
+Self-contained Playwright E2E — `npm test` auto-starts everything (no external gateway):
 
-Tests exercise shadow DOM penetration (`wf-html`, `wf-document` custom elements), fragment lifecycle, and marketplace navigation.
+1. **:3000 fragment** — `scripts/setup-test-apps.mjs` writes a hermetic `apps.json` that
+   registers the local `../knowledge-base-docs-example` prebuilt `dist.tar.gz` twice
+   (slugs `user-guide` + `guide-mirror`, for cross-app nav). `build:headless` builds it;
+   `tests/fragment-server.mjs` serves `dist/` mirroring the production **nginx** rewrites
+   (`/__wf/knowledge-base/*` → `/knowledge-base/*`). NB: `astro preview` is NOT used — its
+   Vite `configurePreviewServer` rewrite hook does not run for static output, so the
+   marketplace CSS 404s; the nginx-mirror server is the faithful fragment endpoint.
+2. **:4201 host** — `tests/host/server.mjs`, a minimal Express "wrapping web-fragment
+   application" (`FragmentGateway` + `getNodeMiddleware`) that proxies/embeds the :3000
+   fragment on a single origin via `<web-fragment fragment-id="knowledge-base">`.
+
+Tests drive the host origin (`http://localhost:4201`). Suites (`tests/`):
+- `build-integrity.spec.js` — `dist/` output: both apps enumerated, absolute URL rewriting,
+  headless markup, stable `dist/style.css` (the marketplace CSS the sub-app pages reference).
+- `web-fragment.spec.js` — shadow-DOM isolation (reframed `wf-html`/`wf-body`; chrome must
+  not leak in), routing + smooth no-reload SPA transitions, cross-app navigation, asset
+  loading (no host-origin 404s), and the documented history limitation (fragment routing is
+  internal to the reframed `wf:<id>` iframe and is not mirrored to top-window history).
+- `support/fragment.js` — shadow-DOM traversal + reframed-body wait/query helpers.
+
+Two build-pipeline pieces support this: `apps.json` entries may carry a `prebuilt` path
+(tarball or dist dir) consumed by `scripts/build-vite.js` (`preparePrebuilt`) for hermetic
+offline builds; and the build aliases the bundled marketplace CSS to a stable `dist/style.css`.
 
 ## Environment Variables
 
