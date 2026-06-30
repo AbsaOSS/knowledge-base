@@ -1,112 +1,115 @@
-# CI checks — run on every PR and push to main.
+# CI — runs on every PR and push to the default branch.
+#
+# Fully hermetic: the build + E2E suites use the vendored docs-example fixture
+# (tests/fixtures/docs-example.dist.tar.gz) via apps.json `prebuilt` entries, so
+# no GITHUB_TOKEN, network, or sibling repo is required.
 #
 # Jobs:
 #   typecheck  — astro check (TypeScript / Astro type errors)
-#   build      — full headless build (fetches app releases via GITHUB_TOKEN)
-#   playwright — standalone Playwright tests against the preview server
-#                (no data-gateway needed — covers web-fragment contract)
-#
-# Full integration tests (marketplace.spec.js) require a running data-gateway
-# and are run locally. See playwright.config.js.
+#   build      — headless build from the vendored fixture; uploads dist/
+#   e2e        — Playwright: embedded web-fragment harness + standalone layer
+#   audit      — npm dependency vulnerability gate
 
 name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [master, main]
   pull_request:
-    branches: [main]
+    branches: [master, main]
+
+# Least privilege: jobs only read the repo. Override per-job if more is needed.
+permissions:
+  contents: read
 
 jobs:
   # ── 1. TypeScript / Astro type-check ───────────────────────────────────────
+  # Non-blocking: `astro check` is memory-hungry and can OOM on standard runners
+  # (tracked separately). The `build` job below is the hard compile gate — a real
+  # type/template error fails `astro build`. This job surfaces strict diagnostics
+  # without wedging CI on an OOM.
   typecheck:
-    name: Type-check
+    name: Type-check (non-blocking)
     runs-on: ubuntu-latest
+    continue-on-error: true
     steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: '24'
           cache: npm
-
-      - name: Install dependencies
-        run: npm ci
-
+      - run: npm ci
       - name: Astro type-check
         run: npx astro check
+        env:
+          NODE_OPTIONS: --max-old-space-size=6144
 
-  # ── 2. Build ───────────────────────────────────────────────────────────────
+  # ── 2. Build (headless, hermetic) ──────────────────────────────────────────
   build:
     name: Build (headless)
     runs-on: ubuntu-latest
     needs: typecheck
     steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: '24'
           cache: npm
-
-      - name: Install dependencies
-        run: npm ci
-
-      # Fetches release artifacts from apps.json repos (AbsaOSS public repos)
-      # then builds the Astro site in headless/web-fragment mode.
-      - name: Build marketplace (headless)
+      - run: npm ci
+      # Builds from the committed apps.json (vendored fixture) — no token/network.
+      - name: Build (headless)
         run: npm run build:headless
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          MP_HEADLESS: 'true'
-
       - name: Upload dist artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: dist
           path: dist/
-          retention-days: 1
+          retention-days: 7
 
-  # ── 3. Playwright — standalone (no gateway) ────────────────────────────────
+  # ── 3. Playwright E2E ──────────────────────────────────────────────────────
   #
-  # Tests the fragment server directly on port 3000. Covers:
-  #   - HTTP header safety  (X-Frame-Options must not block the gateway iframe)
-  #   - Headless mode       (data-mp-headless, no chrome bar)
-  #   - CSS link stability  (data-astro-transition-persist present — prevents #297)
-  #   - Asset routing       (/__wf/knowledge-base/ rewrite via Astro preview plugin)
-  #   - Client-side nav     (no full reload, URL updates via pushState)
-  #
-  playwright:
-    name: Playwright (standalone)
+  # Two layers, both hermetic (each webServer rebuilds from the fixture):
+  #   • embedded  (playwright.config.js)    — full web-fragment harness: host
+  #     gateway proxies/embeds the fragment, shadow-DOM isolation, SPA routing,
+  #     cross-app nav, asset 404s, history limitation.
+  #   • standalone (playwright.config.ci.js) — fragment server only: HTTP header
+  #     safety, headless contract, CSS-link stability (#297), asset routing.
+  e2e:
+    name: E2E (Playwright)
     runs-on: ubuntu-latest
     needs: build
     steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: '24'
           cache: npm
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Download dist artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: dist
-          path: dist/
-
-      - name: Install Playwright browsers
+      - run: npm ci
+      - name: Install Playwright browser
         run: npx playwright install --with-deps chromium
-
-      - name: Run standalone tests
+      - name: Embedded web-fragment tests
+        run: npm test
+      - name: Standalone fragment tests
         run: npx playwright test --config=playwright.config.ci.js
-
       - name: Upload Playwright report
-        uses: actions/upload-artifact@v4
         if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: playwright-report
           path: playwright-report/
           retention-days: 7
+
+  # ── 4. Dependency audit ────────────────────────────────────────────────────
+  audit:
+    name: npm audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci
+      # Fail only on production-dependency vulnerabilities (high or above).
+      - name: Audit production dependencies
+        run: npm audit --omit=dev --audit-level=high

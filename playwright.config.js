@@ -16,6 +16,10 @@ import { defineConfig, devices } from '@playwright/test';
  */
 export default defineConfig({
   testDir: './tests',
+  // standalone.spec.js targets the fragment server directly on :3000 — it has its
+  // own config (playwright.config.ci.js). This embedded config drives the host
+  // gateway on :4201, so exclude it here.
+  testIgnore: '**/standalone.spec.js',
   fullyParallel: false, // fragments share DOM/history — keep navigation sequential
   retries: process.env.CI ? 1 : 0,
   workers: 1,

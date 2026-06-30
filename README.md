@@ -1,268 +1,247 @@
 # knowledge-base
 
-> A unified documentation portal — wraps independently-maintained doc apps into
-> a single deployable with a persistent branded chrome.
+> A unified documentation portal — wraps independently-maintained doc apps into a
+> single deployable with a persistent branded chrome, and can be embedded as a
+> web fragment inside a host app.
 
 ---
 
 ## What it is
 
-`knowledge-base` is a **build-time aggregator** for static documentation sites hosted
-across multiple GitHub repositories.
+`knowledge-base` is a **build-time aggregator** for static documentation sites. At
+build time it:
 
-At build time it:
-1. Downloads each registered app's **GitHub Release artifact** (`dist.tar.gz`)
-2. **Injects the marketplace top chrome** (56 px persistent nav with app switcher) into every HTML page
-3. Generates a **catalog landing page** listing all available apps
-4. Produces a single `dist/` directory served by nginx in Docker → AWS ECS
+1. Obtains each registered app's built output (`dist/`) — from a **GitHub Release
+   artifact** (`dist.tar.gz`), a **local repo**, or a **prebuilt** tarball/dir.
+2. Rewrites every page's URLs to absolute `/knowledge-base/{slug}/…` paths and,
+   in standalone mode, injects a persistent top **chrome** (nav + app switcher).
+3. Generates a **catalog landing page** listing all registered apps.
+4. Produces a single `dist/` served by **nginx** in Docker, or embedded into a
+   host app as a **web fragment**.
 
-Each app retains its own sidebar, routing, and internal navigation. The marketplace
-adds the persistent top bar and gives users a consistent entry point.
+Each app keeps its own sidebar, routing, and internal navigation.
 
 ---
 
 ## Architecture
 
 ```
-Browser  →  https://docs.internal/
-                  │
-                  ▼
-       ┌──────────────────────────────┐
-       │   Marketplace top chrome     │  ← injected at build time
-       │   [Logo] Docs / App ▾       │     persists on every page
-       └──────────────────────────────┘
-       │                              │
-       │   Sub-site content           │  ← from dist/apps/{slug}/
-       │   (sidebar + prose)          │     built headless by each repo
-       │                              │
-       └──────────────────────────────┘
-                  │
-                  ▼
-          nginx (Docker) → ECS
+Browser ──► host origin ──► /knowledge-base/                 (landing catalog)
+                            /knowledge-base/{slug}/…          (each doc app)
+                            /__wf/knowledge-base/…            (fragment assets)
+                                  │
+                                  ▼
+                    nginx (Docker)  ─or─  web-fragments gateway (embedded)
+                                  │
+                                  ▼
+                              dist/  (static)
 ```
 
----
-
-## Registered apps
-
-Apps are listed in [`apps.json`](apps.json):
-
-| App | Slug | Repo | URL |
-|---|---|---|---|
-| Example Docs | `example` | `AbsaOSS/example-docs` | `/apps/example/` |
+When **embedded**, a host app's [web-fragments](https://web-fragments.dev)
+gateway proxies the `/knowledge-base/*` routes onto the host's single origin and
+reframes the markup into a shadow root — no full page reload between pages.
 
 ---
 
-## Local development
+## Quick start
 
-### Prerequisites
-- Node.js ≥ 20
-- `gh` CLI authenticated (or `GITHUB_TOKEN` env var set)
-
-### Build with live artifacts
+Prerequisites: **Node.js ≥ 24**. For the GitHub-fetch build, `gh` CLI
+authenticated (or `GITHUB_TOKEN` set).
 
 ```bash
 npm install
-npm run build        # fetches GitHub Release artifacts + injects chrome
-npx serve dist -p 3000
+
+# Hermetic build from the vendored docs-example fixture (no network/token):
+npm run build:headless
+
+# E2E tests (Playwright — auto-starts its own servers):
+npm test
 ```
 
-### Build in local mode (no GitHub fetch)
+### Build modes
 
-If you've already run a full build or have manually placed artifacts:
+| Command | Source of apps |
+|---|---|
+| `npm run build` | Fetch GitHub Release artifacts (needs `GITHUB_TOKEN`/`gh`) |
+| `npm run build:headless` | Same fetch, headless/web-fragment output |
+| `npm run build:local` | Build each app from a local checkout (`localPath`) |
+| `npm run build:local:headless` | Local + headless |
 
-```bash
-# Place a headless-built dist/ under tmp/apps/{slug}/dist/
-mkdir -p tmp/apps/my-app
-# ... copy dist/ from a headless doc build ...
+`--headless` (or `MP_HEADLESS=true`) produces fragment-ready output: no chrome
+bar, `data-mp-headless="true"` on `<html>`, shadow-DOM compat styles.
 
-npm run build:dev -- --local
+Orchestrator: `scripts/build-vite.js` (flags: `--local`, `--headless`,
+`--path-prefix=`).
+
+---
+
+## The registry: `apps.json`
+
+Each entry registers one doc app. A `slug` is required; the source is one of
+`repo` (+ optional `version`), `localPath`, or `prebuilt`:
+
+```jsonc
+[
+  {
+    "slug": "my-app",
+    "name": "My App Documentation",
+    "description": "What this app documents.",
+    "icon": "book-open",
+    "tags": ["guide"],
+
+    // pick ONE source:
+    "repo": "AbsaOSS/my-docs", "version": "latest", // GitHub Release artifact
+    // "localPath": "../my-docs",                    // build from local checkout
+    // "prebuilt": "tests/fixtures/my-docs.dist.tar.gz" // prebuilt tarball or dist dir
+  }
+]
 ```
 
-### Adding a new app
+The repo ships an `apps.json` that registers the **vendored docs-example fixture**
+twice (`user-guide`, `guide-mirror`) so the build and tests are hermetic out of
+the box. Replace it with your own apps for a real deployment.
 
-1. **In the doc repo:** follow the [contract](contract/HEADLESS_RULES.md)
-   - Add `marketplace.json` to repo root
-   - Support `--headless` build flag
-   - Publish GitHub Release with `dist.tar.gz`
+---
 
-2. **In this repo:** add an entry to `apps.json`:
-   ```json
-   {
-     "repo": "AbsaOSS/my-new-docs",
-     "slug": "my-app",
-     "name": "My App Documentation",
-     "description": "What this app documents.",
-     "icon": "book-open",
-     "tags": ["guide"],
-     "version": "latest"
-   }
-   ```
+## Testing
 
-3. Open a PR — the CI will validate the contract before merging.
+E2E tests use Playwright. Everything is hermetic — built from
+`tests/fixtures/docs-example.dist.tar.gz` (no network, token, or sibling repo).
+
+| Command | Layer |
+|---|---|
+| `npm test` | **Embedded** harness (`playwright.config.js`). Starts the fragment server (`:3000`) and a minimal web-fragments **host gateway** (`tests/host/server.mjs`, `:4201`) that embeds the fragment. Covers shadow-DOM isolation, smooth no-reload SPA routing, cross-app navigation, asset 404s, and the fragment-history limitation. |
+| `npx playwright test --config=playwright.config.ci.js` | **Standalone** layer. Hits the fragment server (`tests/fragment-server.mjs`, `:3000`) directly. Covers HTTP header safety (`X-Frame-Options`), the headless contract, CSS-link stability (web-fragments [#297](https://github.com/web-fragments/web-fragments/issues/297)), and asset routing. |
+
+> `tests/fragment-server.mjs` serves `dist/` and mirrors the production
+> `nginx.conf` rewrites (including `/__wf/knowledge-base/* → /knowledge-base/*`).
+> `astro preview` is **not** used as the fragment endpoint: its Vite
+> `configurePreviewServer` rewrite hook does not run for static output, so the
+> `/__wf` asset route would 404.
+
+Both layers run in CI (`.github/workflows/ci.yml`).
+
+---
+
+## Embedding as a web fragment
+
+`knowledge-base` can run as a web fragment inside any host app that uses a
+web-fragments gateway (Express/Node, Cloudflare, Angular SSR, …).
+`tests/host/server.mjs` is a minimal, runnable reference host.
+
+**Fragment server (this repo):** serve the built `dist/` mirroring the nginx
+rewrites — e.g. `node tests/fragment-server.mjs` (port 3000), or nginx in Docker.
+
+**Host gateway registration:**
+
+```js
+import { FragmentGateway } from 'web-fragments/gateway';
+import { getNodeMiddleware } from 'web-fragments/gateway/node';
+
+const gateway = new FragmentGateway();
+gateway.registerFragment({
+  fragmentId: 'knowledge-base',
+  endpoint: 'http://localhost:3000',          // the fragment server
+  piercing: false,
+  routePatterns: [
+    '/knowledge-base/:_*',                     // landing + sub-app pages + assets
+    '/__wf/knowledge-base/:_*',                // fragment asset prefix
+  ],
+});
+app.use(getNodeMiddleware(gateway));           // before host static/catch-all routes
+```
+
+**Host page:**
+
+```html
+<script type="importmap">{ "imports": { "web-fragments": "/_wf/elements.js" } }</script>
+<web-fragment fragment-id="knowledge-base" src="/knowledge-base/"></web-fragment>
+<script type="module">
+  import { initializeWebFragments } from 'web-fragments';
+  initializeWebFragments();
+</script>
+```
+
+> Fragment-internal routes are not mirrored to the host's top-window history and
+> are not address-bar deep-linkable — design host-level routing if you need that.
 
 ---
 
 ## Contract for doc apps
 
-All apps must comply with the marketplace contract before they can be registered.
+Apps must comply with the marketplace contract before they can be registered:
 
 | Document | Description |
 |---|---|
 | [`contract/schema.json`](contract/schema.json) | JSON Schema for `marketplace.json` |
-| [`contract/HEADLESS_RULES.md`](contract/HEADLESS_RULES.md) | Structural requirements (headless HTML, relative paths, etc.) |
-| [`contract/STYLE_GUIDE.md`](contract/STYLE_GUIDE.md) | Visual style requirements (design tokens, typography, dark mode) |
+| [`contract/HEADLESS_RULES.md`](contract/HEADLESS_RULES.md) | Headless HTML, relative paths, `data-mp-headless` |
+| [`contract/STYLE_GUIDE.md`](contract/STYLE_GUIDE.md) | Design tokens (`--color-kb-*`), typography, dark mode |
 
-### Quick checklist
-- [ ] `marketplace.json` in repo root, validates against `contract/schema.json`
-- [ ] `npm run build -- --headless` succeeds → produces headless `dist/`
+### Checklist
+- [ ] `marketplace.json` in repo root, valid against `contract/schema.json`
+- [ ] `npm run build -- --headless` produces a headless `dist/`
 - [ ] `data-mp-headless="true"` on `<html>` in headless output
-- [ ] No fixed site-level `<header>` in headless output
-- [ ] All asset paths are relative (no leading `/`)
-- [ ] Design tokens (`--color-kb-500` etc.) in CSS
-- [ ] GitHub Release tagged `v*` with `dist.tar.gz` asset
-- [ ] References the marketplace's reusable `validate-doc-app.yml` workflow
+- [ ] No fixed site-level header in headless output
+- [ ] All asset paths relative (no leading `/`)
+- [ ] GitHub Release tagged `v*` with a `dist.tar.gz` asset
 
 ### Reusable validation workflow
 
-Doc repos should call the marketplace's reusable workflow to enforce the contract in CI:
+Doc repos can enforce the contract in their own CI:
 
 ```yaml
 # .github/workflows/validate.yml (in your doc repo)
-name: Validate
-
 on: [push, pull_request]
-
 jobs:
   validate:
-    uses: AbsaOSS/knowledge-base/.github/workflows/validate-doc-app.yml@main
-    secrets: inherit
+    uses: AbsaOSS/knowledge-base/.github/workflows/validate-doc-app.yml@master
 ```
 
 ### Release workflow for doc repos
 
 ```yaml
 # .github/workflows/release.yml (in your doc repo)
-name: Release
-
 on:
   push:
     tags: ['v*']
-
+permissions:
+  contents: write
 jobs:
   release:
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with: { node-version: '20', cache: npm }
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with: { node-version: '24', cache: npm }
       - run: npm ci
       - run: npm run build -- --headless
-      - name: Package dist
-        run: tar -czf dist.tar.gz dist/ marketplace.json
-      - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
+      - run: tar -czf dist.tar.gz dist/ marketplace.json
+      - uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2.6.2
         with:
           files: dist.tar.gz
 ```
 
 ---
 
-## Embedding in data-gateway (web-fragments)
-
-`knowledge-base` can run as a [web-fragment](https://web-fragments.dev) inside the
-`data-gateway` Angular SSR app, appearing at the `/knowledge-base` route without a
-full page reload.
-
-### Fragment server (this repo)
-
-Run the fragment server **without compression** — the web-fragments gateway processes
-the HTML before sending it to the browser, and compression confuses the pipeline:
-
-```bash
-npm run build:local:headless          # build with headless flag
-npm run preview:embedded              # serves on http://localhost:3000/knowledge-base/
-```
-
-> **Why not `npm run preview`?** `vite preview` adds brotli/gzip compression which
-> causes `ERR_CONTENT_DECODING_FAILED` in the web-fragments gateway. `preview:embedded`
-> uses `scripts/preview.js` — a zero-dependency server with no compression.
-
-### data-gateway registration (`src/server.ts`)
-
-Add the fragment alongside the existing registrations:
-
-```typescript
-gateway.registerFragment({
-  fragmentId: 'knowledge-base',
-  piercingClassNames: [],
-  endpoint: environment.fragments.docsMarketplace.endpoint,  // e.g. http://localhost:3000
-  routePatterns: [
-    '/knowledge-base',       // bare path without trailing slash
-    '/knowledge-base/:_*',   // landing page + all sub-app pages and assets
-  ],
-  piercing: false,
-});
-```
-
-Add the endpoint to `src/environments/environment.ts`:
-
-```typescript
-docsMarketplace: {
-  endpoint: 'http://localhost:3000',
-},
-```
-
-### data-gateway template
-
-Create the Angular component and template at the `/knowledge-base` route:
-
-```html
-<!-- src/app/routes/knowledge-base/knowledge-base.html -->
-<web-fragment fragment-id="knowledge-base" />
-```
-
-```typescript
-// knowledge-base.ts
-@Component({
-  selector: 'app-knowledge-base',
-  templateUrl: './knowledge-base.html',
-  schemas: [CUSTOM_ELEMENTS_SCHEMA],
-})
-export class DocsMarketplaceComponent {}
-```
-
----
-
 ## Deployment
 
-Built as a Docker image (nginx serving static files) deployed to AWS ECS.
-
-### Environment variables / GitHub repo variables
-
-| Name | Description | Default |
-|---|---|---|
-| `AWS_REGION` | AWS region for ECR + ECS | `eu-west-1` |
-| `ECR_REPOSITORY` | ECR repository name | `knowledge-base` |
-| `ECS_CLUSTER` | ECS cluster name | `knowledge-base` |
-| `ECS_SERVICE` | ECS service name | `knowledge-base` |
-| `DEPLOY_URL` | Public URL of the deployment | — |
-
-### Secrets required
-
-| Secret | Description |
-|---|---|
-| `AWS_ACCESS_KEY_ID` | IAM access key with ECR push + ECS deploy permissions |
-| `AWS_SECRET_ACCESS_KEY` | Corresponding secret key |
-
-### Manual deploy
+Built as a Docker image (nginx serving static files).
 
 ```bash
 docker build -t knowledge-base .
-docker run -p 8080:8080 knowledge-base
+docker run -p 8080:8080 knowledge-base   # http://localhost:8080/knowledge-base/
 ```
+
+### Deploy configuration (example — AWS ECS)
+
+| Variable | Description |
+|---|---|
+| `AWS_REGION` | AWS region for ECR + ECS |
+| `ECR_REPOSITORY` | ECR repository name |
+| `ECS_CLUSTER` / `ECS_SERVICE` | ECS cluster / service name |
+
+Provide `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` (or an OIDC role) with ECR
+push + ECS deploy permissions via repository secrets.
 
 ---
 
@@ -270,26 +249,43 @@ docker run -p 8080:8080 knowledge-base
 
 ```
 knowledge-base/
-├── apps.json                    ← Registry of all doc apps
-├── package.json
+├── apps.json                  ← Registry of doc apps
+├── astro.config.mjs           ← Astro SSG config (base /knowledge-base)
 ├── src/
-│   ├── input.css                ← Design tokens + marketplace styles
-│   └── templates/
-│       ├── chrome.js            ← Persistent top nav HTML template
-│       └── landing.js           ← Catalog landing page template
+│   ├── pages/
+│   │   ├── index.astro        ← Landing catalog
+│   │   └── [...path].astro    ← Catch-all: renders every sub-app page
+│   ├── layouts/Base.astro
+│   ├── components/            ← AppCard, AppIcon, Chrome
+│   ├── templates/chrome.js    ← Chrome HTML + client SPA router
+│   ├── styles/marketplace.css ← Design tokens + Tailwind
+│   └── utils/
+│       ├── apps.js            ← getAppPages() page enumeration
+│       └── transform.js       ← URL rewriting + chrome/headless injection
 ├── scripts/
-│   ├── build.js                 ← Main build orchestrator
-│   ├── fetch-apps.js            ← GitHub Release download + extract
-│   └── inject-chrome.js        ← HTML chrome injection
-├── contract/
-│   ├── schema.json              ← marketplace.json JSON Schema
-│   ├── HEADLESS_RULES.md        ← Headless HTML contract
-│   └── STYLE_GUIDE.md           ← Visual style requirements
-├── .github/
-│   └── workflows/
-│       ├── build-deploy.yml     ← Marketplace CI/CD (push to main → ECR → ECS)
-│       └── validate-doc-app.yml ← Reusable validation workflow for doc repos
+│   ├── build-vite.js          ← Build orchestrator
+│   ├── fetch-apps.js          ← GitHub Release download + extract
+│   └── setup-test-apps.mjs    ← Generates the hermetic test apps.json
+├── tests/
+│   ├── web-fragment.spec.js   ← Embedded harness suite
+│   ├── standalone.spec.js     ← Standalone fragment-server suite
+│   ├── build-integrity.spec.js
+│   ├── host/server.mjs        ← Reference web-fragments host (gateway)
+│   ├── fragment-server.mjs    ← nginx-mirroring static server
+│   ├── support/fragment.js    ← Shadow-DOM test helpers
+│   └── fixtures/              ← Vendored docs-example dist.tar.gz
+├── contract/                  ← marketplace.json schema + rules + style guide
+├── .github/workflows/         ← ci.yml, validate-doc-app.yml
 ├── Dockerfile
-├── nginx.conf
-└── README.md
+└── nginx.conf
 ```
+
+---
+
+## Contributing & security
+
+See [`CONTRIBUTING.md`](CONTRIBUTING.md) and [`SECURITY.md`](SECURITY.md).
+
+## License
+
+[Apache License 2.0](LICENSE).

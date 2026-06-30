@@ -1,0 +1,27 @@
+# The Docker image only needs nginx.conf + the prebuilt dist/ (see Dockerfile).
+# Keep the build context small and avoid leaking source/secrets into the image.
+node_modules
+.git
+.github
+tests
+scripts
+src
+contract
+plugins
+public
+apps
+tmp
+.astro
+playwright-report
+test-results
+*.md
+.gitignore
+.dockerignore
+.env
+Dockerfile
+playwright*.js
+astro.config.mjs
+vite.config.js
+tsconfig.json
+package-lock.json
+apps.json

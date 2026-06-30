@@ -1,11 +1,24 @@
 [
   {
-    "repo": "AbsaOSS/knowledge-base-docs-example",
-    "slug": "example",
-    "name": "Example Docs",
-    "description": "A minimal template for bootstrapping a documentation project for the ABSA Knowledge base.",
+    "slug": "user-guide",
+    "name": "User Guide",
+    "description": "Primary docs app — the vendored docs-example fixture used as the integration guinea pig.",
     "icon": "book-open",
-    "tags": ["template", "getting-started", "example"],
-    "version": "latest"
+    "tags": [
+      "guide",
+      "getting-started"
+    ],
+    "prebuilt": "tests/fixtures/docs-example.dist.tar.gz"
+  },
+  {
+    "slug": "guide-mirror",
+    "name": "Guide Mirror",
+    "description": "Second registered app (same artifact, different slug) for cross-app navigation tests.",
+    "icon": "book-open",
+    "tags": [
+      "mirror",
+      "cross-app"
+    ],
+    "prebuilt": "tests/fixtures/docs-example.dist.tar.gz"
   }
 ]
