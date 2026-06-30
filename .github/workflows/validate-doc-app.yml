@@ -1,0 +1,189 @@
+# Reusable workflow — validate a doc app against the knowledge-base marketplace contract.
+#
+# Called by doc app repos in their CI to verify the app meets the contract
+# before raising a PR or publishing a release.
+#
+# Usage in a doc repo:
+#
+#   jobs:
+#     validate:
+#       uses: AbsaOSS/knowledge-base/.github/workflows/validate-doc-app.yml@main
+#       secrets: inherit
+#
+# The calling repo must have:
+#   - marketplace.json in the repo root
+#   - npm run build -- --headless producing dist/
+#
+name: Validate Doc App
+
+on:
+  workflow_call:
+    inputs:
+      node-version:
+        description: 'Node.js version to use'
+        type: string
+        default: '24'
+
+jobs:
+  validate:
+    name: Validate marketplace contract
+    runs-on: ubuntu-latest
+    steps:
+      # ── 1. Checkout ────────────────────────────────────────────────────────
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # ── 2. Setup Node ──────────────────────────────────────────────────────
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ inputs.node-version }}
+          cache: npm
+
+      # ── 3. Install dependencies ────────────────────────────────────────────
+      - name: Install dependencies
+        run: npm ci
+
+      # ── 4. Validate marketplace.json ───────────────────────────────────────
+      - name: Validate marketplace.json exists
+        run: |
+          if [ ! -f marketplace.json ]; then
+            echo "::error file=marketplace.json::marketplace.json not found in repo root."
+            echo "See https://github.com/AbsaOSS/knowledge-base/blob/main/contract/HEADLESS_RULES.md"
+            exit 1
+          fi
+          echo "✓ marketplace.json found"
+
+      - name: Validate marketplace.json schema
+        run: |
+          node - <<'EOF'
+          import { readFileSync } from 'fs';
+          import Ajv from 'ajv';
+
+          const manifest = JSON.parse(readFileSync('marketplace.json', 'utf8'));
+
+          const ajv = new Ajv({ allErrors: true });
+          const schemaUrl = 'https://raw.githubusercontent.com/AbsaOSS/knowledge-base/main/contract/schema.json';
+
+          const res = await fetch(schemaUrl);
+          if (!res.ok) {
+            console.warn('⚠ Could not fetch remote schema — skipping schema validation');
+            process.exit(0);
+          }
+          const remoteSchema = await res.json();
+          const validate = ajv.compile(remoteSchema);
+
+          if (!validate(manifest)) {
+            console.error('✗ marketplace.json validation errors:');
+            for (const err of validate.errors) {
+              console.error(`  ${err.instancePath || '/'}: ${err.message}`);
+            }
+            process.exit(1);
+          }
+          console.log('✓ marketplace.json is valid');
+          EOF
+        env:
+          NODE_OPTIONS: --experimental-vm-modules
+
+      # ── 5. Build headless ──────────────────────────────────────────────────
+      - name: Build headless
+        run: npm run build -- --headless
+
+      # ── 6. Check dist/ output ─────────────────────────────────────────────
+      - name: Check dist/ exists
+        run: |
+          if [ ! -d dist ]; then
+            echo "::error::dist/ directory not found after build. Check your build script."
+            exit 1
+          fi
+          echo "✓ dist/ exists"
+
+      - name: Check entryPoint exists
+        run: |
+          ENTRY=$(node -e "const m=require('./marketplace.json'); console.log(m.entryPoint || 'index.html')")
+          if [ ! -f "dist/${ENTRY}" ]; then
+            echo "::error::dist/${ENTRY} (entryPoint) not found after headless build."
+            exit 1
+          fi
+          echo "✓ dist/${ENTRY} found"
+
+      # ── 7. Validate headless HTML structure ───────────────────────────────
+      - name: Check data-mp-headless attribute
+        run: |
+          ENTRY=$(node -e "const m=require('./marketplace.json'); console.log(m.entryPoint || 'index.html')")
+          if ! grep -q 'data-mp-headless="true"' "dist/${ENTRY}"; then
+            echo "::error file=dist/${ENTRY}::Missing data-mp-headless=\"true\" on <html> element."
+            echo "Add data-mp-headless=\"true\" to the <html> tag when building with --headless."
+            exit 1
+          fi
+          echo "✓ data-mp-headless=\"true\" found"
+
+      - name: Check no fixed site header in headless output
+        run: |
+          VIOLATIONS=$(grep -rl 'class="[^"]*fixed[^"]*top-0[^"]*inset-x-0' dist/ || true)
+          if [ -n "$VIOLATIONS" ]; then
+            echo "::warning::Found potential fixed top-bar elements in headless output:"
+            echo "$VIOLATIONS"
+            echo "Ensure the site header is omitted when building with --headless."
+          else
+            echo "✓ No fixed site headers detected in headless output"
+          fi
+
+      - name: Check all asset paths are relative
+        run: |
+          node - <<'EOF'
+          import { readdirSync, statSync, readFileSync } from 'fs';
+          import { join, extname } from 'path';
+
+          function collectHtml(dir) {
+            const files = [];
+            for (const e of readdirSync(dir)) {
+              const p = join(dir, e);
+              if (statSync(p).isDirectory()) files.push(...collectHtml(p));
+              else if (extname(e) === '.html') files.push(p);
+            }
+            return files;
+          }
+
+          let violations = 0;
+          for (const file of collectHtml('dist')) {
+            const html = readFileSync(file, 'utf8');
+            const matches = [...html.matchAll(/(?:href|src|action)="(\/[^/"'][^"]*?)"/g)];
+            for (const [, path] of matches) {
+              if (!path.startsWith('//') && !path.startsWith('/favicon')) {
+                console.error(`::warning file=${file}::Absolute path found: ${path}`);
+                violations++;
+              }
+            }
+          }
+          if (violations > 0) {
+            console.error(`\n${violations} absolute path(s) found. Marketplace mounts apps at /apps/{slug}/ — absolute paths will 404.`);
+            process.exit(1);
+          }
+          console.log('✓ All asset paths are relative');
+          EOF
+
+      # ── 8. Check ABSA tokens in CSS ───────────────────────────────────────
+      - name: Check ABSA design tokens in CSS
+        run: |
+          CSS_FILES=$(find dist/ -name "*.css" | head -5)
+          if [ -z "$CSS_FILES" ]; then
+            echo "::warning::No CSS files found in dist/"
+          else
+            FOUND=false
+            for f in $CSS_FILES; do
+              if grep -q -- '--color-absa-500\|#af144b' "$f"; then
+                FOUND=true
+                break
+              fi
+            done
+            if [ "$FOUND" = "false" ]; then
+              echo "::warning::ABSA brand color token (--color-absa-500 / #af144b) not found in dist CSS."
+              echo "Ensure the ABSA design tokens are included. See contract/STYLE_GUIDE.md"
+            else
+              echo "✓ ABSA design tokens detected in CSS"
+            fi
+          fi
+
+      - name: Validation summary
+        run: echo "✓ All contract checks passed for $(node -e \"console.log(require('./marketplace.json').slug)\")"

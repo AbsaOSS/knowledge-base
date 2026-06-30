@@ -1,0 +1,11 @@
+[
+  {
+    "repo": "AbsaOSS/knowledge-base-docs-example",
+    "slug": "example",
+    "name": "Example Docs",
+    "description": "A minimal template for bootstrapping a documentation project for the ABSA Knowledge base.",
+    "icon": "book-open",
+    "tags": ["template", "getting-started", "example"],
+    "version": "latest"
+  }
+]
