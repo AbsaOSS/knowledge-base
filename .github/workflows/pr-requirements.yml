@@ -1,0 +1,51 @@
+# Validates pull-request hygiene: conventional title, description, issue
+# reference, branch name, size, and target branch.
+# Action: AbsaOSS/check-pr-requirements (SHA-pinned; see Dependabot for bumps).
+
+name: PR Requirements
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, edited, labeled, unlabeled]
+    branches: [master]
+
+# Least privilege: read PR metadata only.
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  check-pr:
+    name: PR Requirements
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check PR requirements
+        uses: AbsaOSS/check-pr-requirements@adb22f6d88c93fd801e787a63d948d6fbbdd4af3 # v0.2.0
+        with:
+          pr-title: ${{ github.event.pull_request.title }}
+          pr-body: ${{ github.event.pull_request.body }}
+          pr-branch: ${{ github.event.pull_request.head.ref }}
+          pr-number: ${{ github.event.pull_request.number }}
+          target-branch: ${{ github.event.pull_request.base.ref }}
+          files-changed: ${{ github.event.pull_request.changed_files }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+          # Enabled checks
+          check-title: "true"
+          check-description: "true"
+          check-issue-reference: "true"
+          check-branch-name: "true"
+          check-pr-size: "true"
+          check-target-branch: "true"
+          check-release-notes: "false" # no release-notes convention yet
+          check-label: "false"
+
+          # Configuration
+          title-formats: "conventional"
+          title-types: "feat,fix,docs,style,refactor,perf,test,build,ci,chore,revert"
+          description-min-length: "20"
+          # Branch names this repo uses; the char class allows the extra path
+          # segments in dependabot branches (e.g. dependabot/npm_and_yarn/…).
+          branch-pattern: "^(feature|bugfix|hotfix|release|support|chore|docs|ci|test|dependabot)/[a-zA-Z0-9._/-]+$"
+          max-files-changed: "50"
+          allowed-target-branches: "master"
