@@ -1,0 +1,101 @@
+name: Bug Report
+description: Report a problem to help us improve knowledge-base
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Please supply complete reproduction details to speed up resolution.
+        For **security vulnerabilities**, do not open an issue — see [SECURITY.md](../blob/master/SECURITY.md).
+
+  - type: textarea
+    id: bug-description
+    attributes:
+      label: Describe the bug
+      description: A clear and concise description of what the bug is.
+      placeholder: Tell us what went wrong.
+    validations:
+      required: true
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      description: Which part of the project is affected?
+      options:
+        - Build pipeline (build-vite / fetch-apps / apps.json)
+        - URL rewriting / chrome injection (transform)
+        - Web-fragment embedding (host gateway / shadow DOM / routing)
+        - Standalone site / nginx / Docker
+        - CI / workflows
+        - Documentation
+        - Other / not sure
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduction-steps
+    attributes:
+      label: Steps to Reproduce
+      description: Steps to reproduce the behavior OR the commands you ran.
+      placeholder: |
+        1. Run `npm run build:headless`
+        2. Start `node tests/host/server.mjs`
+        3. Open '...'
+        4. See error
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected-state
+    attributes:
+      label: Expected state
+      description: A clear and concise description of what you expected to happen.
+      placeholder: What should have happened?
+    validations:
+      required: true
+
+  - type: dropdown
+    id: severity
+    attributes:
+      label: Impact / Severity
+      description: Level of impact
+      options:
+        - Blocker
+        - High
+        - Medium
+        - Low
+    validations:
+      required: true
+
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Attachments / Evidence
+      description: Logs, screenshots, traces, failing test output.
+      placeholder: Paste relevant excerpts.
+    validations:
+      required: false
+
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: How are you running knowledge-base?
+      placeholder: |
+        Node version: e.g., 24.x (run `node --version`)
+        OS: e.g., Windows 11, macOS 14, Ubuntu 24.04
+        Mode: e.g., standalone build / Docker / embedded web-fragment
+        Browser (if UI): e.g., Chrome 130
+        Commit / version: e.g., master @ <sha>
+    validations:
+      required: false
+
+  - type: textarea
+    id: related
+    attributes:
+      label: Related / References
+      description: Link other issues or PRs.
+      placeholder: "#456, #789"
+    validations:
+      required: false
