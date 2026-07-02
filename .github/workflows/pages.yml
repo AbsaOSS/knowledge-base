@@ -1,0 +1,71 @@
+# Publishes a browsable preview of the catalog (from apps.json) to GitHub Pages.
+#
+# The project-site URL (https://<owner>.github.io/knowledge-base/) matches Astro's
+# base (/knowledge-base), so links resolve with no extra config. The build is
+# hermetic (vendored fixture via apps.json) — no GITHUB_TOKEN or network needed.
+#
+# Requires Pages enabled with Source = "GitHub Actions" (configure-pages attempts
+# to enable it automatically via `enablement: true`).
+
+name: Deploy Pages
+
+on:
+  push:
+    branches: [master]
+  workflow_dispatch:
+
+# Least privilege for Pages deployment via OIDC.
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Allow one concurrent deployment; let in-progress deploys finish.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build site
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci
+
+      # Standalone (non-headless) build so the preview has the chrome nav bar and
+      # app switcher and is usable on its own. Hermetic (prebuilt fixture).
+      - name: Build (standalone)
+        run: npm run build
+
+      # Static Pages has no gateway/nginx to rewrite the fragment asset prefix,
+      # and /__wf/* is outside the project-site mount. Point the marketplace
+      # stylesheet at its real served path (/knowledge-base/style.css → dist/style.css).
+      - name: Rewrite fragment asset paths for static hosting
+        run: find dist -name '*.html' -exec sed -i 's#/__wf/knowledge-base/#/knowledge-base/#g' {} +
+
+      - name: Configure Pages
+        uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d # v6.0.0
+        with:
+          enablement: true
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
+        with:
+          path: dist
+
+  deploy:
+    name: Deploy to Pages
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@cd2ce8fcbc39b97be8ca5fce6e763baed58fa128 # v5.0.0
