@@ -100,14 +100,32 @@ async function build() {
 
   const registeredApps = JSON.parse(readFileSync(join(ROOT, 'apps.json'), 'utf8'));
 
+  // Validate registry entries up front (fail fast with a clear message).
+  for (const app of registeredApps) {
+    if (!app.slug) fail('apps.json: an entry is missing "slug"');
+    if (app.type === 'iframe') {
+      if (!app.url) fail(app.slug + ': iframe entry requires a "url"');
+      if (app.temporary) warn(app.slug + ': temporary iframe entry — migrate to a headless package when ready');
+    } else if (!app.prebuilt && !app.localPath && !app.repo) {
+      fail(app.slug + ': packaged entry needs one of "repo", "localPath", or "prebuilt"');
+    }
+  }
+
+  // iframe entries have no artifact to fetch/build — they render a single route
+  // (see src/pages/[...path].astro). Only packaged apps go through the pipeline.
+  const iframeApps   = registeredApps.filter(a => a.type === 'iframe');
+  const packagedApps = registeredApps.filter(a => a.type !== 'iframe');
+
   // 1. Prepare apps/ directory
   step('1/3  Preparing sub-app artifacts → apps/');
   mkdirSync(APPS_DIR, { recursive: true });
 
+  for (const app of iframeApps) ok(app.slug + ' registered (iframe → ' + app.url + ')');
+
   // Apps shipping a `prebuilt` artifact are prepared locally regardless of mode
   // (hermetic — no network, no per-app build). The rest go through fetch/local.
-  const prebuiltApps  = registeredApps.filter(a => a.prebuilt);
-  const remainingApps = registeredApps.filter(a => !a.prebuilt);
+  const prebuiltApps  = packagedApps.filter(a => a.prebuilt);
+  const remainingApps = packagedApps.filter(a => !a.prebuilt);
 
   for (const app of prebuiltApps) preparePrebuilt(app);
 
@@ -140,7 +158,7 @@ async function build() {
   mkdirSync(PUBLIC_ROOT, { recursive: true });
 
   // Clean only known slug dirs so user-owned public/ files (favicon, robots.txt…) are preserved
-  for (const app of registeredApps) {
+  for (const app of packagedApps) {
     const slugDir = join(PUBLIC_ROOT, app.slug);
     if (existsSync(slugDir)) rmSync(slugDir, { recursive: true });
   }
@@ -155,7 +173,7 @@ async function build() {
     }
   }
 
-  for (const app of registeredApps) {
+  for (const app of packagedApps) {
     const srcDir = join(APPS_DIR, app.slug);
     if (!existsSync(srcDir)) { warn(app.slug + ': apps/ dir missing, skipping asset copy'); continue; }
     copyAssets(srcDir, join(PUBLIC_ROOT, app.slug));
@@ -194,7 +212,7 @@ async function build() {
   const elapsed = ((Date.now() - startMs) / 1000).toFixed(1);
   const slugs = readdirSync(APPS_DIR).filter(d => statSync(join(APPS_DIR, d)).isDirectory());
   const appList = slugs.map(s => '    \u2022 \x1b[36m' + s + '\x1b[0m → dist/' + s + '/').join('\n');
-  console.log('\n\x1b[32m✓\x1b[0m \x1b[1m' + slugs.length + ' app(s) integrated\x1b[0m in ' + elapsed + 's\n\n  Apps:\n' + appList + '\n  Prefix: \x1b[33m' + PATH_PREFIX + '\x1b[0m\n');
+  console.log('\n\x1b[32m✓\x1b[0m \x1b[1m' + (slugs.length + iframeApps.length) + ' app(s) integrated\x1b[0m in ' + elapsed + 's\n\n  Apps:\n' + appList + '\n  Prefix: \x1b[33m' + PATH_PREFIX + '\x1b[0m\n');
 }
 
 build().catch(err => {

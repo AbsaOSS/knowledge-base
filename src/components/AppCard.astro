@@ -9,6 +9,7 @@ interface Props {
     description: string;
     icon?: string;
     tags?: string[];
+    type?: string;
   };
   delay?: number;
   base?: string;
@@ -26,6 +27,7 @@ const delayClass = delay > 0 && delay <= 4 ? ` delay-${delay}` : '';
   <h2 class="text-[15px] font-semibold mb-1.5 leading-snug" style="color:var(--text-heading)">{app.name}</h2>
   <p class="text-[13px] leading-relaxed flex-1 mb-4" style="color:var(--text-body)">{app.description}</p>
   <div class="flex flex-wrap gap-1.5 mt-auto">
+    {app.type === 'iframe' && <span class="mp-tag mp-tag-external" title="Embedded via iframe (external site)">External</span>}
     {(app.tags || []).map(tag => <span class="mp-tag">{tag}</span>)}
   </div>
 </a>

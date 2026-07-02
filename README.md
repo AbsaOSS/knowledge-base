@@ -78,7 +78,7 @@ Orchestrator: `scripts/build-vite.js` (flags: `--local`, `--headless`,
 ## The registry: `apps.json`
 
 Each entry registers one doc app. A `slug` is required; the source is one of
-`repo` (+ optional `version`), `localPath`, or `prebuilt`:
+`repo` (+ optional `version`), `localPath`, `prebuilt`, or an `iframe` URL:
 
 ```jsonc
 [
@@ -96,6 +96,29 @@ Each entry registers one doc app. A `slug` is required; the source is one of
   }
 ]
 ```
+
+### iframe onboarding (temporary)
+
+Teams that already host their docs elsewhere and can't yet produce a headless
+package can be listed immediately with an **iframe** entry — no `repo`,
+`marketplace.json`, or artifact needed. It renders as a full-viewport `<iframe>`
+inside the marketplace chrome and shows an **External** badge in the catalogue.
+
+```jsonc
+{
+  "type": "iframe",
+  "url": "https://my-team.example.com/docs",
+  "slug": "my-team",
+  "name": "My Team Docs",
+  "description": "...",
+  "icon": "book-open",
+  "tags": ["my-team"],
+  "temporary": true          // stopgap — migrate to a headless package when ready
+}
+```
+
+The external site must permit embedding (its CSP `frame-ancestors` /
+`X-Frame-Options` must not block the marketplace origin). See issue #10.
 
 The repo ships an `apps.json` that registers the **vendored docs-example fixture**
 twice (`user-guide`, `guide-mirror`) so the build and tests are hermetic out of

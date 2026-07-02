@@ -56,6 +56,17 @@ const apps = [
     tags: ['mirror', 'cross-app'],
     prebuilt: artifact,
   },
+  {
+    // iframe onboarding mode (issue #10): no artifact, renders an <iframe>.
+    slug: 'external-docs',
+    name: 'External Docs',
+    description: 'Iframe-onboarded external documentation site (temporary integration path).',
+    icon: 'book-open',
+    tags: ['external'],
+    type: 'iframe',
+    url: 'https://example.com/docs',
+    temporary: true,
+  },
 ];
 
 const out = join(ROOT, 'apps.json');

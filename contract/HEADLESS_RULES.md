@@ -4,6 +4,15 @@ Doc apps included in the marketplace must produce **headless HTML output** — p
 contain content (sidebar + prose) but **do not** include a site-level top navigation bar.
 The marketplace injects its own persistent 56 px chrome at the top of every page.
 
+> **Temporary alternative — iframe onboarding.** Teams that already host their docs
+> elsewhere and cannot yet produce a headless package can be listed immediately with an
+> `apps.json` entry of `"type": "iframe"` + a `"url"` (no `marketplace.json`, no release
+> artifact, no headless build). The page is rendered as a full-viewport `<iframe>` inside
+> the marketplace chrome. This is an **explicit stopgap** — such entries should carry
+> `"temporary": true` and be migrated to a proper headless package when possible. The
+> external site must allow embedding (its CSP `frame-ancestors` / `X-Frame-Options` must
+> not block the marketplace origin). See issue #10.
+
 ---
 
 ## Required: Headless build flag
