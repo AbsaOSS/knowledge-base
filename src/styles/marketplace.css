@@ -222,3 +222,11 @@ wf-body.mp-wrapped #sidebar { top: var(--mp-chrome-h) !important; }
   color: var(--text-muted);
   border: 1px solid var(--border);
 }
+
+/* iframe-onboarding entries (issue #10) — flags an externally embedded app */
+.mp-tag-external {
+  background: var(--color-kb-50);
+  color: var(--color-kb-600);
+  border-color: var(--color-kb-100);
+  font-weight: 600;
+}

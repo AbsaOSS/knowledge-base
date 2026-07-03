@@ -39,6 +39,24 @@ export function getAppPages(cwd, headless) {
     const appDir      = join(appsDir, app.slug);
     const appHeadless = app.headless ?? headless;
 
+    if (app.type === 'iframe') {
+      // iFrame onboarding mode: no artifact on disk — emit a single route that
+      // renders a full-viewport <iframe> for the external URL. See issue #10.
+      pages.push({
+        routePath:   app.slug,
+        file:        null,
+        slug:        app.slug,
+        fileRelDir:  '',
+        appHeadless,
+        apps,
+        title:       app.name ?? app.slug,
+        section:     null,
+        iframe:      true,
+        url:         app.url,
+      });
+      continue;
+    }
+
     if (Array.isArray(app.pages) && app.pages.length > 0) {
       // Manifest-driven routing: use the pages array from marketplace.json
       for (const page of app.pages) {

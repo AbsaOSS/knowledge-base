@@ -74,3 +74,29 @@ test.describe('Build integrity', () => {
     expect(html).toContain('astro-view-transitions-enabled');
   });
 });
+
+// ── iframe onboarding mode (issue #10) ──────────────────────────────────────
+test.describe('iframe onboarding', () => {
+  test('renders a single route with a full-viewport iframe to the external URL', () => {
+    expect(existsSync(join(DIST, 'external-docs/index.html')), 'iframe app page missing').toBe(true);
+    const html = read('external-docs/index.html');
+    expect(html).toMatch(/<iframe[^>]*src="https:\/\/example\.com\/docs"/);
+    expect(html).toContain('height:100vh'); // headless build → full viewport
+  });
+
+  test('iframe entry does not produce packaged sub-app pages', () => {
+    // No artifact was fetched/built — only the single index route exists.
+    expect(existsSync(join(DIST, 'external-docs/docs')), 'unexpected packaged pages for iframe entry').toBe(false);
+  });
+
+  test('landing shows the iframe app card with an External badge', () => {
+    const html = read('index.html');
+    expect(html).toContain('External Docs');
+    expect(html).toContain('mp-tag-external');
+  });
+
+  test('packaged apps are unaffected by the iframe entry', () => {
+    expect(existsSync(join(DIST, 'user-guide/docs/index.html'))).toBe(true);
+    expect(existsSync(join(DIST, 'guide-mirror/docs/index.html'))).toBe(true);
+  });
+});

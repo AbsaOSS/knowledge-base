@@ -20,5 +20,17 @@
       "cross-app"
     ],
     "prebuilt": "tests/fixtures/docs-example.dist.tar.gz"
+  },
+  {
+    "slug": "external-docs",
+    "name": "External Docs",
+    "description": "Iframe-onboarded external documentation site (temporary integration path).",
+    "icon": "book-open",
+    "tags": [
+      "external"
+    ],
+    "type": "iframe",
+    "url": "https://example.com/docs",
+    "temporary": true
   }
 ]
