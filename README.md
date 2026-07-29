@@ -1,7 +1,7 @@
 # knowledge-base
 
 > A unified documentation portal — wraps independently-maintained doc apps into a
-> single deployable with a persistent branded chrome, and can be embedded as a
+> single deployable with a persistent branded masthead, and can be embedded as a
 > web fragment inside a host app.
 
 ---
@@ -279,12 +279,12 @@ knowledge-base/
 │   │   ├── index.astro        ← Landing catalog
 │   │   └── [...path].astro    ← Catch-all: renders every sub-app page
 │   ├── layouts/Base.astro
-│   ├── components/            ← AppCard, AppIcon, Chrome
-│   ├── templates/chrome.js    ← Chrome HTML + client SPA router
+│   ├── components/            ← AppCard, AppIcon, Masthead
+│   ├── templates/shadow-compat.js ← Shadow-DOM design-token styles
 │   ├── styles/marketplace.css ← Design tokens + Tailwind
 │   └── utils/
 │       ├── apps.js            ← getAppPages() page enumeration
-│       └── transform.js       ← URL rewriting + chrome/headless injection
+│       └── transform.js       ← URL rewriting + sub-app document splitting
 ├── scripts/
 │   ├── build-vite.js          ← Build orchestrator
 │   ├── fetch-apps.js          ← GitHub Release download + extract
