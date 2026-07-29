@@ -64,14 +64,15 @@ test.describe('Shadow-DOM isolation', () => {
     expect(el, 'data-mp-headless not found inside fragment').not.toBeNull();
   });
 
-  test('fragment is forced to light mode (no dark class)', async ({ page }) => {
+  test('fragment is light only (no dark class)', async ({ page }) => {
     expect(await fragmentIsDark(page)).toBe(false);
   });
 
-  test('chrome navigation bar does not leak into the fragment', async ({ page }) => {
-    // #mp-chrome is the standalone chrome bar; in a fragment it would escape the
-    // shadow boundary and overlap the host, so headless mode must omit it.
+  test('no chrome bar exists; the masthead is the fragment navigation', async ({ page }) => {
+    // A fixed chrome bar escaped the shadow boundary and overlapped the host, so
+    // it was removed outright — the masthead carries the navigation instead.
     expect(await queryInShadow(page, '#mp-chrome'), '#mp-chrome must not appear in fragment').toBeNull();
+    expect(await queryInShadow(page, '#mp-masthead'), 'masthead missing from fragment').not.toBeNull();
   });
 });
 

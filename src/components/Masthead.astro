@@ -1,0 +1,81 @@
+---
+// src/components/Masthead.astro
+//
+// Persistent Knowledge base masthead. Rendered by every page through Base.astro
+// (landing catalog, packaged sub-app pages, iframe entries) in both headless and
+// standalone builds, so the branding and the way back to the catalog never
+// disappear once a user opens a documentation app.
+//
+// Sub-navigation:
+//   • "Library"  → the catalog of all documentation sites
+//   • a dynamic second entry naming the app currently being viewed
+// The entry matching the current location is inert text with aria-current="page"
+// rather than a link to itself.
+import AppIcon from './AppIcon.astro';
+
+interface App {
+  slug: string;
+  name: string;
+  icon?: string;
+}
+
+interface Props {
+  apps: App[];
+  activeSlug?: string;
+  base?: string;
+  /** True when the current page is the active app's own index (its crumb is then inert). */
+  appRoot?: boolean;
+}
+
+const { apps, activeSlug = '', base = '/knowledge-base', appRoot = false } = Astro.props;
+
+const activeApp = apps.find(a => a.slug === activeSlug);
+const onLibrary = !activeApp;
+---
+
+<div id="mp-masthead" class="mp-masthead">
+  <div class="mp-masthead-inner">
+    <div class="mp-masthead-eyebrow animate-fade-up">
+      <span class="mp-masthead-badge">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/>
+        </svg>
+      </span>
+      <span class="mp-masthead-kicker">Docs</span>
+    </div>
+
+    {/* On the catalog the masthead IS the page heading; on a documentation page the
+        sub-app supplies its own <h1>, so the masthead title stays non-heading text. */}
+    {onLibrary
+      ? <h1 class="mp-masthead-title animate-fade-up delay-1">Knowledge base</h1>
+      : <p class="mp-masthead-title animate-fade-up delay-1">Knowledge base</p>
+    }
+
+    <p class="mp-masthead-desc animate-fade-up delay-2">
+      Browse and access all documentation sites. Each app is independently
+      maintained and deployed — one consistent experience.
+    </p>
+
+    <nav class="mp-masthead-nav" aria-label="Knowledge base sections">
+      {onLibrary
+        ? <span class="mp-masthead-link active" aria-current="page">Library</span>
+        : <a class="mp-masthead-link" href={`${base}/`}>Library</a>
+      }
+
+      {activeApp && (appRoot
+        ? (
+          <span class="mp-masthead-link active" aria-current="page">
+            <AppIcon icon={activeApp.icon || 'book-open'} size={14} />
+            <span>{activeApp.name}</span>
+          </span>
+        )
+        : (
+          <a class="mp-masthead-link active" href={`${base}/${activeApp.slug}/`}>
+            <AppIcon icon={activeApp.icon || 'book-open'} size={14} />
+            <span>{activeApp.name}</span>
+          </a>
+        )
+      )}
+    </nav>
+  </div>
+</div>

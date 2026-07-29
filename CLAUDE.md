@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What This Is
 
-Build-time aggregator that downloads pre-built static doc sites from GitHub Release artifacts, injects a persistent branded chrome (56px top nav), and produces a single static deployment. Served by nginx in Docker. Can also run as a web-fragment inside an Angular SSR gateway.
+Build-time aggregator that downloads pre-built static doc sites from GitHub Release artifacts, wraps them in a persistent branded masthead, and produces a single static deployment. Served by nginx in Docker. Can also run as a web-fragment inside an Angular SSR gateway.
 
 ## Commands
 
@@ -44,7 +44,8 @@ apps.json (registry)
   → [1] Fetch Release artifacts OR build local repos → apps/{slug}/
   → [2] Copy non-HTML assets → public/{slug}/ (Astro serves as static)
   → [3] astro build: [...path].astro enumerates all HTML via getStaticPaths
-         → transformSubAppHtml() rewrites URLs + injects chrome
+         → transformSubAppHtml() rewrites URLs + splits the document,
+           which Base.astro then re-hosts (masthead + head/body)
   → dist/
 ```
 
@@ -59,34 +60,43 @@ Orchestrator: `scripts/build-vite.js`. Flags: `--local`, `--headless`, `--path-p
 
 ### Core Data Flow
 
-`apps.json` → `scripts/fetch-apps.js` downloads `dist.tar.gz` per app → `apps/{slug}/` → Astro's `src/pages/[...path].astro` catchall uses `getStaticPaths()` from `src/utils/apps.js` to enumerate every HTML file → `src/utils/transform.js` rewrites URLs and injects chrome → static output in `dist/`.
+`apps.json` → `scripts/fetch-apps.js` downloads `dist.tar.gz` per app → `apps/{slug}/` → Astro's `src/pages/[...path].astro` catchall uses `getStaticPaths()` from `src/utils/apps.js` to enumerate every HTML file → `src/utils/transform.js` rewrites URLs and splits the document → `Base.astro` re-hosts the parts → static output in `dist/`.
 
 ### Key Source Files
 
-- `src/pages/[...path].astro` — Catchall route, renders every sub-app page. Injects `<ClientRouter />` for Astro client-side transitions.
+- `src/pages/[...path].astro` — Catchall route, renders every sub-app page through `Base.astro`
 - `src/pages/index.astro` — Landing catalog page
 - `src/utils/apps.js` — `getAppPages()` enumerates sub-app HTML (manifest-driven or filesystem crawl)
-- `src/utils/transform.js` — `transformSubAppHtml()`: URL rewriting, chrome injection, headless transforms
-- `src/templates/chrome.js` — Chrome HTML template + client-side SPA router script
+- `src/utils/transform.js` — `transformSubAppHtml()`: URL rewriting, document splitting (head/body/title/body-class), headless transforms
+- `src/layouts/Base.astro` — The one document shell: head, fonts, marketplace CSS, theme script, `<ClientRouter />`
+- `src/components/Chrome.astro` — 56px fixed top bar (standalone mode only)
+- `src/components/Masthead.astro` — Persistent Knowledge base header + Library/current-app sub-nav (all pages, both modes)
+- `src/templates/chrome.js` — Inline theme script + shadow-DOM compat styles injected by the layout
 - `scripts/build-vite.js` — Build orchestrator (3-step pipeline)
 - `scripts/fetch-apps.js` — GitHub Release artifact downloader
 
 ### Two Modes
 
-**Non-headless** (standalone): Injects chrome bar, SPA router, theme toggle. Client-side router intercepts navigation, fetches HTML, swaps DOM content.
+Both modes render the same document: the masthead (`Masthead.astro`) — branding plus the Library / current-app sub-navigation — on every page, and nothing else chrome-like. There is no fixed top bar and no app switcher; the masthead is the navigation.
 
-**Headless** (web-fragment): Strips dark mode class, marks `data-mp-headless="true"`, injects shadow DOM compat styles. No chrome bar. Designed for embedding in a web-fragments gateway.
+**Non-headless** (standalone): Plain marketplace pages. Navigation is Astro's `<ClientRouter />` (view transitions).
+
+**Headless** (web-fragment): Marks `data-mp-headless="true"` and injects shadow DOM compat styles. Designed for embedding in a web-fragments gateway.
+
+### Light Only
+
+The marketplace has no dark mode: no theme toggle, no persisted theme, no `dark` class, no dark palette. `transformSubAppHtml()` strips any sub-app theme bootstrap and `dark` body class so an embedding host's theme cannot bleed into the fragment.
 
 ### URL Rewriting
 
-`transform.js` rewrites all relative and root-relative URLs to absolute `/{prefix}/{slug}/...` paths. Runs before chrome injection to prevent double-rewriting. Removes `<base>` tags.
+`transform.js` rewrites all relative and root-relative URLs to absolute `/{prefix}/{slug}/...` paths. Runs before the document is split so nothing is double-rewritten. Removes `<base>` tags.
 
 ## Contract for Doc Apps
 
 Apps registered in `apps.json` must comply with:
 - `contract/schema.json` — JSON Schema for `marketplace.json` manifest
 - `contract/HEADLESS_RULES.md` — Structural requirements (headless HTML, relative paths, `data-mp-headless` attribute)
-- `contract/STYLE_GUIDE.md` — Design tokens, typography, dark mode support
+- `contract/STYLE_GUIDE.md` — Design tokens and typography (light only — the marketplace has no dark mode)
 
 ## Testing
 

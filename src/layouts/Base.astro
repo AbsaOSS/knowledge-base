@@ -1,23 +1,40 @@
 ---
 // src/layouts/Base.astro
+//
+// The single document shell for every marketplace page — landing catalog,
+// packaged sub-app pages and iframe entries alike. It owns <head>, the fonts,
+// the marketplace stylesheet, <ClientRouter /> and the shadow-DOM compat styles,
+// so none of that has to be string-injected into sub-app documents any more.
+//
+// The marketplace is light-only. There is no theme toggle, no persisted theme and
+// no `dark` class anywhere, so an embedding host's theme can never bleed in.
 import '../styles/marketplace.css';
 import { ClientRouter } from 'astro:transitions';
-import { shadowCompatStyle } from '../templates/chrome.js';
+import { shadowCompatStyle } from '../templates/shadow-compat.js';
 
 interface Props {
   title?: string;
   headless?: boolean;
+  /** Extra classes for <body> — packaged sub-app pages pass their own body class. */
   bodyClass?: string;
+  /** Full-height flex column body. Off for sub-app content, which brings its own layout. */
+  flexBody?: boolean;
 }
 
 const {
   title = 'Knowledge base',
   headless = false,
   bodyClass = '',
+  flexBody = true,
 } = Astro.props;
 
 const HEADLESS = process.env.MP_HEADLESS !== 'false';
 const effectiveHeadless = headless || HEADLESS;
+
+const bodyClasses = [
+  flexBody ? 'min-h-screen flex flex-col' : '',
+  bodyClass,
+].filter(Boolean).join(' ') || undefined;
 ---
 
 <!DOCTYPE html>
@@ -27,14 +44,19 @@ const effectiveHeadless = headless || HEADLESS;
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta name="description" content="Documentation marketplace — browse all doc sites in one place." />
   <title>{title}</title>
+  {/* Sub-app head contents (their stylesheets, meta and inline scripts) are slotted
+      in first so the marketplace stylesheet — injected by Astro from the CSS import
+      above — still wins on equal specificity, exactly as it did when the old string
+      transform appended it to the sub-app document. */}
+  <slot name="head" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <!-- data-astro-transition-persist keeps the font stylesheet stable across
-       ClientRouter navigation (mirrors transform.js for sub-app pages) so it
-       isn't churned in <head> — avoids web-fragments #297 accumulation. -->
+  {/* data-astro-transition-persist keeps the font stylesheet stable across
+      ClientRouter navigation so it isn't churned on every page swap — avoids
+      web-fragments #297 accumulation. */}
   <link href="https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,400;0,14..32,500;0,14..32,600;0,14..32,700&display=swap" rel="stylesheet" data-astro-transition-persist="css-google-fonts-inter" />
   <ClientRouter />
 </head>
-<body class={`${effectiveHeadless ? '' : 'mp-wrapped '}min-h-screen flex flex-col${bodyClass ? ' ' + bodyClass : ''}`} style="background-color:var(--bg-page)">
+<body class={bodyClasses} style="background-color:var(--bg-page)">
   <slot />
   <Fragment set:html={shadowCompatStyle} />
 </body>

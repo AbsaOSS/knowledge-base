@@ -52,23 +52,16 @@ Ensure Inter is loaded from Google Fonts or bundled:
 
 ## Dark mode
 
-Dark mode is **class-based**: add `class="dark"` to `<html>` (default in standalone builds).  
-The marketplace propagates the user's theme preference to all embedded apps.
+**There is none.** The marketplace is light-only: no theme toggle, no persisted
+preference, no dark palette.
 
-Required dark-mode variable overrides (copy from `src/input.css`):
+Do not ship a dark-mode bootstrap. When an app is integrated, the build strips any
+`localStorage`-based theme script and removes a `dark` class from `<body>`, so a
+dark theme would be dropped at integration time anyway — and inside a web fragment
+it would clash with the host application's own theme.
 
-```css
-.dark {
-  --bg-page:      #0a0d14;
-  --bg-card:      #111827;
-  --bg-strong:    #1f2937;
-  --bg-subtle:    #1a2236;
-  --border:       #1f2937;
-  --text-heading: #ffffff;
-  --text-body:    #d1d5db;
-  --text-muted:   #9ca3af;
-}
-```
+An app may still define `.dark` styles for its **standalone** deployment; they will
+simply never activate inside the marketplace.
 
 ---
 
@@ -77,9 +70,8 @@ Required dark-mode variable overrides (copy from `src/input.css`):
 - Fixed left sidebar, **64px wide** (`w-64`)
 - Background: `var(--bg-card)`
 - Border right: `1px solid var(--border)`
-- `id="sidebar"` required for marketplace chrome injection
-- In **headless** mode: `top: 0` (marketplace chrome handles the offset)
-- In **standalone** mode: `top: 56px` (offset by site header)
+- `id="sidebar"` required so the marketplace can position it
+- `top: 0` — the marketplace renders no fixed top bar, so nothing needs offsetting
 
 ---
 
@@ -151,7 +143,7 @@ padding: 0.75rem 1rem;
 
 - [ ] Only brand color tokens used (no raw hex brand colors)
 - [ ] Inter font loaded
-- [ ] Both light and dark CSS variable sets defined
+- [ ] Light CSS variable set defined (no dark set — the marketplace is light-only)
 - [ ] `id="sidebar"` present on the left navigation
 - [ ] `id="content"` or `<main>` wraps the prose area
 - [ ] No inline styles that override design tokens with hardcoded values

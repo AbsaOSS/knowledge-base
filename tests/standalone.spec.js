@@ -7,7 +7,7 @@
  *
  * Coverage:
  *   ─ HTTP header safety   X-Frame-Options must not block the gateway's hidden iframe
- *   ─ Headless contract    data-mp-headless present; no chrome bar (#mp-chrome)
+ *   ─ Headless contract    data-mp-headless present; no chrome bar, no dark mode
  *   ─ CSS stability        data-astro-transition-persist on every <link rel=stylesheet>
  *                          (prevents web-fragments issue #297: head style accumulation)
  *   ─ Asset routing        /__wf/knowledge-base/* rewrite returns 200
@@ -74,11 +74,21 @@ test.describe('Headless contract', () => {
     await expect(page.locator('html')).toHaveAttribute('data-mp-headless', 'true');
   });
 
-  // The chrome nav bar (#mp-chrome) must be absent in headless mode — it
-  // escapes the shadow boundary when reframed pierces the DOM, creating a
-  // duplicate nav bar over the host app.
-  test('chrome nav bar (#mp-chrome) is absent', async ({ page }) => {
+  // There is no chrome nav bar in either mode any more — the masthead is the
+  // whole navigation. A fixed bar escaped the shadow boundary when reframed
+  // pierced the DOM, duplicating a nav over the host app.
+  test('no chrome nav bar is rendered; the masthead is the navigation', async ({ page }) => {
     await expect(page.locator('#mp-chrome')).toHaveCount(0);
+    await expect(page.locator('#mp-masthead')).toHaveCount(1);
+  });
+
+  // Light-only: no theme bootstrap, no toggle, no dark class.
+  test('no dark mode is shipped', async ({ page }) => {
+    await expect(page.locator('html.dark, .dark')).toHaveCount(0);
+    const themeApi = await page.evaluate(
+      () => typeof window.toggleTheme + '|' + (localStorage.getItem('mp-theme') ?? 'unset'),
+    );
+    expect(themeApi).toBe('undefined|unset');
   });
 
   test('page title is set', async ({ page }) => {
@@ -146,6 +156,9 @@ test.describe('CSS link stability (#297)', () => {
 
     for (let i = 0; i < count; i++) {
       const href = await links.nth(i).getAttribute('href');
+      // Same exemption as the landing page: the bundled marketplace stylesheet is
+      // injected by Astro from the layout's CSS import and cannot carry the attribute.
+      if (/^\/knowledge-base\/style\d*\.css$/.test(href ?? '')) continue;
       const persist = await links.nth(i).getAttribute('data-astro-transition-persist');
       expect(
         persist,
@@ -167,11 +180,17 @@ test.describe('CSS link stability (#297)', () => {
     }
 
     // Navigate forward
+    const href = await appLink.getAttribute('href');
     await appLink.click();
+    await page.waitForURL(`**${href}`, { timeout: 10_000 });
     await page.waitForLoadState('networkidle');
 
-    // Navigate back
+    // Navigate back. ClientRouter updates the URL on popstate BEFORE it swaps the
+    // document, so neither waitForURL nor 'networkidle' proves the swap finished —
+    // counting there would still see the sub-app's stylesheets. Wait for landing-only
+    // content (the catalog cards) to prove the swap landed.
     await page.goBack();
+    await page.locator('.mp-card').first().waitFor({ state: 'visible', timeout: 10_000 });
     await page.waitForLoadState('networkidle');
 
     const afterCount = await page.locator('link[rel="stylesheet"]').count();

@@ -4,13 +4,17 @@
 // Catchall route that serves every sub-app page as a static Astro page.
 // getStaticPaths enumerates all HTML files under apps/{slug}/ for every packaged
 // entry in apps.json, plus a single route per iframe-type entry (issue #10).
+//
+// Packaged pages are not emitted verbatim: transformSubAppHtml() rewrites their
+// URLs and splits the document, and Base.astro re-hosts the parts. That keeps the
+// masthead, fonts, marketplace CSS and ClientRouter in one place for all page
+// types (issue #24).
 
 import { readFileSync } from 'node:fs';
-import { ClientRouter } from 'astro:transitions';
 import { getAppPages } from '../utils/apps.js';
 import { transformSubAppHtml } from '../utils/transform.js';
 import Base from '../layouts/Base.astro';
-import Chrome from '../components/Chrome.astro';
+import Masthead from '../components/Masthead.astro';
 
 const PREFIX = 'knowledge-base';
 
@@ -25,36 +29,39 @@ export function getStaticPaths() {
 const props = Astro.props;
 const { slug, appHeadless, apps, title } = props;
 
-// Packaged apps: read the sub-app HTML file and transform it. Split at </head>
-// so <ClientRouter /> is injected for Astro's client-side transitions.
-let beforeHeadEnd = '';
-let afterHeadEnd = '';
-if (!props.iframe) {
-  const raw  = readFileSync(props.file, 'utf-8');
-  const html = transformSubAppHtml(raw, apps, slug, props.fileRelDir, PREFIX, appHeadless);
-  const headEnd = html.indexOf('</head>');
-  beforeHeadEnd = headEnd >= 0 ? html.slice(0, headEnd) : html;
-  afterHeadEnd  = headEnd >= 0 ? html.slice(headEnd)   : '';
-}
+const parts = props.iframe
+  ? null
+  : transformSubAppHtml(readFileSync(props.file, 'utf-8'), slug, props.fileRelDir, PREFIX);
 
-// iFrame entries: fill the viewport (below the 56px chrome when standalone; full
-// height when headless/embedded, where the host supplies its own chrome).
-const iframeHeight = appHeadless ? '100vh' : 'calc(100vh - var(--mp-chrome-h, 56px))';
+const app = apps.find((a: any) => a.slug === slug);
+const pageTitle = title ?? parts?.title ?? app?.name ?? 'Knowledge base';
+
+// The app's own crumb in the masthead is inert on the app index and a link deeper in.
+const atAppRoot = !props.fileRelDir;
 ---
-{props.iframe ? (
-  <Base headless={appHeadless} title={title}>
-    {!appHeadless && <Chrome apps={apps} activeSlug={slug} base={`/${PREFIX}`} />}
-    <main style="display:block;flex:1 1 auto;min-height:0">
+
+<Base
+  title={pageTitle}
+  headless={appHeadless}
+  bodyClass={parts?.bodyClass ?? ''}
+  flexBody={!!props.iframe}
+>
+  {parts && <Fragment slot="head" set:html={parts.headHtml} />}
+
+  <Masthead apps={apps} activeSlug={slug} base={`/${PREFIX}`} appRoot={atAppRoot} />
+
+  {props.iframe ? (
+    <main style="display:flex;flex:1 1 auto;min-height:0">
       <iframe
         src={props.url}
-        title={title}
-        style={`width:100%;height:${iframeHeight};border:0;display:block`}
+        title={pageTitle}
+        style="flex:1 1 auto;width:100%;min-height:0;border:0;display:block"
         loading="lazy"
         referrerpolicy="no-referrer-when-downgrade"
         sandbox="allow-scripts allow-same-origin allow-popups allow-forms allow-downloads"
       ></iframe>
     </main>
-  </Base>
-) : (
-  <Fragment set:html={beforeHeadEnd} /><ClientRouter /><Fragment set:html={afterHeadEnd} />
-)}
+  ) : (
+    <Fragment set:html={parts!.bodyHtml} />
+  )}
+</Base>

@@ -1,8 +1,12 @@
 // src/utils/transform.js
 //
 // Pure sub-app HTML transformation utilities for the Astro catchall page.
-
-import { chromeHtml, chromeScript, marketplaceRouterScript, shadowCompatStyle } from '../templates/chrome.js';
+//
+// Packaged sub-app pages arrive as complete pre-built documents. Rather than
+// emitting them verbatim, the catchall route renders them through Base.astro so
+// the layout owns the masthead, fonts, marketplace CSS and <ClientRouter /> for
+// every page. This module rewrites the sub-app URLs and splits the document into
+// the parts the layout needs.
 
 // ── URL rewriting ─────────────────────────────────────────────────────────────
 
@@ -30,8 +34,6 @@ function resolveUrl(url, base, prefix, slug) {
 
 /**
  * Rewrites all href/src/action URLs in the HTML to absolute paths.
- * Runs BEFORE any marketplace assets are injected so injected absolute
- * URLs (e.g. /__wf/knowledge-base/style.css) are never double-rewritten.
  * Removes any pre-existing <base> tag.
  *
  * @param {string} html
@@ -68,37 +70,15 @@ function rewriteUrlsToAbsolute(html, prefix, slug, fileRelDir) {
   return html;
 }
 
-// ── Sub-app HTML transformation ───────────────────────────────────────────────
-
-const FONT_PRECONNECT = `<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,400;0,14..32,500;0,14..32,600;0,14..32,700&display=swap" rel="stylesheet">`;
-
 /**
- * Transforms raw sub-app HTML for embedding in the marketplace.
- *
- * Steps (all applied in order):
- *  1. Rewrite all relative/root-relative URLs to absolute /knowledge-base/slug/… paths
- *  2. Add data-astro-transition-persist to all stylesheet links (prevents FOUC)
- *  3. Inject marketplace CSS link (via /__wf/ gateway route)
- *  4. Inject Google Fonts preconnect if Inter is not already loaded
- *  5a. Headless: strip dark-mode, mark document, inject shadow DOM compat styles
- *  5b. Non-headless: inject chrome bar and SPA router
- *
- * @param {string}   html
- * @param {Array}    apps       - full apps.json array (for chrome nav)
- * @param {string}   slug       - this app's slug
- * @param {string}   fileRelDir - path of this HTML file relative to the app root
- * @param {string}   prefix     - URL prefix, e.g. 'knowledge-base'
- * @param {boolean}  headless   - whether to render in headless (fragment) mode
+ * Adds data-astro-transition-persist to every stylesheet <link> so Astro's
+ * ClientRouter keeps them in place across page transitions instead of removing
+ * and re-adding them. Inside web-fragments, reframed relocates head nodes out of
+ * wf-head, so Astro's cleanup can no longer find them and they accumulate
+ * unbounded — see web-fragments issue #297.
  */
-export function transformSubAppHtml(html, apps, slug, fileRelDir, prefix, headless) {
-  // 1. Rewrite all URLs to absolute /knowledge-base/slug/... (must be first)
-  html = rewriteUrlsToAbsolute(html, prefix, slug, fileRelDir);
-
-  // 2. Add data-astro-transition-persist to every stylesheet <link> so that
-  //    Astro's ClientRouter keeps them in place across page transitions (no FOUC).
-  //    Strip any trailing self-closing slash from attrs before re-serialising.
-  html = html.replace(
+function persistStylesheets(html) {
+  return html.replace(
     /<link(\s[^>]*rel\s*=\s*["']stylesheet["'][^>]*)>/gi,
     (match, attrs) => {
       if (attrs.includes('data-astro-transition-persist')) return match;
@@ -109,65 +89,65 @@ export function transformSubAppHtml(html, apps, slug, fileRelDir, prefix, headle
       return `<link${cleanAttrs} data-astro-transition-persist="${id}">`;
     },
   );
-
-  // 3. Inject marketplace CSS via /__wf/ gateway route
-  const stylePath = `/__wf/${prefix}/style.css`;
-  if (!html.includes(`href="${stylePath}"`)) {
-    html = html.replace(/<\/head>/i, `  <link rel="stylesheet" href="${stylePath}" data-astro-transition-persist="css-wf-${prefix}-style-css">\n</head>`);
-  }
-
-  // 4. Inject font preconnect if Inter isn't loaded
-  if (!html.includes('fonts.googleapis.com')) {
-    const fontsPersist = FONT_PRECONNECT.replace(
-      /rel="stylesheet"/,
-      'rel="stylesheet" data-astro-transition-persist="css-google-fonts-inter"',
-    );
-    html = html.replace(/<\/head>/i, `  ${fontsPersist}\n</head>`);
-  }
-
-  if (headless) {
-    // H-a. Force light mode: remove `dark` class and localStorage theme script
-    html = html.replace(
-      /(<html\b[^>]*)\bclass=(["'])([^"']*)\2([^>]*>)/i,
-      (_, pre, q, cls, post) => {
-        const cleaned = cls.replace(/\bdark\b/g, '').replace(/\s+/g, ' ').trim();
-        const classAttr = cleaned ? ` class=${q}${cleaned}${q}` : '';
-        return `${pre.trimEnd()}${classAttr}${post}`;
-      },
-    );
-    html = html.replace(/<script>[^<]*localStorage[^<]*classList[^<]*<\/script>\s*/gi, '');
-
-    // H-b. Mark document as headless
-    html = html.replace(/(<html\b[^>]*)(>)/i, (_, openTag, gt) => {
-      if (openTag.includes('data-mp-headless')) return `${openTag}${gt}`;
-      return `${openTag} data-mp-headless="true"${gt}`;
-    });
-
-    // H-c. Inject shadow DOM compat styles before </body>
-    html = html.replace(/<\/body>/i, `${shadowCompatStyle}\n</body>`);
-
-    return html;
-  }
-
-  // Non-headless: inject full chrome bar
-  if (!html.includes('mp-theme')) {
-    html = html.replace(/<\/head>/i, `  ${chromeScript}\n</head>`);
-  }
-  if (!html.includes('data-mp-router')) {
-    html = html.replace(/<\/head>/i, `  ${marketplaceRouterScript(prefix)}\n</head>`);
-  }
-
-  const chrome = chromeHtml(apps, slug, './', prefix);
-  html = html.replace(
-    /(<body\b[^>]*)(>)/i,
-    (_, openTag, gt) => {
-      openTag = /class=["']/.test(openTag)
-        ? openTag.replace(/class=(["'])/, 'class=$1mp-wrapped ')
-        : `${openTag} class="mp-wrapped"`;
-      return `${openTag}${gt}\n\n${chrome}\n`;
-    },
-  );
-
-  return html;
 }
 
+/** Strips a sub-app's own `localStorage` theme bootstrap — the marketplace is light-only. */
+function stripThemeBootstrap(html) {
+  return html.replace(/<script>[^<]*localStorage[^<]*classList[^<]*<\/script>\s*/gi, '');
+}
+
+// ── Sub-app HTML transformation ───────────────────────────────────────────────
+
+/**
+ * Rewrites a packaged sub-app document and splits it into the parts Base.astro
+ * needs to re-host it.
+ *
+ * Steps (in order):
+ *  1. Rewrite all relative/root-relative URLs to absolute /{prefix}/{slug}/… paths
+ *  2. Stamp data-astro-transition-persist on every stylesheet link
+ *  3. Split off <head> contents, <body> attributes and <body> contents
+ *  4. Lift the <title> out of the head (the layout renders it)
+ *  5. Drop <meta charset> / <meta viewport> duplicates (the layout provides both)
+ *  6. Strip the sub-app's theme bootstrap and any `dark` body class — light only
+ *
+ * @param {string}   html
+ * @param {string}   slug       - this app's slug
+ * @param {string}   fileRelDir - path of this HTML file relative to the app root
+ * @param {string}   prefix     - URL prefix, e.g. 'knowledge-base'
+ * @returns {{headHtml: string, bodyHtml: string, bodyClass: string, title: string|null}}
+ */
+export function transformSubAppHtml(html, slug, fileRelDir, prefix) {
+  html = rewriteUrlsToAbsolute(html, prefix, slug, fileRelDir);
+  html = persistStylesheets(html);
+
+  const headMatch = html.match(/<head\b[^>]*>([\s\S]*?)<\/head>/i);
+  const bodyMatch = html.match(/<body\b([^>]*)>([\s\S]*?)<\/body>/i);
+
+  let headHtml = headMatch ? headMatch[1] : '';
+  const bodyAttrs = bodyMatch ? bodyMatch[1] : '';
+  // Documents without an explicit <body> are treated as body-only fragments.
+  let bodyHtml = bodyMatch
+    ? bodyMatch[2]
+    : (headMatch ? html.replace(headMatch[0], '') : html);
+
+  // The layout renders <title> from the manifest title or this one.
+  let title = null;
+  headHtml = headHtml.replace(/<title\b[^>]*>([\s\S]*?)<\/title>/i, (_, t) => {
+    title = t.replace(/\s+/g, ' ').trim() || null;
+    return '';
+  });
+
+  // Base.astro already declares both; a second <meta charset> is ignored anyway.
+  headHtml = headHtml.replace(/<meta\b[^>]*\bcharset\b[^>]*>/gi, '');
+  headHtml = headHtml.replace(/<meta\b[^>]*name\s*=\s*["']viewport["'][^>]*>/gi, '');
+
+  // Light-only marketplace: drop the sub-app's theme bootstrap and `dark` class.
+  headHtml = stripThemeBootstrap(headHtml);
+  bodyHtml = stripThemeBootstrap(bodyHtml);
+  const bodyClass = (bodyAttrs.match(/class\s*=\s*["']([^"']*)["']/i)?.[1] ?? '')
+    .replace(/\bdark\b/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  return { headHtml: headHtml.trim(), bodyHtml, bodyClass, title };
+}

@@ -128,8 +128,9 @@ At minimum the following CSS custom properties must be present:
 --text-heading, --text-body, --text-muted
 ```
 
-Copy the `@theme` block and `:root` / `.dark` variable declarations from  
-[`src/input.css`](../src/input.css) in this repository.
+Copy the `@theme` block and `:root` variable declarations from  
+[`src/styles/marketplace.css`](../src/styles/marketplace.css) in this repository.  
+There is deliberately no `.dark` set — the marketplace is light-only.
 
 ---
 
