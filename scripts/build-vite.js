@@ -14,7 +14,7 @@
  *      Sub-app pages are rendered by src/pages/[...path].astro via getStaticPaths.
  */
 
-import { existsSync, readFileSync, mkdirSync, rmSync, copyFileSync, readdirSync, statSync } from 'fs';
+import { existsSync, readFileSync, writeFileSync, mkdirSync, rmSync, copyFileSync, readdirSync, statSync } from 'fs';
 import { join, dirname, basename, resolve, isAbsolute } from 'path';
 import { fileURLToPath } from 'url';
 import { homedir } from 'os';
@@ -169,7 +169,20 @@ async function build() {
       const s = join(src, entry);
       const d = join(dest, entry);
       if (statSync(s).isDirectory()) copyAssets(s, d);
-      else if (!entry.endsWith('.html')) copyFileSync(s, d);
+      else if (!entry.endsWith('.html')) {
+        copyFileSync(s, d);
+        // Rewrite root-relative url() references in CSS bundles so they resolve
+        // correctly when served from a sub-path (e.g. /knowledge-base/{slug}/_astro/).
+        // Astro/Vite preserves absolute url(/) paths verbatim; from _astro/*.css
+        // one level up (../) is the slug root, so ../fonts/ becomes
+        // /knowledge-base/{slug}/fonts/ — matching where static assets are served.
+        if (entry.endsWith('.css')) {
+          let css = readFileSync(d, 'utf8');
+          // url(/path) | url('/path') | url("/path") → url(../path) etc.
+          const rewritten = css.replace(/url\(\s*(['"]?)\/(?!\/)/g, 'url($1../');
+          if (rewritten !== css) writeFileSync(d, rewritten);
+        }
+      }
     }
   }
 

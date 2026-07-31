@@ -44,10 +44,28 @@ const bodyClasses = [
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta name="description" content="Documentation marketplace — browse all doc sites in one place." />
   <title>{title}</title>
-  {/* Sub-app head contents (their stylesheets, meta and inline scripts) are slotted
-      in first so the marketplace stylesheet — injected by Astro from the CSS import
-      above — still wins on equal specificity, exactly as it did when the old string
-      transform appended it to the sub-app document. */}
+  {/*
+    CSS layer ordering fix — must appear before sub-app stylesheets.
+
+    Problem: Tailwind (style.css) uses @layer base which includes Preflight
+    (h1-h6 { font-size: inherit }). Starlight uses @layer starlight.content
+    (h1 { font-size: var(--sl-text-h1) }). CSS layer priority is determined
+    by FIRST DECLARATION ORDER: the last-declared layer wins.
+
+    On direct URL load the HTML order is:
+      <slot name="head">  ← Starlight CSS (starlight.* layers declared first)
+      <link style.css>   ← Tailwind (base layer declared last → wins)
+    Result: Tailwind Preflight clobbers all Starlight heading sizes → layout broken.
+
+    On router navigation style.css was already loaded on the KB homepage, so
+    its @layer base was declared first and Starlight's layers win. This is why
+    router nav appears correct but direct load is broken.
+
+    Fix: declare @layer base here, before the slot, so Tailwind's base layer is
+    always established first (lowest priority) regardless of stylesheet load order.
+    Starlight's layers, declared later via the slot, will always have higher priority.
+  */}
+  <style is:inline>@layer base;</style>
   <slot name="head" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   {/* data-astro-transition-persist keeps the font stylesheet stable across
