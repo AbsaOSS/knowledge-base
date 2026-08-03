@@ -77,6 +77,49 @@ body, wf-body {
   .mp-masthead-inner { padding-left: 2.5rem; padding-right: 2.5rem; }
 }
 
+/* Compact mode: app pages — only the nav strip is shown */
+.mp-masthead--compact {
+  display: flex;
+  align-items: center;
+}
+.mp-masthead--compact .mp-masthead-inner {
+  flex: 1;
+  min-width: 0;
+  padding-top: 0;
+  padding-bottom: 0;
+}
+.mp-masthead--compact .mp-masthead-eyebrow,
+.mp-masthead--compact .mp-masthead-title,
+.mp-masthead--compact .mp-masthead-desc {
+  display: none;
+}
+.mp-masthead--compact .mp-masthead-nav {
+  margin: 0;
+}
+
+/* Brand wordmark — sits in the left gutter, outside mp-masthead-inner */
+.mp-masthead-brand {
+  display: none;
+}
+.mp-masthead--compact .mp-masthead-brand {
+  display: block;
+  position: absolute;
+  font-size: 0.9375rem;
+  font-weight: 700;
+  letter-spacing: -0.015em;
+  color: var(--text-heading);
+  white-space: nowrap;
+  flex-shrink: 0;
+  padding: 0 1rem 0 1.5rem;
+}
+@media (min-width: 768px) {
+  .mp-masthead--compact .mp-masthead-brand { padding-left: 2.5rem; }
+}
+/* Below the large-display threshold, hide the brand */
+@media (max-width: 767px) {
+  .mp-masthead--compact .mp-masthead-brand { display: none; }
+}
+
 .mp-masthead-eyebrow {
   display: flex;
   align-items: center;
