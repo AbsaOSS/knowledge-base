@@ -33,7 +33,10 @@ const activeApp = apps.find(a => a.slug === activeSlug);
 const onLibrary = !activeApp;
 ---
 
-<div id="mp-masthead" class="mp-masthead">
+<div id="mp-masthead" class={`mp-masthead${onLibrary ? '' : ' mp-masthead--compact'}`}>
+  {!onLibrary && (
+    <span class="mp-masthead-brand" aria-hidden="true">Knowledge base</span>
+  )}
   <div class="mp-masthead-inner">
     <div class="mp-masthead-eyebrow animate-fade-up">
       <span class="mp-masthead-badge">
