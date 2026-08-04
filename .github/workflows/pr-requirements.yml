@@ -46,6 +46,6 @@ jobs:
           description-min-length: "20"
           # Branch names this repo uses; the char class allows the extra path
           # segments in dependabot branches (e.g. dependabot/npm_and_yarn/…).
-          branch-pattern: "^(feature|bugfix|hotfix|release|support|chore|docs|ci|test|dependabot)/[a-zA-Z0-9._/-]+$"
+          branch-pattern: "^(feat|feature|fix|bugfix|hotfix|release|support|chore|docs|ci|test|dependabot)/[a-zA-Z0-9._/-]+$"
           max-files-changed: "50"
           allowed-target-branches: "master"
