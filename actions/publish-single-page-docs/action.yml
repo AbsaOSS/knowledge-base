@@ -23,7 +23,8 @@ inputs:
     required: false
     default: ${{ github.event.release.tag_name }}
   github-token:
-    description: Token used to upload the release asset. Needs `contents: write`.
+    description: >-
+      Token used to upload the release asset. Needs `contents: write`.
     required: false
     default: ${{ github.token }}
 
