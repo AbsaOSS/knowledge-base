@@ -99,7 +99,30 @@ jobs:
           path: playwright-report/
           retention-days: 7
 
-  # ── 4. Dependency audit ────────────────────────────────────────────────────
+  # ── 4. publish-single-page-docs action self-test ───────────────────────────
+  #
+  # actions/publish-single-page-docs/ ships its own pinned dependency tree, so it is not
+  # covered by the root `npm ci` or by the Playwright suites (which stay hermetic
+  # and must not depend on the action's node_modules). This job renders a sample
+  # markdown file through the real pipeline and pins the validation messages —
+  # they are the action's user interface for onboarding repos.
+  publish-single-page-docs:
+    name: publish-single-page-docs action self-test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          # Matches the node-version the composite action pins in action.yml.
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: actions/publish-single-page-docs/package-lock.json
+      - run: npm ci
+        working-directory: actions/publish-single-page-docs
+      - run: npm run selftest
+        working-directory: actions/publish-single-page-docs
+
+  # ── 5. Dependency audit ────────────────────────────────────────────────────
   audit:
     name: npm audit
     runs-on: ubuntu-latest

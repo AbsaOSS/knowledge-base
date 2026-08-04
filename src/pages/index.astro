@@ -1,16 +1,15 @@
 ---
 // src/pages/index.astro
-import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
 import Base from '../layouts/Base.astro';
 import Masthead from '../components/Masthead.astro';
 import AppCard from '../components/AppCard.astro';
+import { loadRegistry } from '../utils/apps.js';
 
 const HEADLESS = process.env.MP_HEADLESS !== 'false';
 
-// Load apps from apps.json at the repo root
-const appsPath = resolve('apps.json');
-const apps = JSON.parse(readFileSync(appsPath, 'utf-8'));
+// The effective registry: apps.json, with every single-page bundle replaced by
+// the docs it expanded into, so each one gets its own catalog card.
+const apps = loadRegistry(process.cwd());
 
 const buildDate = new Date().toISOString().slice(0, 10);
 ---

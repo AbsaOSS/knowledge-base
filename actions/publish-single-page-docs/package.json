@@ -1,0 +1,20 @@
+{
+  "name": "@absaoss/knowledge-base-publish-single-page-docs",
+  "version": "1.0.0",
+  "private": true,
+  "description": "GitHub Action: publish plain markdown files to the knowledge base as single-page docs",
+  "type": "module",
+  "license": "Apache-2.0",
+  "scripts": {
+    "selftest": "node src/selftest.js"
+  },
+  "dependencies": {
+    "highlight.js": "11.11.1",
+    "markdown-it": "14.1.0",
+    "markdown-it-anchor": "9.2.0",
+    "markdown-it-footnote": "4.0.0",
+    "markdown-it-task-lists": "2.1.1",
+    "mermaid": "11.4.1",
+    "yaml": "2.7.1"
+  }
+}

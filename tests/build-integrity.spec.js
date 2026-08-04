@@ -119,6 +119,88 @@ test.describe('iframe onboarding', () => {
   });
 });
 
+// ── single-page onboarding (issue #35) ──────────────────────────────────────
+//
+// One registry entry (`type: "single-page"`, no per-doc metadata) points at a
+// bundle holding two docs; the build must expand it into two independent apps.
+test.describe('single-page onboarding', () => {
+  test('one bundle entry expands into one app per doc', () => {
+    for (const p of ['platform-overview/index.html', 'release-process/index.html']) {
+      expect(existsSync(join(DIST, p)), `expected expanded single-page doc ${p}`).toBe(true);
+    }
+    // A single doc is one route — nothing is crawled underneath it.
+    expect(existsSync(join(DIST, 'platform-overview/docs')), 'single-page app must emit exactly one route').toBe(false);
+  });
+
+  test('apps.json carries no per-doc metadata — the bundle manifest supplies it', () => {
+    const registry = JSON.parse(readFileSync(join(ROOT, 'apps.json'), 'utf8'));
+    const entry = registry.find((a) => a.type === 'single-page');
+    expect(entry, 'no single-page entry in apps.json').toBeTruthy();
+    expect(entry.slug, 'a single-page entry must not name a slug').toBeUndefined();
+    expect(entry.name).toBeUndefined();
+
+    // …yet the catalog knows both docs, which can only come from bundle.json.
+    const html = read('index.html');
+    expect(html).toContain('Platform Overview');
+    expect(html).toContain('Release Process');
+    expect(html).toContain('href="/knowledge-base/platform-overview/"');
+    expect(html).toContain('href="/knowledge-base/release-process/"');
+  });
+
+  test('renders in the centred reading column, with no sidebar', () => {
+    const html = read('platform-overview/index.html');
+    expect(html).toMatch(/<main id="content" class="mp-single-page"/);
+    expect(html).toContain('class="mp-doc"');
+    // Single-page docs have no navigation of their own — the masthead is it.
+    expect(html).not.toContain('id="sidebar"');
+    expect(html).not.toMatch(/<nav[^>]*aria-label="Documentation"/);
+    expect(html).toContain('id="mp-masthead"');
+  });
+
+  test('is re-hosted by the layout like any packaged page', () => {
+    const html = read('platform-overview/index.html');
+    expect(html).toContain('data-mp-headless="true"');
+    expect(html).toContain('/knowledge-base/style.css');
+    expect(html.match(/<html\b/gi) ?? []).toHaveLength(1);
+    expect(html.match(/<head\b/gi) ?? []).toHaveLength(1);
+    expect(html.match(/<body\b/gi) ?? []).toHaveLength(1);
+    expect(html.match(/<title\b/gi) ?? []).toHaveLength(1);
+  });
+
+  test('bundle asset URLs are rewritten to absolute /{prefix}/{slug}/ paths', () => {
+    const html = read('platform-overview/index.html');
+    expect(html).toContain('href="/knowledge-base/platform-overview/assets/doc.css"');
+    expect(html).not.toMatch(/href="(?!\/|https?:|mailto:|#|data:)[^"]/);
+    expect(html).not.toMatch(/<base\b/i);
+
+    // …and the assets themselves shipped alongside the page.
+    expect(existsSync(join(DIST, 'platform-overview/assets/doc.css'))).toBe(true);
+    expect(existsSync(join(DIST, 'release-process/assets/doc.css'))).toBe(true);
+  });
+
+  test('renders the markdown features the contract promises', () => {
+    const html = read('platform-overview/index.html');
+    expect(html).toContain('<table>');                        // GFM tables
+    expect(html).toContain('task-list-item');                 // GFM task lists
+    expect(html).toContain('<pre class="mp-code">');          // fenced code
+    expect(html).toContain('hljs-keyword');                   // syntax highlighting
+    expect(html).toMatch(/<pre class="mermaid">flowchart LR/); // mermaid source survives
+  });
+
+  test('mermaid is vendored into the artifact, never fetched from a CDN', () => {
+    const html = read('platform-overview/index.html');
+    expect(html).toContain('src="/knowledge-base/platform-overview/assets/mermaid.min.js"');
+    expect(html).not.toMatch(/src="https?:\/\/[^"]*mermaid/);
+    expect(existsSync(join(DIST, 'platform-overview/assets/mermaid.min.js')), 'vendored mermaid missing').toBe(true);
+  });
+
+  test('the other onboarding types are unaffected', () => {
+    expect(existsSync(join(DIST, 'user-guide/docs/index.html'))).toBe(true);
+    expect(existsSync(join(DIST, 'guide-mirror/docs/index.html'))).toBe(true);
+    expect(existsSync(join(DIST, 'external-docs/index.html'))).toBe(true);
+  });
+});
+
 // ── Persistent masthead (issue #24) ─────────────────────────────────────────
 test.describe('Masthead', () => {
   const STRAPLINE = 'Browse and access all documentation sites';
@@ -159,6 +241,8 @@ test.describe('Masthead', () => {
   test('the crumb tracks the app being viewed', () => {
     expect(nav(read('guide-mirror/docs/index.html'))).toContain('Guide Mirror');
     expect(nav(read('external-docs/index.html'))).toContain('External Docs');
+    // Expanded single-page docs are ordinary apps as far as the masthead cares.
+    expect(nav(read('platform-overview/index.html'))).toContain('Platform Overview');
   });
 
   test('all masthead links are absolute /knowledge-base/ paths', () => {

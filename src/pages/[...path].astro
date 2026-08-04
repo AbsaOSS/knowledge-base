@@ -3,7 +3,8 @@
 //
 // Catchall route that serves every sub-app page as a static Astro page.
 // getStaticPaths enumerates all HTML files under apps/{slug}/ for every packaged
-// entry in apps.json, plus a single route per iframe-type entry (issue #10).
+// entry in apps.json, plus a single route per iframe-type entry (issue #10) and
+// per single-page doc (issue #35).
 //
 // Packaged pages are not emitted verbatim: transformSubAppHtml() rewrites their
 // URLs and splits the document, and Base.astro re-hosts the parts. That keeps the
@@ -44,7 +45,7 @@ const atAppRoot = !props.fileRelDir;
   title={pageTitle}
   headless={appHeadless}
   bodyClass={parts?.bodyClass ?? ''}
-  flexBody={!!props.iframe}
+  flexBody={!!props.iframe || !!props.singlePage}
 >
   {parts && <Fragment slot="head" set:html={parts.headHtml} />}
 
@@ -61,6 +62,10 @@ const atAppRoot = !props.fileRelDir;
         sandbox="allow-scripts allow-same-origin allow-popups allow-forms allow-downloads"
       ></iframe>
     </main>
+  ) : props.singlePage ? (
+    /* Single-page docs bring no navigation of their own — no sidebar, no in-app
+       chrome — so the marketplace supplies the reading column instead. */
+    <main id="content" class="mp-single-page" set:html={parts!.bodyHtml} />
   ) : (
     <Fragment set:html={parts!.bodyHtml} />
   )}

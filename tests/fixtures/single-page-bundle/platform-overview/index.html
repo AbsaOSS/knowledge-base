@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en" data-mp-headless="true">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Platform Overview</title>
+<meta name="description" content="How the platform is wired together, endpoint by endpoint.">
+<link rel="stylesheet" href="assets/doc.css">
+</head>
+<body>
+<article class="mp-doc">
+<h1 id="platform-overview" tabindex="-1">Platform Overview <a class="mp-anchor" href="#platform-overview">#</a></h1>
+<p>The platform runs every service behind a single gateway. See
+<a href="https://example.com/handbook" target="_blank" rel="noopener noreferrer">the handbook</a> for the long version.</p>
+<h2 id="endpoints" tabindex="-1">Endpoints <a class="mp-anchor" href="#endpoints">#</a></h2>
+<div class="mp-table-wrap">
+<table>
+<thead>
+<tr><th>Endpoint</th><th>Method</th><th>Notes</th></tr>
+</thead>
+<tbody>
+<tr><td><code>/health</code></td><td>GET</td><td>Liveness probe</td></tr>
+<tr><td><code>/v1/items</code></td><td>POST</td><td>Creates an item</td></tr>
+</tbody>
+</table>
+</div>
+<h2 id="configuration" tabindex="-1">Configuration <a class="mp-anchor" href="#configuration">#</a></h2>
+<pre class="mp-code"><code class="hljs language-js"><span class="hljs-keyword">export</span> <span class="hljs-keyword">const</span> port = <span class="hljs-title class_">Number</span>(process.<span class="hljs-property">env</span>.<span class="hljs-property">PORT</span> ?? <span class="hljs-number">8080</span>);</code></pre>
+<h2 id="rollout-status" tabindex="-1">Rollout status <a class="mp-anchor" href="#rollout-status">#</a></h2>
+<ul class="contains-task-list">
+<li class="task-list-item"><input class="task-list-item-checkbox" checked disabled type="checkbox"> Contract published</li>
+<li class="task-list-item"><input class="task-list-item-checkbox" disabled type="checkbox"> Load-tested</li>
+</ul>
+<h2 id="request-flow" tabindex="-1">Request flow <a class="mp-anchor" href="#request-flow">#</a></h2>
+<pre class="mermaid">flowchart LR
+  client --&gt; gateway --&gt; service</pre>
+</article>
+<script src="assets/mermaid.min.js"></script>
+<script>(function () {
+  var render = function () {
+    if (!window.mermaid) return;
+    var nodes = document.querySelectorAll('pre.mermaid:not([data-processed])');
+    if (!nodes.length) return;
+    window.mermaid.initialize({
+      startOnLoad: false,
+      theme: 'base',
+      securityLevel: 'strict',
+      fontFamily: 'Inter, Noto Sans, ui-sans-serif, system-ui, sans-serif',
+      themeVariables: {
+        primaryColor: '#f8eaee', primaryTextColor: '#1b0e12', primaryBorderColor: '#af144b',
+        lineColor: '#93103f', secondaryColor: '#f0d0da', tertiaryColor: '#fdf8f9'
+      }
+    });
+    try { window.mermaid.run({ nodes: nodes }); } catch (e) { /* leave the source visible */ }
+  };
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', render);
+  else render();
+  document.addEventListener('astro:page-load', render);
+})();</script>
+</body>
+</html>

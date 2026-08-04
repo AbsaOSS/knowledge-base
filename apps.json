@@ -32,5 +32,14 @@
     "type": "iframe",
     "url": "https://example.com/docs",
     "temporary": true
+  },
+  {
+    "type": "single-page",
+    "prebuilt": "tests/fixtures/single-page-bundle"
+  },
+  {
+    "type": "single-page",
+    "prebuilt": "../knowledge-base-example-single-page/dist.tar.gz",
+    "optional": true
   }
 ]
