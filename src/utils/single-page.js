@@ -211,7 +211,11 @@ export function resolveRegistry(registry, map, warn = () => {}) {
     const key = bundleKey(app);
     const docs = map[key];
     if (!docs || docs.length === 0) {
-      warn(`${key}: single-page bundle has not been prepared yet — run a build to populate ${EXPANSION_FILE}`);
+      // `optional` entries are expected to be missing whenever their artifact is
+      // not checked out (see build-vite.js) — that is not worth a warning.
+      if (!app.optional) {
+        warn(`${key}: single-page bundle has not been prepared yet — run a build to populate ${EXPANSION_FILE}`);
+      }
       continue;
     }
     resolved.push(...docs);

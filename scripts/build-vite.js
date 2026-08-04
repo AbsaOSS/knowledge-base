@@ -72,10 +72,15 @@ function stageArtifact(srcPath, name) {
   return stageDir;
 }
 
-/** Resolves a registry path (`~` and repo-relative forms allowed) to an absolute one. */
-function resolveArtifactPath(app, raw, label) {
+/** Expands a registry path (`~` and repo-relative forms allowed) to an absolute one. */
+function artifactPath(raw) {
   const expanded = raw.replace(/^~/, homedir());
-  const srcPath  = isAbsolute(expanded) ? expanded : resolve(ROOT, expanded);
+  return isAbsolute(expanded) ? expanded : resolve(ROOT, expanded);
+}
+
+/** As artifactPath, but fails the build when the artifact is not there. */
+function resolveArtifactPath(app, raw, label) {
+  const srcPath = artifactPath(raw);
   if (!existsSync(srcPath)) fail((app.slug ?? bundleKey(app)) + ': ' + label + ' path not found: ' + srcPath);
   return srcPath;
 }
@@ -150,7 +155,19 @@ async function build() {
   const modeLabel = [LOCAL_MODE && 'local', HEADLESS && 'headless'].filter(Boolean).join(', ');
   console.log('\n\x1b[1m\x1b[35m▶ knowledge-base build' + (modeLabel ? ' (' + modeLabel + ')' : '') + '\x1b[0m\n');
 
-  const registeredApps = JSON.parse(readFileSync(join(ROOT, 'apps.json'), 'utf8'));
+  const allEntries = JSON.parse(readFileSync(join(ROOT, 'apps.json'), 'utf8'));
+
+  // Entries flagged `"optional": true` are local-development conveniences whose
+  // artifact lives outside this repo — the sibling example repo, say. When it is
+  // absent (CI, a fresh clone) the entry is skipped with a warning rather than
+  // failing the build. Everything else still hard-fails on a missing artifact,
+  // so a lost fixture can never quietly produce an empty deployment.
+  const registeredApps = allEntries.filter(app => {
+    const artifact = app.prebuilt ?? app.localPath;
+    if (!app.optional || !artifact || existsSync(artifactPath(artifact))) return true;
+    warn((app.slug ?? artifact) + ': optional entry skipped — artifact not found at ' + artifactPath(artifact));
+    return false;
+  });
 
   // Validate registry entries up front (fail fast with a clear message).
   const bundleKeys = new Set();

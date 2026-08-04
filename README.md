@@ -97,6 +97,13 @@ Each entry registers one doc app. A `slug` is required; the source is one of
 ]
 ```
 
+Add `"optional": true` to a `prebuilt`/`localPath` entry whose artifact lives
+outside this repo — a sibling checkout, say. The build then **skips it with a
+warning** when the artifact is absent instead of failing, so CI and fresh clones
+stay green while a developer who has the sibling repo gets the app. Entries
+without the flag still hard-fail on a missing artifact, so a lost fixture can
+never quietly produce an empty deployment.
+
 ### iframe onboarding (temporary)
 
 Teams that already host their docs elsewhere and can't yet produce a headless
@@ -169,10 +176,24 @@ never touches this repository again. Pages render with the masthead and a centre
 reading column, no sidebar. See [`contract/SINGLE_PAGE.md`](contract/SINGLE_PAGE.md)
 and issue #35.
 
+#### Seeing it for real
+
+`knowledge-base-example-single-page` is a mock docs repo — three markdown files
+and the workflow above, nothing else — whose `dist.tar.gz` is produced by the
+real action. Check it out next to this repo and:
+
+```bash
+npm run build:local && npm run preview
+```
+
+then open <http://localhost:4321/knowledge-base/>. The committed `apps.json`
+already registers it as an `optional` entry, so nothing breaks when it is absent.
+
 The repo ships an `apps.json` that registers the **vendored docs-example fixture**
-twice (`user-guide`, `guide-mirror`), an iframe entry, and a **single-page bundle
-fixture** (`platform-overview`, `release-process`) so the build and tests are
-hermetic out of the box. Replace it with your own apps for a real deployment.
+twice (`user-guide`, `guide-mirror`), an iframe entry, a **single-page bundle
+fixture** (`platform-overview`, `release-process`), and the optional example repo
+above — so the build and tests are hermetic out of the box. Replace it with your
+own apps for a real deployment.
 
 ---
 

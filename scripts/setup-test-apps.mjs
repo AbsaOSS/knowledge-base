@@ -201,6 +201,20 @@ const apps = [
     type: 'single-page',
     prebuilt: BUNDLE_DIR,
   },
+  {
+    // The sibling example repo (knowledge-base-example-single-page), for looking
+    // at real action output in a browser: `npm run build:local && npm run preview`.
+    // Its dist.tar.gz is produced by the real action, so it is the closest thing
+    // to a published bundle without a network round-trip.
+    //
+    // `optional` because that repo is not part of this one: when it is not
+    // checked out next door — CI, a fresh clone — the build skips this entry with
+    // a warning instead of failing. Keep it last so the hermetic fixture above
+    // stays the first single-page entry the suites look at.
+    type: 'single-page',
+    prebuilt: '../knowledge-base-example-single-page/dist.tar.gz',
+    optional: true,
+  },
 ];
 
 const out = join(ROOT, 'apps.json');

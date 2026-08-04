@@ -138,6 +138,12 @@ Two build-pipeline pieces support this: `apps.json` entries may carry a `prebuil
 (tarball or dist dir) consumed by `scripts/build-vite.js` (`preparePrebuilt`) for hermetic
 offline builds; and the build aliases the bundled marketplace CSS to a stable `dist/style.css`.
 
+An entry may also carry `"optional": true`: the build then skips it with a warning when its
+`prebuilt`/`localPath` artifact is missing, instead of failing. That is how the sibling
+`knowledge-base-example-single-page` repo (a mock docs repo whose `dist.tar.gz` comes from
+the real action — `npm run build:local && npm run preview` to view it) can stay registered
+in the committed `apps.json` without breaking CI, which only has this repo.
+
 ## Environment Variables
 
 - `GITHUB_TOKEN` — GitHub API auth for fetching Release artifacts
