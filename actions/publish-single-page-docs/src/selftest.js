@@ -1,5 +1,5 @@
 /**
- * selftest.js — `npm run selftest` inside actions/publish-docs.
+ * selftest.js — `npm run selftest` inside actions/publish-single-page-docs.
  *
  * Exercises the action without a runner: renders a sample markdown file through
  * the real pipeline and asserts the markdown features the contract promises, the
@@ -44,7 +44,7 @@ flowchart LR
 [^1]: The handbook is internal.
 `;
 
-const root = mkdtempSync(join(tmpdir(), 'kb-publish-docs-'));
+const root = mkdtempSync(join(tmpdir(), 'kb-publish-single-page-docs-'));
 let failures = 0;
 
 function check(name, fn) {
@@ -204,4 +204,4 @@ if (failures > 0) {
   console.error(`\n\x1b[31m✗ ${failures} self-test check(s) failed\x1b[0m\n`);
   process.exit(1);
 }
-console.log('\n\x1b[32m✓ publish-docs self-test passed\x1b[0m\n');
+console.log('\n\x1b[32m✓ publish-single-page-docs self-test passed\x1b[0m\n');

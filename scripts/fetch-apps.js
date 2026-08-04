@@ -159,7 +159,7 @@ async function fetchBundle(app) {
     fail(
       `${key}: the release artifact has no ${BUNDLE_MANIFEST} at its root.\n` +
       `     A "single-page" entry expects a bundle published by ` +
-      `AbsaOSS/knowledge-base/actions/publish-docs — see contract/SINGLE_PAGE.md.`,
+      `AbsaOSS/knowledge-base/actions/publish-single-page-docs — see contract/SINGLE_PAGE.md.`,
     );
   }
 

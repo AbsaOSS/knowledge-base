@@ -139,7 +139,7 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v4
-      - uses: AbsaOSS/knowledge-base/actions/publish-docs@master
+      - uses: AbsaOSS/knowledge-base/actions/publish-single-page-docs@master
         with:
           docs: |
             - md: docs/overview.md
@@ -148,7 +148,7 @@ jobs:
               slug: my-service
 ```
 
-The action ([`actions/publish-docs/`](actions/publish-docs)) renders the markdown
+The action ([`actions/publish-single-page-docs/`](actions/publish-single-page-docs)) renders the markdown
 to headless HTML — GFM tables, task lists, footnotes, highlighted code and
 vendored-mermaid diagrams — packs every doc into one `dist.tar.gz` with a
 `bundle.json` manifest, and attaches it to the repo's latest release.
@@ -328,7 +328,7 @@ push + ECS deploy permissions via repository secrets.
 knowledge-base/
 ├── apps.json                  ← Registry of doc apps
 ├── astro.config.mjs           ← Astro SSG config (base /knowledge-base)
-├── actions/publish-docs/      ← Reusable action: markdown → single-page bundle
+├── actions/publish-single-page-docs/      ← Reusable action: markdown → single-page bundle
 ├── src/
 │   ├── pages/
 │   │   ├── index.astro        ← Landing catalog

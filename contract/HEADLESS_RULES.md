@@ -6,7 +6,7 @@ The marketplace injects its own persistent 56 px chrome at the top of every page
 
 > **Simpler alternative — single-page docs.** If what you have is a markdown file or
 > two rather than a documentation *site*, none of this applies to you. Add the
-> `publish-docs` workflow to your repo and the action produces a compliant artifact
+> `publish-single-page-docs` action to your repo and it produces a compliant artifact
 > for you — no headless build, no `marketplace.json`, no config. See
 > [`SINGLE_PAGE.md`](./SINGLE_PAGE.md).
 

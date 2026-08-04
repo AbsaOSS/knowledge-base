@@ -1,5 +1,5 @@
 {
-  "name": "@absaoss/knowledge-base-publish-docs",
+  "name": "@absaoss/knowledge-base-publish-single-page-docs",
   "version": "1.0.0",
   "private": true,
   "description": "GitHub Action: publish plain markdown files to the knowledge base as single-page docs",

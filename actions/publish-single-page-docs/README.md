@@ -1,11 +1,11 @@
-# `publish-docs` action
+# `publish-single-page-docs` action
 
 Renders plain markdown files into headless single-page docs and attaches them to
 your repository's latest GitHub Release as `dist.tar.gz`, ready for the AbsaOSS
 knowledge base to pick up.
 
 ```yaml
-- uses: AbsaOSS/knowledge-base/actions/publish-docs@master
+- uses: AbsaOSS/knowledge-base/actions/publish-single-page-docs@master
   with:
     docs: |
       - md: docs/overview.md
@@ -38,7 +38,7 @@ onboarding repo needs no toolchain of its own.
 ## Working on it
 
 ```bash
-cd actions/publish-docs
+cd actions/publish-single-page-docs
 npm ci
 npm run selftest
 ```

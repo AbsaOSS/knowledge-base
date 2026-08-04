@@ -75,7 +75,7 @@ Orchestrator: `scripts/build-vite.js`. Flags: `--local`, `--headless`, `--path-p
 - `src/utils/single-page.js` — Bundle manifest reading/validation + registry expansion, shared by both fetch paths and by Astro
 - `scripts/build-vite.js` — Build orchestrator (3-step pipeline)
 - `scripts/fetch-apps.js` — GitHub Release artifact downloader
-- `actions/publish-docs/` — Reusable GitHub Action that turns a repo's markdown into a single-page bundle
+- `actions/publish-single-page-docs/` — Reusable GitHub Action that turns a repo's markdown into a single-page bundle
 
 ### Three Onboarding Types
 
@@ -83,7 +83,7 @@ An `apps.json` entry is one of:
 
 - **default (packaged)** — a repo publishes a headless static site as `dist.tar.gz` plus `marketplace.json`. Every HTML file becomes a route.
 - **`type: "iframe"`** — no artifact; a single route renders a full-viewport `<iframe>` for an external URL. Explicit stopgap (issue #10).
-- **`type: "single-page"`** — one release artifact holding *many* docs, published by `actions/publish-docs` from plain markdown. The entry carries **no per-doc metadata** (`{ "repo": …, "type": "single-page", "version": "latest" }`); the build reads the artifact's `bundle.json` and **expands** the entry into one app per doc, extracting each into `apps/{slug}/`. The expansion is recorded in `apps/.single-page.json` and spliced back into the registry by `loadRegistry()` so Astro sees the same registry the build did. Slugs must be globally unique — `resolveRegistry()` fails the build otherwise. Rendering: masthead, no sidebar, content in a centred `main.mp-single-page` reading column. See issue #35 and `contract/SINGLE_PAGE.md`.
+- **`type: "single-page"`** — one release artifact holding *many* docs, published by `actions/publish-single-page-docs` from plain markdown. The entry carries **no per-doc metadata** (`{ "repo": …, "type": "single-page", "version": "latest" }`); the build reads the artifact's `bundle.json` and **expands** the entry into one app per doc, extracting each into `apps/{slug}/`. The expansion is recorded in `apps/.single-page.json` and spliced back into the registry by `loadRegistry()` so Astro sees the same registry the build did. Slugs must be globally unique — `resolveRegistry()` fails the build otherwise. Rendering: masthead, no sidebar, content in a centred `main.mp-single-page` reading column. See issue #35 and `contract/SINGLE_PAGE.md`.
 
 ### Two Modes
 

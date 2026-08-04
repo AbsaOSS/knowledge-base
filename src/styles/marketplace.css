@@ -233,7 +233,7 @@ a.mp-masthead-link:hover { color: var(--text-heading); }
 }
 
 /* ── Single-page docs (issue #35) ────────────────────────────────────────── */
-/* A single-page doc is one markdown file rendered by actions/publish-docs: no
+/* A single-page doc is one markdown file rendered by actions/publish-single-page-docs: no
    sidebar, no in-app navigation, nothing but prose. The marketplace owns the
    measure so every such doc reads identically regardless of which repo published
    it — ~800px of content, centred, with room to breathe underneath. The prose

@@ -129,7 +129,7 @@ function installBundle(app, stageDir, sourceLabel) {
   if (!bundleRoot) {
     fail(
       key + ': single-page artifact has no ' + BUNDLE_MANIFEST + ' at its root. ' +
-      'Publish it with AbsaOSS/knowledge-base/actions/publish-docs — see contract/SINGLE_PAGE.md.',
+      'Publish it with AbsaOSS/knowledge-base/actions/publish-single-page-docs — see contract/SINGLE_PAGE.md.',
     );
   }
 

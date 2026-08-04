@@ -3,7 +3,7 @@
 // Shared helpers for the "single-page" onboarding type (issue #35).
 //
 // A single-page entry in apps.json points at ONE release artifact that contains
-// MANY docs — the repo publishes them with actions/publish-docs. The registry
+// MANY docs — the repo publishes them with actions/publish-single-page-docs. The registry
 // entry therefore carries no per-doc metadata:
 //
 //   { "repo": "org/repo", "type": "single-page", "version": "latest" }

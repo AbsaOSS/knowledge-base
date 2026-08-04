@@ -36,7 +36,7 @@ jobs:
       contents: write        # required — the action uploads a release asset
     steps:
       - uses: actions/checkout@v4
-      - uses: AbsaOSS/knowledge-base/actions/publish-docs@master
+      - uses: AbsaOSS/knowledge-base/actions/publish-single-page-docs@master
         with:
           docs: |
             - md: docs/overview.md

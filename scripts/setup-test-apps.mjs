@@ -23,7 +23,7 @@ import { mkdirSync, rmSync, writeFileSync, existsSync } from 'node:fs';
 import { dirname, join, resolve, isAbsolute } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { DOC_CSS, CSS_PATH, MERMAID_PATH, renderDocument } from '../actions/publish-docs/src/template.js';
+import { DOC_CSS, CSS_PATH, MERMAID_PATH, renderDocument } from '../actions/publish-single-page-docs/src/template.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(__dirname, '..');
@@ -50,7 +50,7 @@ if (!existsSync(artifactAbs)) {
 // opaque blob. It is regenerated here on every run and committed, so CI's plain
 // `npm run build:headless` works without running this script first.
 //
-// The document shell comes from the real action (actions/publish-docs/src/
+// The document shell comes from the real action (actions/publish-single-page-docs/src/
 // template.js — deliberately dependency-free) so the fixture cannot drift from
 // what a published bundle looks like. Only the *body* HTML is hand-written here,
 // standing in for the markdown-it output, which keeps the marketplace test suite
@@ -95,7 +95,7 @@ const RELEASE_PROCESS_BODY = `<h1 id="release-process" tabindex="-1">Release Pro
 <ol>
 <li>Tag the commit.</li>
 <li>Publish the GitHub Release.</li>
-<li>The publish-docs action attaches <code>dist.tar.gz</code>.</li>
+<li>The publish-single-page-docs action attaches <code>dist.tar.gz</code>.</li>
 </ol>`;
 
 /**
