@@ -119,6 +119,44 @@ jobs:
           cache-dependency-path: actions/publish-single-page-docs/package-lock.json
       - run: npm ci
         working-directory: actions/publish-single-page-docs
+      # Action manifests are only parsed by *consuming* repositories' runners, so
+      # a syntax error here ships green and breaks every downstream workflow at
+      # "Set up job" (#39). Parse them with the same pinned `yaml` package the
+      # action already depends on, so this needs no extra tooling.
+      - name: Validate action manifests
+        working-directory: actions/publish-single-page-docs
+        run: |
+          node -e '
+            const fs = require("node:fs");
+            const path = require("node:path");
+            const YAML = require("yaml");
+            const root = path.resolve("../..");
+            const files = [];
+            (function walk(dir) {
+              for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+                if (entry.name === "node_modules") continue;
+                const full = path.join(dir, entry.name);
+                if (entry.isDirectory()) walk(full);
+                else if (/\.ya?ml$/.test(entry.name)) files.push(full);
+              }
+            })(path.join(root, "actions"));
+            if (files.length === 0) {
+              console.error("no action manifests found under actions/ — check this glob");
+              process.exit(1);
+            }
+            let failed = 0;
+            for (const file of files) {
+              const name = path.relative(root, file);
+              try {
+                YAML.parse(fs.readFileSync(file, "utf8"));
+                console.log("ok      " + name);
+              } catch (error) {
+                failed += 1;
+                console.error("FAILED  " + name + ": " + error.message);
+              }
+            }
+            process.exit(failed === 0 ? 0 : 1);
+          '
       - run: npm run selftest
         working-directory: actions/publish-single-page-docs
 
