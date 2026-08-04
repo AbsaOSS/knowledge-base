@@ -1,0 +1,27 @@
+{
+  "marketplaceVersion": "1",
+  "type": "single-page",
+  "docs": [
+    {
+      "slug": "platform-overview",
+      "title": "Platform Overview",
+      "description": "How the platform is wired together, endpoint by endpoint.",
+      "icon": "layers",
+      "tags": [
+        "platform",
+        "reference"
+      ],
+      "entryPoint": "index.html"
+    },
+    {
+      "slug": "release-process",
+      "title": "Release Process",
+      "description": "How a release is cut and how the docs bundle gets attached.",
+      "icon": "cog",
+      "tags": [
+        "process"
+      ],
+      "entryPoint": "index.html"
+    }
+  ]
+}

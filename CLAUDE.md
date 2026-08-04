@@ -72,8 +72,18 @@ Orchestrator: `scripts/build-vite.js`. Flags: `--local`, `--headless`, `--path-p
 - `src/components/Chrome.astro` — 56px fixed top bar (standalone mode only)
 - `src/components/Masthead.astro` — Persistent Knowledge base header + Library/current-app sub-nav (all pages, both modes)
 - `src/templates/chrome.js` — Inline theme script + shadow-DOM compat styles injected by the layout
+- `src/utils/single-page.js` — Bundle manifest reading/validation + registry expansion, shared by both fetch paths and by Astro
 - `scripts/build-vite.js` — Build orchestrator (3-step pipeline)
 - `scripts/fetch-apps.js` — GitHub Release artifact downloader
+- `actions/publish-docs/` — Reusable GitHub Action that turns a repo's markdown into a single-page bundle
+
+### Three Onboarding Types
+
+An `apps.json` entry is one of:
+
+- **default (packaged)** — a repo publishes a headless static site as `dist.tar.gz` plus `marketplace.json`. Every HTML file becomes a route.
+- **`type: "iframe"`** — no artifact; a single route renders a full-viewport `<iframe>` for an external URL. Explicit stopgap (issue #10).
+- **`type: "single-page"`** — one release artifact holding *many* docs, published by `actions/publish-docs` from plain markdown. The entry carries **no per-doc metadata** (`{ "repo": …, "type": "single-page", "version": "latest" }`); the build reads the artifact's `bundle.json` and **expands** the entry into one app per doc, extracting each into `apps/{slug}/`. The expansion is recorded in `apps/.single-page.json` and spliced back into the registry by `loadRegistry()` so Astro sees the same registry the build did. Slugs must be globally unique — `resolveRegistry()` fails the build otherwise. Rendering: masthead, no sidebar, content in a centred `main.mp-single-page` reading column. See issue #35 and `contract/SINGLE_PAGE.md`.
 
 ### Two Modes
 
@@ -94,9 +104,10 @@ The marketplace has no dark mode: no theme toggle, no persisted theme, no `dark`
 ## Contract for Doc Apps
 
 Apps registered in `apps.json` must comply with:
-- `contract/schema.json` — JSON Schema for `marketplace.json` manifest
+- `contract/schema.json` — JSON Schema for `marketplace.json` manifest (packaged apps)
 - `contract/HEADLESS_RULES.md` — Structural requirements (headless HTML, relative paths, `data-mp-headless` attribute)
 - `contract/STYLE_GUIDE.md` — Design tokens and typography (light only — the marketplace has no dark mode)
+- `contract/SINGLE_PAGE.md` — `bundle.json` format + the copy-paste onboarding workflow for single-page docs
 
 ## Testing
 
@@ -115,7 +126,8 @@ Self-contained Playwright E2E — `npm test` auto-starts everything (no external
 
 Tests drive the host origin (`http://localhost:4201`). Suites (`tests/`):
 - `build-integrity.spec.js` — `dist/` output: both apps enumerated, absolute URL rewriting,
-  headless markup, stable `dist/style.css` (the marketplace CSS the sub-app pages reference).
+  headless markup, stable `dist/style.css` (the marketplace CSS the sub-app pages reference),
+  and single-page bundle expansion (`tests/fixtures/single-page-bundle/` → two apps).
 - `web-fragment.spec.js` — shadow-DOM isolation (reframed `wf-html`/`wf-body`; chrome must
   not leak in), routing + smooth no-reload SPA transitions, cross-app navigation, asset
   loading (no host-origin 404s), and the documented history limitation (fragment routing is

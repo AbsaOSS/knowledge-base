@@ -120,9 +120,59 @@ inside the marketplace chrome and shows an **External** badge in the catalogue.
 The external site must permit embedding (its CSP `frame-ancestors` /
 `X-Frame-Options` must not block the marketplace origin). See issue #10.
 
+### single-page onboarding (markdown, zero config)
+
+Teams whose "docs" are just a markdown file or two don't need a docs site at all.
+They add **one workflow file** to their repo:
+
+```yaml
+# .github/workflows/publish-docs.yml in the docs repo
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: AbsaOSS/knowledge-base/actions/publish-docs@master
+        with:
+          docs: |
+            - md: docs/overview.md
+              title: Service Overview
+              description: What the service does and how to use it.
+              slug: my-service
+```
+
+The action ([`actions/publish-docs/`](actions/publish-docs)) renders the markdown
+to headless HTML — GFM tables, task lists, footnotes, highlighted code and
+vendored-mermaid diagrams — packs every doc into one `dist.tar.gz` with a
+`bundle.json` manifest, and attaches it to the repo's latest release.
+
+The registry entry then carries **no per-doc metadata at all**:
+
+```jsonc
+{
+  "repo": "AbsaOSS/my-service",
+  "type": "single-page",
+  "version": "latest"
+}
+```
+
+The build reads `bundle.json` and expands that one entry into one app per doc —
+each with its own catalogue card and URL — so adding or renaming a doc later
+never touches this repository again. Pages render with the masthead and a centred
+reading column, no sidebar. See [`contract/SINGLE_PAGE.md`](contract/SINGLE_PAGE.md)
+and issue #35.
+
 The repo ships an `apps.json` that registers the **vendored docs-example fixture**
-twice (`user-guide`, `guide-mirror`) so the build and tests are hermetic out of
-the box. Replace it with your own apps for a real deployment.
+twice (`user-guide`, `guide-mirror`), an iframe entry, and a **single-page bundle
+fixture** (`platform-overview`, `release-process`) so the build and tests are
+hermetic out of the box. Replace it with your own apps for a real deployment.
 
 ---
 
@@ -199,6 +249,10 @@ Apps must comply with the marketplace contract before they can be registered:
 | [`contract/schema.json`](contract/schema.json) | JSON Schema for `marketplace.json` |
 | [`contract/HEADLESS_RULES.md`](contract/HEADLESS_RULES.md) | Headless HTML, relative paths, `data-mp-headless` |
 | [`contract/STYLE_GUIDE.md`](contract/STYLE_GUIDE.md) | Design tokens (`--color-kb-*`), typography, dark mode |
+| [`contract/SINGLE_PAGE.md`](contract/SINGLE_PAGE.md) | `bundle.json` format + zero-config markdown onboarding |
+
+> The checklist and workflows below apply to **packaged** doc apps. Single-page
+> docs skip all of it — the action produces a compliant artifact for you.
 
 ### Checklist
 - [ ] `marketplace.json` in repo root, valid against `contract/schema.json`
@@ -274,6 +328,7 @@ push + ECS deploy permissions via repository secrets.
 knowledge-base/
 ├── apps.json                  ← Registry of doc apps
 ├── astro.config.mjs           ← Astro SSG config (base /knowledge-base)
+├── actions/publish-docs/      ← Reusable action: markdown → single-page bundle
 ├── src/
 │   ├── pages/
 │   │   ├── index.astro        ← Landing catalog
@@ -283,7 +338,8 @@ knowledge-base/
 │   ├── templates/shadow-compat.js ← Shadow-DOM design-token styles
 │   ├── styles/marketplace.css ← Design tokens + Tailwind
 │   └── utils/
-│       ├── apps.js            ← getAppPages() page enumeration
+│       ├── apps.js            ← loadRegistry() + getAppPages() page enumeration
+│       ├── single-page.js     ← bundle.json parsing + registry expansion
 │       └── transform.js       ← URL rewriting + sub-app document splitting
 ├── scripts/
 │   ├── build-vite.js          ← Build orchestrator
@@ -296,7 +352,7 @@ knowledge-base/
 │   ├── host/server.mjs        ← Reference web-fragments host (gateway)
 │   ├── fragment-server.mjs    ← nginx-mirroring static server
 │   ├── support/fragment.js    ← Shadow-DOM test helpers
-│   └── fixtures/              ← Vendored docs-example dist.tar.gz
+│   └── fixtures/              ← Vendored docs-example dist.tar.gz + single-page bundle
 ├── contract/                  ← marketplace.json schema + rules + style guide
 ├── .github/workflows/         ← ci.yml, validate-doc-app.yml
 ├── Dockerfile

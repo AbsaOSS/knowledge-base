@@ -4,6 +4,12 @@ Doc apps included in the marketplace must produce **headless HTML output** — p
 contain content (sidebar + prose) but **do not** include a site-level top navigation bar.
 The marketplace injects its own persistent 56 px chrome at the top of every page.
 
+> **Simpler alternative — single-page docs.** If what you have is a markdown file or
+> two rather than a documentation *site*, none of this applies to you. Add the
+> `publish-docs` workflow to your repo and the action produces a compliant artifact
+> for you — no headless build, no `marketplace.json`, no config. See
+> [`SINGLE_PAGE.md`](./SINGLE_PAGE.md).
+
 > **Temporary alternative — iframe onboarding.** Teams that already host their docs
 > elsewhere and cannot yet produce a headless package can be listed immediately with an
 > `apps.json` entry of `"type": "iframe"` + a `"url"` (no `marketplace.json`, no release

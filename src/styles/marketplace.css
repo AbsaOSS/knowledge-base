@@ -232,6 +232,24 @@ a.mp-masthead-link:hover { color: var(--text-heading); }
   color: var(--color-kb-500);
 }
 
+/* ── Single-page docs (issue #35) ────────────────────────────────────────── */
+/* A single-page doc is one markdown file rendered by actions/publish-docs: no
+   sidebar, no in-app navigation, nothing but prose. The marketplace owns the
+   measure so every such doc reads identically regardless of which repo published
+   it — ~800px of content, centred, with room to breathe underneath. The prose
+   itself is styled by the artifact's own assets/doc.css, scoped to .mp-doc. */
+.mp-single-page {
+  flex: 1 1 auto;
+  width: 100%;
+  max-width: 53rem;      /* 848px − 2×1.5rem padding = 800px of content */
+  margin: 0 auto;
+  padding: 3rem 1.5rem 5rem;
+  box-sizing: border-box;
+}
+@media (max-width: 640px) {
+  .mp-single-page { padding: 2rem 1.25rem 3.5rem; }
+}
+
 /* ── Tag pills ───────────────────────────────────────────────────────────── */
 .mp-tag {
   display: inline-flex;

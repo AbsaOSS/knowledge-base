@@ -189,11 +189,50 @@ test.describe('Cross-app navigation', () => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Single-page docs (issue #35): one bundle in apps.json, one card and one route
+// per doc, rendered in the marketplace's own reading column.
+test.describe('Single-page docs', () => {
+  test('expanded docs appear as ordinary catalog cards', async ({ page }) => {
+    await gotoFragment(page, '/knowledge-base/');
+    const text = await getFragmentText(page);
+    expect(text).toContain('Platform Overview');
+    expect(text).toContain('Release Process');
+
+    const hrefs = await shadowHrefs(page, '.mp-card');
+    expect(hrefs).toContain('/knowledge-base/platform-overview/');
+    expect(hrefs).toContain('/knowledge-base/release-process/');
+  });
+
+  test('clicking a doc card navigates into it without reloading the host', async ({ page }) => {
+    await gotoFragment(page, '/knowledge-base/');
+    await clickFragmentLink(page, '.mp-card[href="/knowledge-base/platform-overview/"]');
+
+    await waitForFragmentText(page, /Platform Overview/i);
+    expect(await hostStillAlive(page)).toBe(true);
+  });
+
+  test('renders in the centred column with the masthead and no sidebar', async ({ page }) => {
+    await gotoFragment(page, '/knowledge-base/platform-overview/');
+
+    const column = await queryInShadow(page, 'main.mp-single-page');
+    expect(column, 'centred reading column missing from fragment').not.toBeNull();
+    expect(column.text).toMatch(/Platform Overview/i);
+
+    // Nothing but the masthead: a single-page doc ships no navigation of its own.
+    expect(await queryInShadow(page, 'nav#sidebar'), 'single-page doc must not render a sidebar').toBeNull();
+    expect(await queryInShadow(page, '#mp-masthead'), 'masthead missing').not.toBeNull();
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
 test.describe('Asset loading on the host origin', () => {
   test('no 404s for fragment assets while browsing', async ({ page }) => {
     const bad = collectBadResponses(page);
 
     await gotoFragment(page, '/knowledge-base/');
+    // Includes a single-page doc, whose stylesheet and vendored mermaid bundle
+    // must resolve on the host origin like any other sub-app asset.
+    await gotoFragment(page, '/knowledge-base/platform-overview/');
     await gotoFragment(page, '/knowledge-base/user-guide/docs/');
     await clickFragmentLink(page, 'nav#sidebar a[href*="customising"]');
     await waitForFragmentText(page, /Customising/i);

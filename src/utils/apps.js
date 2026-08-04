@@ -4,6 +4,27 @@
 
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { join, relative, dirname } from 'node:path';
+import { isSinglePage, readExpansionMap, resolveRegistry } from './single-page.js';
+
+/**
+ * Reads the effective app registry.
+ *
+ * apps.json is the source of truth, except for `type: "single-page"` entries:
+ * those point at a bundle whose docs are only known after the build fetched it,
+ * so each one is replaced by the apps it expanded into (see single-page.js).
+ *
+ * @param {string} cwd - project root (process.cwd())
+ */
+export function loadRegistry(cwd) {
+  const appsJson = join(cwd, 'apps.json');
+  const registry = existsSync(appsJson)
+    ? JSON.parse(readFileSync(appsJson, 'utf-8'))
+    : [];
+
+  return resolveRegistry(registry, readExpansionMap(cwd), (msg) => {
+    process.stderr.write(`  \x1b[33m⚠\x1b[0m  ${msg}\n`);
+  });
+}
 
 /** Recursively collect every .html file under a directory. */
 export function collectHtmlFiles(dir) {
@@ -26,12 +47,8 @@ export function collectHtmlFiles(dir) {
  * @param {boolean} headless    - global headless default
  */
 export function getAppPages(cwd, headless) {
-  const appsDir  = join(cwd, 'apps');
-  const appsJson = join(cwd, 'apps.json');
-
-  const apps = existsSync(appsJson)
-    ? JSON.parse(readFileSync(appsJson, 'utf-8'))
-    : [];
+  const appsDir = join(cwd, 'apps');
+  const apps    = loadRegistry(cwd);
 
   const pages = [];
 
@@ -53,6 +70,24 @@ export function getAppPages(cwd, headless) {
         section:     null,
         iframe:      true,
         url:         app.url,
+      });
+      continue;
+    }
+
+    if (isSinglePage(app)) {
+      // Single-page onboarding (issue #35): the artifact holds exactly one
+      // document per app, so there is nothing to crawl — emit its single route
+      // and let the catchall render it in the centred reading column.
+      pages.push({
+        routePath:   app.slug,
+        file:        join(appDir, app.entryPoint ?? 'index.html'),
+        slug:        app.slug,
+        fileRelDir:  '',
+        appHeadless,
+        apps,
+        title:       app.name ?? app.slug,
+        section:     null,
+        singlePage:  true,
       });
       continue;
     }
