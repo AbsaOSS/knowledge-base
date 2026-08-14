@@ -46,8 +46,13 @@ function locationBlocks(conf) {
   return blocks;
 }
 
-/** Strips `#` comments so assertions never match commentary. */
-const uncomment = (text) => text.split('\n').map((l) => l.replace(/#.*$/, '')).join('\n');
+/**
+ * Strips `#` comments so assertions never match commentary.
+ * `.` does not match `\r`, so a CRLF checkout (the default on Windows, where
+ * there is no .gitattributes to force LF) needs the line ending trimmed first.
+ */
+const uncomment = (text) =>
+  text.split('\n').map((l) => l.replace(/\r$/, '').replace(/#.*$/, '')).join('\n');
 
 test.describe('nginx.conf header inheritance', () => {
   test('the shared header set is defined once, in nginx.headers.conf', () => {

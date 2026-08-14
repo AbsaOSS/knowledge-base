@@ -175,7 +175,7 @@ test.describe('CSS link stability (#297)', () => {
       // from a CSS `import`; that link is framework-managed and cannot carry the attribute.
       // Astro keeps it across navigation by href-match, and the behavioural
       // "CSS link count does not grow" test below is the authoritative #297 guard.
-      if (/^\/knowledge-base\/style\d*\.css$/.test(href ?? '')) continue;
+      if (/^\/knowledge-base\/_astro\/.+\.css$/.test(href ?? '')) continue;
       const persist = await links.nth(i).getAttribute('data-astro-transition-persist');
       expect(
         persist,
@@ -205,7 +205,7 @@ test.describe('CSS link stability (#297)', () => {
       const href = await links.nth(i).getAttribute('href');
       // Same exemption as the landing page: the bundled marketplace stylesheet is
       // injected by Astro from the layout's CSS import and cannot carry the attribute.
-      if (/^\/knowledge-base\/style\d*\.css$/.test(href ?? '')) continue;
+      if (/^\/knowledge-base\/_astro\/.+\.css$/.test(href ?? '')) continue;
       const persist = await links.nth(i).getAttribute('data-astro-transition-persist');
       expect(
         persist,

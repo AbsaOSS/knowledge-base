@@ -27,11 +27,20 @@
  * Only executable scripts are hoisted. `application/ld+json`, `text/template`,
  * `importmap` and friends are data, not code — a CSP does not care about them
  * and moving them would break whatever reads them.
+ *
+ * WHAT IS DELETED
+ *
+ * A sub-app's dark-mode bootstrap is dropped rather than hoisted. The
+ * marketplace is light-only and src/utils/transform.js strips that script — but
+ * only while it is still inline, and this step runs first. Hoisting it would
+ * turn it into an external file the strip can no longer recognise, and it would
+ * then run in the browser and re-add `dark` (#48).
  */
 
 import { createHash } from 'node:crypto';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join, relative } from 'node:path';
+import { isThemeBootstrap } from '../src/utils/transform.js';
 
 /** Directory (relative to an app root) the hoisted files are written to. */
 export const HOIST_DIR = '_kb-inline';
@@ -52,16 +61,20 @@ function isExecutableInline(attrs) {
  * @param {string} html       - document source
  * @param {string} appDir     - app root on disk; hoisted files go under appDir/HOIST_DIR
  * @param {string} fileRelDir - the document's directory relative to appDir ('' at the root)
- * @returns {{html: string, written: number}}
+ * @returns {{html: string, written: number, dropped: number}}
  */
 export function hoistInlineScripts(html, appDir, fileRelDir) {
   let written = 0;
+  let dropped = 0;
 
   const out = html.replace(
     /<script\b([^>]*)>([\s\S]*?)<\/script>/gi,
     (match, attrs, body) => {
       if (!isExecutableInline(attrs)) return match;
       if (body.trim() === '') return match;
+
+      // Light-only: the theme bootstrap is deleted, not relocated.
+      if (isThemeBootstrap(body)) { dropped++; return ''; }
 
       // Content-addressed: two pages sharing a bootstrap share one file, and a
       // rebuild of unchanged input produces an unchanged name.
@@ -81,7 +94,7 @@ export function hoistInlineScripts(html, appDir, fileRelDir) {
     },
   );
 
-  return { html: out, written };
+  return { html: out, written, dropped };
 }
 
 /**
@@ -89,18 +102,21 @@ export function hoistInlineScripts(html, appDir, fileRelDir) {
  *
  * @param {string} appDir    - apps/{slug}
  * @param {string[]} htmlFiles - absolute paths to that app's HTML files
- * @returns {number} how many scripts were hoisted
+ * @returns {{hoisted: number, dropped: number}} scripts moved to files, and theme
+ *          bootstraps deleted
  */
 export function hoistAppInlineScripts(appDir, htmlFiles) {
-  let total = 0;
+  let hoisted = 0;
+  let dropped = 0;
   for (const file of htmlFiles) {
     const fileRelDir = relative(appDir, dirname(file)).replace(/\\/g, '/');
     const source = readFileSync(file, 'utf8');
-    const { html, written } = hoistInlineScripts(source, appDir, fileRelDir === '.' ? '' : fileRelDir);
-    if (written > 0) {
-      writeFileSync(file, html);
-      total += written;
+    const result = hoistInlineScripts(source, appDir, fileRelDir === '.' ? '' : fileRelDir);
+    if (result.written > 0 || result.dropped > 0) {
+      writeFileSync(file, result.html);
+      hoisted += result.written;
+      dropped += result.dropped;
     }
   }
-  return total;
+  return { hoisted, dropped };
 }

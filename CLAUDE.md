@@ -130,8 +130,8 @@ Self-contained Playwright E2E — `npm test` auto-starts everything (no external
 
 Tests drive the host origin (`http://localhost:4201`). Suites (`tests/`):
 - `build-integrity.spec.js` — `dist/` output: both apps enumerated, absolute URL rewriting,
-  headless markup, stable `dist/style.css` (the marketplace CSS the sub-app pages reference),
-  and single-page bundle expansion (`tests/fixtures/single-page-bundle/` → two apps).
+  headless markup, the content-hashed marketplace stylesheet plus its stable `dist/style.css`
+  alias, and single-page bundle expansion (`tests/fixtures/single-page-bundle/` → two apps).
 - `web-fragment.spec.js` — shadow-DOM isolation (reframed `wf-html`/`wf-body`; chrome must
   not leak in), routing + smooth no-reload SPA transitions, cross-app navigation, asset
   loading (no host-origin 404s), and the documented history limitation (fragment routing is
@@ -140,7 +140,9 @@ Tests drive the host origin (`http://localhost:4201`). Suites (`tests/`):
 
 Two build-pipeline pieces support this: `apps.json` entries may carry a `prebuilt` path
 (tarball or dist dir) consumed by `scripts/build-vite.js` (`preparePrebuilt`) for hermetic
-offline builds; and the build aliases the bundled marketplace CSS to a stable `dist/style.css`.
+offline builds; and the build copies the marketplace stylesheet — identified as the local
+stylesheet the landing page loads — to a stable `dist/style.css` alias. Pages themselves
+reference the content-hashed bundle Astro injects, so nothing depends on that filename.
 
 An entry may also carry `"optional": true`: the build then skips it with a warning when its
 `prebuilt`/`localPath` artifact is missing, instead of failing. That is how the sibling

@@ -110,6 +110,25 @@ const MERMAID_STUB = `/* Test fixture stand-in for the vendored mermaid bundle. 
 window.mermaid = { initialize: function () {}, run: function () {} };
 `;
 
+/**
+ * Regression fixture for #49 — a stylesheet two directories deep that references
+ * assets from its app root.
+ *
+ * The build rewrites root-relative `url()` in copied CSS so it still resolves
+ * once the app is served from /{prefix}/{slug}/. That rewrite used to hardcode a
+ * single `../` hop, which is only correct at exactly one level of nesting: from
+ * `{slug}/assets/` it pointed one directory short, and from `{slug}/` it climbed
+ * out of the app and into another one's assets. Nothing shipped by the action
+ * happens to use `url(/…)` today, so without this file the rewrite is untested
+ * at the depth it got wrong. Asserted by tests/build-integrity.spec.js.
+ */
+const DEPTH_CHECK_CSS = `/* Fixture: see scripts/setup-test-apps.mjs (#49). Not referenced by the doc. */
+@font-face { font-family: Demo; src: url(/fonts/demo.woff2) format("woff2"); }
+.a { background-image: url(data:image/gif;base64,R0lGOD); }
+.b { clip-path: url(#clip); }
+.c { background-image: url(//cdn.example.com/x.png); }
+`;
+
 const bundleDocs = [
   {
     slug: 'platform-overview',
@@ -119,6 +138,7 @@ const bundleDocs = [
     tags: ['platform', 'reference'],
     body: PLATFORM_OVERVIEW_BODY,
     usesMermaid: true,
+    depthFixture: true,
   },
   {
     slug: 'release-process',
@@ -147,6 +167,7 @@ function writeSinglePageBundle() {
       hasHeading:  true,
     }));
     writeFileSync(join(docDir, CSS_PATH), DOC_CSS);
+    if (doc.depthFixture) writeFileSync(join(docDir, dirname(CSS_PATH), 'depth-check.css'), DEPTH_CHECK_CSS);
     if (doc.usesMermaid) {
       writeFileSync(join(docDir, MERMAID_PATH), MERMAID_STUB);
       // Real init script, not a stub: it is the thing that must stay out of the

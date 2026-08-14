@@ -14,10 +14,24 @@ import { test, expect } from '@playwright/test';
 import { readFileSync, existsSync, readdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join, relative } from 'node:path';
+import { isThemeBootstrap } from '../src/utils/transform.js';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const DIST = join(ROOT, 'dist');
 const read = (rel) => readFileSync(join(DIST, rel), 'utf8');
+
+/**
+ * The marketplace stylesheet a page loads. Astro injects this <link> from
+ * Base.astro's CSS import, so the name is content-hashed and changes whenever
+ * the stylesheet does — assert the shape, never a literal filename.
+ */
+function marketplaceCssHref(html) {
+  const href = [...html.matchAll(/<link\b[^>]*\brel="stylesheet"[^>]*>/gi)]
+    .map((tag) => tag[0].match(/\bhref="([^"]+)"/)?.[1])
+    .find((h) => h?.startsWith('/knowledge-base/_astro/'));
+  expect(href, 'page does not load the marketplace stylesheet').toBeTruthy();
+  return href;
+}
 
 test.describe('Build integrity', () => {
   test('produced dist/ with the landing page', () => {
@@ -40,11 +54,13 @@ test.describe('Build integrity', () => {
     }
   });
 
-  test('marketplace stylesheet is emitted at the stable /style.css name', () => {
-    // Every page references /knowledge-base/style.css → dist/style.css (the gateway
-    // also reaches it via /__wf/knowledge-base/style.css). It must exist or every
-    // fragment page 404s its CSS.
-    expect(existsSync(join(DIST, 'style.css')), 'dist/style.css missing — sub-app CSS would 404').toBe(true);
+  test('the marketplace stylesheet is published at the stable /style.css alias too', () => {
+    // Pages reference the content-hashed bundle; /knowledge-base/style.css stays
+    // available as an alias of the same bytes for anything outside this
+    // repository that still asks for it by that path.
+    expect(existsSync(join(DIST, 'style.css')), 'dist/style.css alias missing').toBe(true);
+    expect(read('style.css'), 'the alias is not a copy of the bundle the pages load')
+      .toBe(read(marketplaceCssHref(read('index.html')).slice('/knowledge-base/'.length)));
   });
 
   test('landing lists both app cards with absolute slug links', () => {
@@ -58,7 +74,7 @@ test.describe('Build integrity', () => {
   test('sub-app pages are marked headless and reference the marketplace CSS', () => {
     const html = read('user-guide/index.html');
     expect(html).toContain('data-mp-headless="true"');
-    expect(html).toContain('/knowledge-base/style.css');
+    expect(marketplaceCssHref(html)).toMatch(/\.css$/);
   });
 
   test('sub-app pages are re-hosted by the layout, keeping their own head + body', () => {
@@ -160,7 +176,7 @@ test.describe('single-page onboarding', () => {
   test('is re-hosted by the layout like any packaged page', () => {
     const html = read('platform-overview/index.html');
     expect(html).toContain('data-mp-headless="true"');
-    expect(html).toContain('/knowledge-base/style.css');
+    expect(marketplaceCssHref(html)).toMatch(/\.css$/);
     expect(html.match(/<html\b/gi) ?? []).toHaveLength(1);
     expect(html.match(/<head\b/gi) ?? []).toHaveLength(1);
     expect(html.match(/<body\b/gi) ?? []).toHaveLength(1);
@@ -305,16 +321,68 @@ test.describe('no inline scripts in the build output', () => {
   });
 
   test('hoisted scripts are referenced by absolute prefixed paths', () => {
-    // A nested page: the fixture's inline scripts live on inner pages, so this
+    // A nested page: the fixture's inline script lives on an inner page, so this
     // also covers the ../ depth computation — a hoisted script referenced from
-    // user-guide/docs/ must still resolve to the app root, not one level up.
-    const html = read('user-guide/docs/index.html');
+    // user-guide/admin/ must still resolve to the app root, not one level up.
+    const html = read('user-guide/admin/index.html');
     const srcs = [...html.matchAll(/<script[^>]+src="([^"]+)"/g)].map((m) => m[1]);
     const hoisted = srcs.filter((s) => s.includes('_kb-inline'));
-    expect(hoisted.length, 'user-guide/docs should reference hoisted scripts').toBeGreaterThan(0);
+    expect(hoisted.length, 'user-guide/admin should reference hoisted scripts').toBeGreaterThan(0);
     for (const src of hoisted) {
       expect(src, 'hoisted script must be rewritten like every other URL').toMatch(/^\/knowledge-base\/user-guide\/_kb-inline\//);
       expect(existsSync(join(DIST, src.replace(/^\/knowledge-base\//, ''))), `${src} is not in dist/`).toBe(true);
     }
+  });
+
+  test('the sub-app theme bootstrap is deleted, not hoisted into a file', () => {
+    // The docs-example fixture ships a `localStorage`-driven dark-mode bootstrap.
+    // Hoisting it would turn it into an external script the light-only strip can
+    // no longer see, and it would then re-add `dark` in the browser (#48).
+    const offenders = htmlFiles(DIST)
+      .flatMap((file) => {
+        const html = readFileSync(file, 'utf8');
+        const srcs = [...html.matchAll(/<script[^>]+src="([^"]+)"/g)].map((m) => m[1]);
+        return srcs
+          .filter((s) => s.includes('_kb-inline'))
+          .map((s) => join(DIST, s.replace(/^\/knowledge-base\//, '')))
+          .filter((p) => existsSync(p) && isThemeBootstrap(readFileSync(p, 'utf8')))
+          .map((p) => `${relative(DIST, file)} → ${relative(DIST, p)}`);
+      });
+    expect(offenders, 'a theme bootstrap survived as a hoisted file — the page can still go dark').toEqual([]);
+  });
+});
+
+// ── CSS asset handling (#49, #50) ───────────────────────────────────────────
+test.describe('stylesheet emission', () => {
+  test('the marketplace stylesheet is content-hashed, not pinned to a constant name', () => {
+    // Forcing "style.css" onto every CSS asset made Rollup disambiguate the
+    // collisions as style.css / style2.css / …, which the build then had to
+    // guess between — and it left the one stylesheet every page loads unable to
+    // be cache-busted (#50). Every page's <link> is Astro-injected, so nothing
+    // needed the constant name in the first place.
+    expect(marketplaceCssHref(read('index.html')))
+      .toMatch(/^\/knowledge-base\/_astro\/[^/]+\.[A-Za-z0-9_-]{8,}\.css$/);
+    expect(readdirSync(DIST).filter((f) => /^style\d+\.css$/.test(f)),
+      'a style2.css means two bundles collided on one name again').toEqual([]);
+  });
+
+  test('every CSS asset carries a content hash', () => {
+    const astroDir = join(DIST, '_astro');
+    const unhashed = (existsSync(astroDir) ? readdirSync(astroDir) : [])
+      .filter((f) => f.endsWith('.css') && !/[.-][A-Za-z0-9_-]{8,}\.css$/.test(f));
+    expect(unhashed, 'an unhashed CSS asset cannot be cached immutably').toEqual([]);
+  });
+
+  test('root-relative url() in sub-app CSS is rebased onto the app, at any depth', () => {
+    // The rewrite used to hardcode `../`, which is only correct for a stylesheet
+    // exactly one directory deep; from {slug}/assets/ it pointed outside the app
+    // and from {slug}/ it escaped the app entirely (#49).
+    const css = read('platform-overview/assets/depth-check.css');
+    expect(css).toContain('url(/knowledge-base/platform-overview/fonts/demo.woff2)');
+    expect(css, 'a relative hop from assets/ resolves outside the app').not.toContain('url(../');
+    // Untouched forms stay untouched.
+    expect(css).toContain('url(data:image/gif;base64,R0lGOD)');
+    expect(css).toContain('url(#clip)');
+    expect(css).toContain('url(//cdn.example.com/x.png)');
   });
 });
