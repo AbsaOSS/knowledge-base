@@ -7,11 +7,13 @@
  *   node scripts/build-vite.js --headless
  *
  * Pipeline:
- *   1. Fetch/build sub-app artifacts → apps/{slug}/
- *   2. Copy non-HTML sub-app assets → public/knowledge-base/{slug}/
- *      (Astro serves these as static files; HTML files are handled by the catchall page)
- *   3. Run astro build → dist/
- *      Sub-app pages are rendered by src/pages/[...path].astro via getStaticPaths.
+ *   1.  Fetch/build sub-app artifacts → apps/{slug}/
+ *   1b. Hoist inline <script> bodies → apps/{slug}/_kb-inline/*.js, and delete
+ *       any theme bootstrap (light only)
+ *   2.  Copy non-HTML sub-app assets → public/{slug}/
+ *       (Astro serves these as static files; HTML files are handled by the catchall page)
+ *   3.  Run astro build → dist/
+ *       Sub-app pages are rendered by src/pages/[...path].astro via getStaticPaths.
  */
 
 import { existsSync, readFileSync, writeFileSync, mkdirSync, rmSync, copyFileSync, readdirSync, statSync } from 'node:fs';
@@ -168,7 +170,7 @@ async function build() {
   const packagedApps = registeredApps.filter(a => a.type !== 'iframe');
 
   // 1. Prepare apps/ directory
-  step('1/3  Preparing sub-app artifacts → apps/');
+  step('1/4  Preparing sub-app artifacts → apps/');
   mkdirSync(APPS_DIR, { recursive: true });
 
   for (const app of iframeApps) ok(app.slug + ' registered (iframe → ' + app.url + ')');
