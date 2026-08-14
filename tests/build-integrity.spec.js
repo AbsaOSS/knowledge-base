@@ -14,6 +14,7 @@ import { test, expect } from '@playwright/test';
 import { readFileSync, existsSync, readdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join, relative } from 'node:path';
+import { isThemeBootstrap } from '../src/utils/transform.js';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const DIST = join(ROOT, 'dist');
@@ -305,16 +306,66 @@ test.describe('no inline scripts in the build output', () => {
   });
 
   test('hoisted scripts are referenced by absolute prefixed paths', () => {
-    // A nested page: the fixture's inline scripts live on inner pages, so this
+    // A nested page: the fixture's inline script lives on an inner page, so this
     // also covers the ../ depth computation — a hoisted script referenced from
-    // user-guide/docs/ must still resolve to the app root, not one level up.
-    const html = read('user-guide/docs/index.html');
+    // user-guide/admin/ must still resolve to the app root, not one level up.
+    const html = read('user-guide/admin/index.html');
     const srcs = [...html.matchAll(/<script[^>]+src="([^"]+)"/g)].map((m) => m[1]);
     const hoisted = srcs.filter((s) => s.includes('_kb-inline'));
-    expect(hoisted.length, 'user-guide/docs should reference hoisted scripts').toBeGreaterThan(0);
+    expect(hoisted.length, 'user-guide/admin should reference hoisted scripts').toBeGreaterThan(0);
     for (const src of hoisted) {
       expect(src, 'hoisted script must be rewritten like every other URL').toMatch(/^\/knowledge-base\/user-guide\/_kb-inline\//);
       expect(existsSync(join(DIST, src.replace(/^\/knowledge-base\//, ''))), `${src} is not in dist/`).toBe(true);
     }
+  });
+
+  test('the sub-app theme bootstrap is deleted, not hoisted into a file', () => {
+    // The docs-example fixture ships a `localStorage`-driven dark-mode bootstrap.
+    // Hoisting it would turn it into an external script the light-only strip can
+    // no longer see, and it would then re-add `dark` in the browser (#48).
+    const offenders = htmlFiles(DIST)
+      .flatMap((file) => {
+        const html = readFileSync(file, 'utf8');
+        const srcs = [...html.matchAll(/<script[^>]+src="([^"]+)"/g)].map((m) => m[1]);
+        return srcs
+          .filter((s) => s.includes('_kb-inline'))
+          .map((s) => join(DIST, s.replace(/^\/knowledge-base\//, '')))
+          .filter((p) => existsSync(p) && isThemeBootstrap(readFileSync(p, 'utf8')))
+          .map((p) => `${relative(DIST, file)} → ${relative(DIST, p)}`);
+      });
+    expect(offenders, 'a theme bootstrap survived as a hoisted file — the page can still go dark').toEqual([]);
+  });
+});
+
+// ── CSS asset handling (#49, #50) ───────────────────────────────────────────
+test.describe('stylesheet emission', () => {
+  test('the stable marketplace stylesheet is the only unhashed CSS at the dist root', () => {
+    // Sub-app pages reference /{prefix}/style.css literally, so exactly one
+    // bundle may own that name. style2.css means Rollup disambiguated a
+    // collision and the build had to guess which one the pages meant (#50).
+    const rootCss = readdirSync(DIST).filter((f) => f.endsWith('.css'));
+    expect(rootCss).toEqual(['style.css']);
+    expect(read('style.css'), 'dist/style.css is not the marketplace bundle')
+      .toContain('--mp-marketplace-stylesheet');
+  });
+
+  test('every other CSS asset keeps its content hash', () => {
+    const astroDir = join(DIST, '_astro');
+    const unhashed = (existsSync(astroDir) ? readdirSync(astroDir) : [])
+      .filter((f) => f.endsWith('.css') && !/-[A-Za-z0-9_-]{8,}\.css$/.test(f));
+    expect(unhashed, 'an unhashed CSS asset cannot be cached immutably').toEqual([]);
+  });
+
+  test('root-relative url() in sub-app CSS is rebased onto the app, at any depth', () => {
+    // The rewrite used to hardcode `../`, which is only correct for a stylesheet
+    // exactly one directory deep; from {slug}/assets/ it pointed outside the app
+    // and from {slug}/ it escaped the app entirely (#49).
+    const css = read('platform-overview/assets/depth-check.css');
+    expect(css).toContain('url(/knowledge-base/platform-overview/fonts/demo.woff2)');
+    expect(css, 'a relative hop from assets/ resolves outside the app').not.toContain('url(../');
+    // Untouched forms stay untouched.
+    expect(css).toContain('url(data:image/gif;base64,R0lGOD)');
+    expect(css).toContain('url(#clip)');
+    expect(css).toContain('url(//cdn.example.com/x.png)');
   });
 });

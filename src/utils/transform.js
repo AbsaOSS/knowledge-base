@@ -7,6 +7,21 @@
 // the layout owns the masthead, fonts, marketplace CSS and <ClientRouter /> for
 // every page. This module rewrites the sub-app URLs and splits the document into
 // the parts the layout needs.
+//
+// WHY A PARSER AND NOT REGEXES
+//
+// The input is third-party HTML from another repository's release artifact, so
+// every "surely no document does that" assumption a regex makes eventually meets
+// a document that does. Pattern matching got this wrong four ways (#48):
+// a `</body>` inside a script truncated the page, a `<` inside the theme
+// bootstrap defeated the strip that keeps the marketplace light-only, several
+// URL-bearing attributes were never rewritten, and `href="/x"` inside a code
+// sample in the prose was rewritten as if it were a link. parse5 is the same
+// tokenizer a browser uses, it is build-time only, and it knows the difference
+// between an attribute, a comment and a text node — so all four stop being
+// possible rather than being patched one at a time.
+
+import { parse, serialize } from 'parse5';
 
 // ── URL rewriting ─────────────────────────────────────────────────────────────
 
@@ -32,68 +47,96 @@ function resolveUrl(url, base, prefix, slug) {
   }
 }
 
+/** Attributes holding exactly one URL. `data` is handled separately — it is only a URL on <object>. */
+const URL_ATTRS = new Set(['href', 'src', 'action', 'formaction', 'poster']);
+
+/** Attributes holding a comma-separated candidate list (`url 2x, url 640w`). */
+const SRCSET_ATTRS = new Set(['srcset', 'imagesrcset']);
+
+/** <meta> property/name values whose `content` is a URL. */
+const URL_META = new Set([
+  'og:image', 'og:image:url', 'og:image:secure_url', 'og:url',
+  'twitter:image', 'twitter:image:src',
+]);
+
+/** Rewrites every `url(...)` reference in a CSS string (inline `style=` or a <style> block). */
+function rewriteCssUrls(css, base, prefix, slug) {
+  return css.replace(
+    /url\(\s*(['"]?)([^'")]*)\1\s*\)/gi,
+    (match, quote, url) => {
+      const abs = resolveUrl(url.trim(), base, prefix, slug);
+      return abs === null ? match : `url(${quote}${abs}${quote})`;
+    },
+  );
+}
+
 /**
- * Rewrites all href/src/action URLs in the HTML to absolute paths.
- * Removes any pre-existing <base> tag.
+ * Rewrites a `srcset` value candidate by candidate, preserving the descriptors.
+ * A value containing a `data:` URI is left alone: commas inside the payload make
+ * splitting ambiguous, and data: URIs need no rewriting anyway.
+ */
+function rewriteSrcset(value, base, prefix, slug) {
+  if (/data:/i.test(value)) return value;
+  return value
+    .split(',')
+    .map((candidate) => {
+      const match = candidate.match(/^(\s*)(\S+)(\s*.*)$/s);
+      if (!match) return candidate;
+      const [, lead, url, descriptor] = match;
+      const abs = resolveUrl(url, base, prefix, slug);
+      return abs === null ? candidate : `${lead}${abs}${descriptor}`;
+    })
+    .join(',');
+}
+
+// ── Tree helpers ──────────────────────────────────────────────────────────────
+
+const attrOf = (el, name) => el?.attrs?.find((a) => a.name === name);
+const attrValue = (el, name) => attrOf(el, name)?.value;
+
+/** Depth-first walk over every element in the tree, including <template> content. */
+function* elements(node) {
+  for (const child of node.childNodes ?? []) {
+    if (child.tagName) {
+      yield child;
+      if (child.content) yield* elements(child.content);
+    }
+    yield* elements(child);
+  }
+}
+
+/** Concatenated text of a node's direct text children (what <script>/<title> hold). */
+function textOf(node) {
+  return (node.childNodes ?? [])
+    .filter((c) => c.nodeName === '#text')
+    .map((c) => c.value)
+    .join('');
+}
+
+function detach(node) {
+  const siblings = node.parentNode?.childNodes;
+  const index = siblings?.indexOf(node) ?? -1;
+  if (index >= 0) siblings.splice(index, 1);
+}
+
+const childElement = (node, tagName) =>
+  (node?.childNodes ?? []).find((c) => c.tagName === tagName);
+
+// ── Light-only enforcement ────────────────────────────────────────────────────
+
+/**
+ * True when a script body is a sub-app's own dark-mode bootstrap.
  *
- * @param {string} html
- * @param {string} prefix  - e.g. 'knowledge-base'
- * @param {string} slug    - app slug, e.g. 'my-app'
- * @param {string} fileRelDir - path of the HTML file relative to the app root,
- *                              e.g. '' for index.html, 'getting-started' for
- *                              getting-started/index.html
+ * Exported because the strip has to happen in two places: here for the `astro
+ * dev` path, and in scripts/hoist-inline-scripts.js for the build, which turns
+ * inline scripts into files before this module ever sees the document — a
+ * hoisted bootstrap would otherwise sail past the strip and re-add `dark` at
+ * runtime, which is exactly the leak the light-only rule exists to prevent.
  */
-function rewriteUrlsToAbsolute(html, prefix, slug, fileRelDir) {
-  const base = `/${prefix}/${slug}/${fileRelDir ? fileRelDir + '/' : ''}`;
-
-  // Remove any <base> tag — all URLs are now explicit
-  html = html.replace(/<base\b[^>]*>/gi, '');
-
-  // Double-quoted attributes
-  html = html.replace(
-    /((?:href|src|action)\s*=\s*")([^"]*?)(")/gi,
-    (match, pre, url, post) => {
-      const abs = resolveUrl(url, base, prefix, slug);
-      return abs !== null ? `${pre}${abs}${post}` : match;
-    },
-  );
-
-  // Single-quoted attributes
-  html = html.replace(
-    /((?:href|src|action)\s*=\s*')([^']*?)(')/gi,
-    (match, pre, url, post) => {
-      const abs = resolveUrl(url, base, prefix, slug);
-      return abs !== null ? `${pre}${abs}${post}` : match;
-    },
-  );
-
-  return html;
-}
-
-/**
- * Adds data-astro-transition-persist to every stylesheet <link> so Astro's
- * ClientRouter keeps them in place across page transitions instead of removing
- * and re-adding them. Inside web-fragments, reframed relocates head nodes out of
- * wf-head, so Astro's cleanup can no longer find them and they accumulate
- * unbounded — see web-fragments issue #297.
- */
-function persistStylesheets(html) {
-  return html.replace(
-    /<link(\s[^>]*rel\s*=\s*["']stylesheet["'][^>]*)>/gi,
-    (match, attrs) => {
-      if (attrs.includes('data-astro-transition-persist')) return match;
-      const hrefMatch = attrs.match(/href\s*=\s*["']([^"']+)["']/i);
-      if (!hrefMatch) return match;
-      const id = 'css-' + hrefMatch[1].replace(/[^a-z0-9]/gi, '-').replace(/-{2,}/g, '-').replace(/^-|-$/g, '');
-      const cleanAttrs = attrs.replace(/\s*\/\s*$/, ''); // drop trailing / from self-closing tags
-      return `<link${cleanAttrs} data-astro-transition-persist="${id}">`;
-    },
-  );
-}
-
-/** Strips a sub-app's own `localStorage` theme bootstrap — the marketplace is light-only. */
-function stripThemeBootstrap(html) {
-  return html.replace(/<script>[^<]*localStorage[^<]*classList[^<]*<\/script>\s*/gi, '');
+export function isThemeBootstrap(code) {
+  return /\blocalStorage\b/.test(code) &&
+         /\bclassList\b/.test(code) &&
+         /\bdark\b|\btheme\b/i.test(code);
 }
 
 // ── Sub-app HTML transformation ───────────────────────────────────────────────
@@ -103,7 +146,8 @@ function stripThemeBootstrap(html) {
  * needs to re-host it.
  *
  * Steps (in order):
- *  1. Rewrite all relative/root-relative URLs to absolute /{prefix}/{slug}/… paths
+ *  1. Rewrite every URL-bearing attribute to an absolute /{prefix}/{slug}/… path
+ *     and drop any <base> tag
  *  2. Stamp data-astro-transition-persist on every stylesheet link
  *  3. Split off <head> contents, <body> attributes and <body> contents
  *  4. Lift the <title> out of the head (the layout renders it)
@@ -117,37 +161,90 @@ function stripThemeBootstrap(html) {
  * @returns {{headHtml: string, bodyHtml: string, bodyClass: string, title: string|null}}
  */
 export function transformSubAppHtml(html, slug, fileRelDir, prefix) {
-  html = rewriteUrlsToAbsolute(html, prefix, slug, fileRelDir);
-  html = persistStylesheets(html);
+  const base = `/${prefix}/${slug}/${fileRelDir ? fileRelDir + '/' : ''}`;
 
-  const headMatch = html.match(/<head\b[^>]*>([\s\S]*?)<\/head>/i);
-  const bodyMatch = html.match(/<body\b([^>]*)>([\s\S]*?)<\/body>/i);
+  // parse() always yields html > head + body, so a document that ships no
+  // explicit <body> is split the same way a browser would split it — no
+  // "body-only fragment" special case, and no first-`</body>`-wins truncation.
+  const document = parse(html);
+  const root = childElement(document, 'html');
+  const head = childElement(root, 'head');
+  const body = childElement(root, 'body');
 
-  let headHtml = headMatch ? headMatch[1] : '';
-  const bodyAttrs = bodyMatch ? bodyMatch[1] : '';
-  // Documents without an explicit <body> are treated as body-only fragments.
-  let bodyHtml = bodyMatch
-    ? bodyMatch[2]
-    : (headMatch ? html.replace(headMatch[0], '') : html);
+  const doomed = [];
 
-  // The layout renders <title> from the manifest title or this one.
+  for (const el of elements(root ?? document)) {
+    // 1. URLs. Only attributes of real elements are touched, so a `href="/x"`
+    //    written out in a code sample stays the string the author typed.
+    if (el.tagName === 'base') { doomed.push(el); continue; }
+
+    for (const attr of el.attrs ?? []) {
+      if (URL_ATTRS.has(attr.name) || (attr.name === 'data' && el.tagName === 'object')) {
+        const abs = resolveUrl(attr.value, base, prefix, slug);
+        if (abs !== null) attr.value = abs;
+      } else if (SRCSET_ATTRS.has(attr.name)) {
+        attr.value = rewriteSrcset(attr.value, base, prefix, slug);
+      } else if (attr.name === 'style') {
+        attr.value = rewriteCssUrls(attr.value, base, prefix, slug);
+      } else if (attr.name === 'content' && el.tagName === 'meta') {
+        const key = (attrValue(el, 'property') ?? attrValue(el, 'name') ?? '').toLowerCase();
+        if (URL_META.has(key)) {
+          const abs = resolveUrl(attr.value, base, prefix, slug);
+          if (abs !== null) attr.value = abs;
+        }
+      }
+    }
+
+    if (el.tagName === 'style') {
+      for (const text of el.childNodes ?? []) {
+        if (text.nodeName === '#text') text.value = rewriteCssUrls(text.value, base, prefix, slug);
+      }
+    }
+
+    // 2. Keep stylesheets in place across ClientRouter navigation. Inside
+    //    web-fragments, reframed relocates head nodes out of wf-head, so Astro's
+    //    cleanup can no longer find them and they accumulate unbounded — see
+    //    web-fragments issue #297.
+    if (el.tagName === 'link' && /\bstylesheet\b/i.test(attrValue(el, 'rel') ?? '')) {
+      const href = attrValue(el, 'href');
+      if (href && !attrOf(el, 'data-astro-transition-persist')) {
+        const id = 'css-' + href.replace(/[^a-z0-9]/gi, '-').replace(/-{2,}/g, '-').replace(/^-|-$/g, '');
+        el.attrs.push({ name: 'data-astro-transition-persist', value: id });
+      }
+    }
+
+    // 6a. Light-only marketplace: the sub-app's theme bootstrap never runs.
+    if (el.tagName === 'script' && !attrOf(el, 'src') && isThemeBootstrap(textOf(el))) {
+      doomed.push(el);
+      continue;
+    }
+
+    // 5. Base.astro already declares both; a second <meta charset> is ignored anyway.
+    if (el.tagName === 'meta' &&
+        (attrOf(el, 'charset') || (attrValue(el, 'name') ?? '').toLowerCase() === 'viewport')) {
+      doomed.push(el);
+    }
+  }
+
+  // 4. The layout renders <title> from the manifest title or this one.
   let title = null;
-  headHtml = headHtml.replace(/<title\b[^>]*>([\s\S]*?)<\/title>/i, (_, t) => {
-    title = t.replace(/\s+/g, ' ').trim() || null;
-    return '';
-  });
+  const titleEl = childElement(head, 'title');
+  if (titleEl) {
+    title = textOf(titleEl).replace(/\s+/g, ' ').trim() || null;
+    doomed.push(titleEl);
+  }
 
-  // Base.astro already declares both; a second <meta charset> is ignored anyway.
-  headHtml = headHtml.replace(/<meta\b[^>]*\bcharset\b[^>]*>/gi, '');
-  headHtml = headHtml.replace(/<meta\b[^>]*name\s*=\s*["']viewport["'][^>]*>/gi, '');
+  for (const el of doomed) detach(el);
 
-  // Light-only marketplace: drop the sub-app's theme bootstrap and `dark` class.
-  headHtml = stripThemeBootstrap(headHtml);
-  bodyHtml = stripThemeBootstrap(bodyHtml);
-  const bodyClass = (bodyAttrs.match(/class\s*=\s*["']([^"']*)["']/i)?.[1] ?? '')
+  const bodyClass = (attrValue(body, 'class') ?? '')
     .replace(/\bdark\b/g, '')
     .replace(/\s+/g, ' ')
     .trim();
 
-  return { headHtml: headHtml.trim(), bodyHtml, bodyClass, title };
+  return {
+    headHtml: head ? serialize(head).trim() : '',
+    bodyHtml: body ? serialize(body) : '',
+    bodyClass,
+    title,
+  };
 }

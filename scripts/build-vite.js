@@ -238,16 +238,19 @@ async function build() {
   //     when those repos re-publish — so it is fixed here rather than assumed.
   step('1b/4  Hoisting inline scripts → files');
   let hoisted = 0;
+  let droppedBootstraps = 0;
   for (const app of resolvedApps.filter(a => a.type !== 'iframe')) {
     const appDir = join(APPS_DIR, app.slug);
     if (!existsSync(appDir)) continue;
-    const count = hoistAppInlineScripts(appDir, collectHtmlFiles(appDir));
-    if (count > 0) {
-      hoisted += count;
-      ok(app.slug + ': ' + count + ' inline script(s) → ' + HOIST_DIR + '/');
-    }
+    const { hoisted: count, dropped } = hoistAppInlineScripts(appDir, collectHtmlFiles(appDir));
+    hoisted += count;
+    droppedBootstraps += dropped;
+    if (count > 0) ok(app.slug + ': ' + count + ' inline script(s) → ' + HOIST_DIR + '/');
+    // Light-only: a hoisted theme bootstrap would run and re-add `dark`, so it
+    // is deleted here instead — transform.js can only strip it while inline.
+    if (dropped > 0) ok(app.slug + ': ' + dropped + ' theme bootstrap(s) dropped (light-only)');
   }
-  if (hoisted === 0) log('No inline scripts found — every artifact is already CSP-clean');
+  if (hoisted === 0 && droppedBootstraps === 0) log('No inline scripts found — every artifact is already CSP-clean');
 
   // 2. Copy non-HTML sub-app assets → public/{slug}/ so Astro copies them to dist/{slug}/
   //    HTML files are excluded — they're handled by src/pages/[...path].astro.
@@ -261,23 +264,36 @@ async function build() {
     if (existsSync(slugDir)) rmSync(slugDir, { recursive: true });
   }
 
-  function copyAssets(src, dest) {
+  /**
+   * Copies a sub-app's non-HTML assets, rewriting root-relative CSS url()
+   * references on the way through.
+   *
+   * A sub-app's CSS is authored for the root of its own site, so `url(/fonts/x)`
+   * means "this app's /fonts/x" — but the app is served from
+   * /{prefix}/{slug}/. The rewrite targets that absolute path directly rather
+   * than a relative hop: a relative `../` is only correct for a stylesheet
+   * exactly one directory deep, and copyAssets recurses to every depth, so
+   * `{slug}/style.css` used to climb out of the app entirely and
+   * `{slug}/assets/css/a.css` landed one level short (#49). An absolute target
+   * needs no depth arithmetic and matches what transform.js does for HTML.
+   */
+  function copyAssets(src, dest, slug) {
     mkdirSync(dest, { recursive: true });
     for (const entry of readdirSync(src).sort()) {
       const s = join(src, entry);
       const d = join(dest, entry);
-      if (statSync(s).isDirectory()) copyAssets(s, d);
+      if (statSync(s).isDirectory()) copyAssets(s, d, slug);
       else if (!entry.endsWith('.html')) {
         copyFileSync(s, d);
-        // Rewrite root-relative url() references in CSS bundles so they resolve
-        // correctly when served from a sub-path (e.g. /knowledge-base/{slug}/_astro/).
-        // Astro/Vite preserves absolute url(/) paths verbatim; from _astro/*.css
-        // one level up (../) is the slug root, so ../fonts/ becomes
-        // /knowledge-base/{slug}/fonts/ — matching where static assets are served.
         if (entry.endsWith('.css')) {
-          let css = readFileSync(d, 'utf8');
-          // url(/path) | url('/path') | url("/path") → url(../path) etc.
-          const rewritten = css.replace(/url\(\s*(['"]?)\/(?!\/)/g, 'url($1../');
+          const css = readFileSync(d, 'utf8');
+          // url(/path) | url('/path') | url("/path") → url(/{prefix}/{slug}/path).
+          // The (?!\/) guard skips protocol-relative //host/…; data: and #ref
+          // never match, since neither starts with a slash.
+          const rewritten = css.replace(
+            /url\(\s*(['"]?)\/(?!\/)/g,
+            'url($1/' + PATH_PREFIX + '/' + slug + '/',
+          );
           if (rewritten !== css) writeFileSync(d, rewritten);
         }
       }
@@ -287,7 +303,7 @@ async function build() {
   for (const app of packagedResolved) {
     const srcDir = join(APPS_DIR, app.slug);
     if (!existsSync(srcDir)) { warn(app.slug + ': apps/ dir missing, skipping asset copy'); continue; }
-    copyAssets(srcDir, join(PUBLIC_ROOT, app.slug));
+    copyAssets(srcDir, join(PUBLIC_ROOT, app.slug), app.slug);
     ok(app.slug + ' assets → public/' + app.slug + '/');
   }
 
@@ -303,19 +319,29 @@ async function build() {
 
   // Sub-app pages hardcode the marketplace stylesheet at /__wf/{prefix}/style.css,
   // which the gateway/nginx/preview rewrite to /{prefix}/style.css → dist/style.css.
-  // Astro can emit that bundle with a numeric suffix (e.g. style2.css) when the
-  // forced "style.css" asset name clashes, which would 404 the sub-app CSS. Alias
-  // the bundled css to a stable dist/style.css so the reference always resolves.
-  const distRoot  = join(ROOT, 'dist');
-  const stableCss = join(distRoot, 'style.css');
-  if (existsSync(distRoot) && !existsSync(stableCss)) {
-    const rootCss = readdirSync(distRoot).filter(f => /^style\d*\.css$/.test(f));
-    if (rootCss.length > 0) {
-      copyFileSync(join(distRoot, rootCss[0]), stableCss);
-      ok('Marketplace CSS aliased ' + rootCss[0] + ' → style.css');
-    } else {
-      warn('No bundled marketplace CSS at dist root — /' + PATH_PREFIX + '/style.css may 404');
+  // astro.config.mjs names the marketplace bundle (and nothing else) style.css, so
+  // it is emitted at that path by construction — no filename guessing. If it is
+  // missing the CSS reference on every sub-app page 404s, which is a broken
+  // deployment, so the build stops rather than shipping it.
+  const distRoot = join(ROOT, 'dist');
+  if (existsSync(distRoot)) {
+    if (!existsSync(join(distRoot, 'style.css'))) {
+      fail(
+        'No marketplace stylesheet at dist/style.css — every sub-app page would 404 its CSS. ' +
+        'astro.config.mjs gives that name to the bundle carrying the --mp-marketplace-stylesheet ' +
+        'sentinel; check that src/styles/marketplace.css still declares it and Base.astro still imports it.',
+      );
     }
+    // style2.css means two bundles claimed the sentinel and Rollup disambiguated
+    // them — the pages reference one path, so which one they get is a coin toss.
+    const collisions = readdirSync(distRoot).filter(f => /^style\d+\.css$/.test(f));
+    if (collisions.length > 0) {
+      fail(
+        'More than one bundle claims the stable marketplace stylesheet name: style.css, ' +
+        collisions.join(', ') + '. Sub-app pages reference /style.css only, so the rest would never be served.',
+      );
+    }
+    ok('Marketplace CSS at dist/style.css');
   }
 
   // 4. Summary

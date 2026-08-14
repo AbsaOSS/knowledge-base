@@ -1,0 +1,5 @@
+/* Fixture: see scripts/setup-test-apps.mjs (#49). Not referenced by the doc. */
+@font-face { font-family: Demo; src: url(/fonts/demo.woff2) format("woff2"); }
+.a { background-image: url(data:image/gif;base64,R0lGOD); }
+.b { clip-path: url(#clip); }
+.c { background-image: url(//cdn.example.com/x.png); }
