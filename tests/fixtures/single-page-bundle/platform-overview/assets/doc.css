@@ -173,7 +173,10 @@ body { margin: 0; font-family: var(--font-sans); color: var(--text-body); }
   font-size: 0.8125rem;
   color: var(--text-muted);
 }
-.mp-doc pre.mermaid svg { max-width: 100%; height: auto; }
+/* margin-inline:auto, not the parent's text-align. Mermaid sets display:block on
+   the <svg> it swaps in, and a block box ignores text-align — so a diagram
+   narrower than the column sat flush left. */
+.mp-doc pre.mermaid svg { max-width: 100%; height: auto; display: block; margin-inline: auto; }
 
 /* ── Footnotes (GFM) ──────────────────────────────────────────────────────── */
 .mp-doc .footnotes {
