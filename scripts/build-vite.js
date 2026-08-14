@@ -317,31 +317,38 @@ async function build() {
   execSync('npx astro build', { cwd: ROOT, stdio: 'inherit', env });
   ok('Astro build complete');
 
-  // Sub-app pages hardcode the marketplace stylesheet at /__wf/{prefix}/style.css,
-  // which the gateway/nginx/preview rewrite to /{prefix}/style.css → dist/style.css.
-  // astro.config.mjs names the marketplace bundle (and nothing else) style.css, so
-  // it is emitted at that path by construction — no filename guessing. If it is
-  // missing the CSS reference on every sub-app page 404s, which is a broken
-  // deployment, so the build stops rather than shipping it.
+  // Publish dist/style.css as an alias of the marketplace stylesheet.
+  //
+  // Pages do not need it: Astro injects the <link> from Base.astro's CSS import,
+  // with whatever content-hashed name the bundle got. The alias exists because
+  // /{prefix}/style.css is a URL this deployment has served for a long time and
+  // something outside this repository may still ask for it.
+  //
+  // The bundle is identified by *use*, not by filename: it is the local
+  // stylesheet the marketplace's own landing page loads. That is the definition
+  // of "the marketplace stylesheet", and it cannot drift from what the pages
+  // actually reference the way a filename pattern could (#50).
   const distRoot = join(ROOT, 'dist');
   if (existsSync(distRoot)) {
-    if (!existsSync(join(distRoot, 'style.css'))) {
+    const landing = join(distRoot, 'index.html');
+    if (!existsSync(landing)) fail('No dist/index.html — the landing page did not build.');
+
+    const hrefs = [...readFileSync(landing, 'utf8').matchAll(/<link\b[^>]*\brel="stylesheet"[^>]*>/gi)]
+      .map(tag => tag[0].match(/\bhref="([^"]+)"/)?.[1])
+      .filter(href => href?.startsWith('/' + PATH_PREFIX + '/'));
+
+    if (hrefs.length !== 1) {
       fail(
-        'No marketplace stylesheet at dist/style.css — every sub-app page would 404 its CSS. ' +
-        'astro.config.mjs gives that name to the bundle carrying the --mp-marketplace-stylesheet ' +
-        'sentinel; check that src/styles/marketplace.css still declares it and Base.astro still imports it.',
+        'Expected the landing page to load exactly one local stylesheet — the marketplace bundle — ' +
+        'but found ' + hrefs.length + (hrefs.length ? ': ' + hrefs.join(', ') : '') +
+        '. dist/style.css can only alias an unambiguous one.',
       );
     }
-    // style2.css means two bundles claimed the sentinel and Rollup disambiguated
-    // them — the pages reference one path, so which one they get is a coin toss.
-    const collisions = readdirSync(distRoot).filter(f => /^style\d+\.css$/.test(f));
-    if (collisions.length > 0) {
-      fail(
-        'More than one bundle claims the stable marketplace stylesheet name: style.css, ' +
-        collisions.join(', ') + '. Sub-app pages reference /style.css only, so the rest would never be served.',
-      );
-    }
-    ok('Marketplace CSS at dist/style.css');
+
+    const bundle = join(distRoot, hrefs[0].slice(('/' + PATH_PREFIX).length));
+    if (!existsSync(bundle)) fail('The landing page references ' + hrefs[0] + ', which is not in dist/.');
+    copyFileSync(bundle, join(distRoot, 'style.css'));
+    ok('Marketplace CSS ' + hrefs[0] + ' aliased → dist/style.css');
   }
 
   // 4. Summary

@@ -25,25 +25,17 @@ export default defineConfig({
       },
     ],
     css: { modules: false },
-    build: {
-      rollupOptions: {
-        output: {
-          // Sub-app pages reference the marketplace stylesheet at the fixed path
-          // /{PREFIX}/style.css, so that one asset — and only it — gets a stable,
-          // unhashed name. It is identified by the sentinel declaration
-          // src/styles/marketplace.css carries, not by "it happens to be CSS":
-          // forcing the name on *every* CSS asset made Rollup disambiguate the
-          // collisions as style.css / style2.css / …, and the build then had to
-          // guess which of them the pages meant (#50). Rollup's own name for the
-          // asset is no help — it is whichever component pulled the CSS in.
-          // Every other CSS asset keeps its content hash.
-          assetFileNames: (info) =>
-            String(info.source ?? '').includes('--mp-marketplace-stylesheet')
-              ? 'style.css'
-              : '_astro/[name]-[hash][extname]',
-        },
-      },
-    },
+    // No assetFileNames override: CSS is content-hashed like every other asset.
+    //
+    // This used to force the name "style.css" onto every CSS asset so that
+    // /{PREFIX}/style.css was a fixed path. Nothing needs a fixed path — the
+    // <link> on every page is injected by Astro from Base.astro's CSS import, so
+    // it always carries whatever name the bundle was given. Forcing a constant
+    // name only made Rollup disambiguate collisions as style.css / style2.css,
+    // which the build then had to guess between, and it defeated cache-busting
+    // for the one stylesheet every page loads (#50). scripts/build-vite.js still
+    // publishes dist/style.css as an alias of this bundle for anything outside
+    // this repository that refers to it by that path.
   },
 });
 

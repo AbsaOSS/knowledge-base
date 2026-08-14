@@ -4,18 +4,6 @@
 @source "../src/templates/**/*.js";
 @source "../scripts/**/*.js";
 
-/* ── Bundle sentinel ────────────────────────────────────────────────────────
-   Every sub-app page references the marketplace stylesheet at the fixed path
-   /{prefix}/style.css, so this bundle — and only this one — is emitted with a
-   stable, unhashed name. astro.config.mjs finds it by looking for the property
-   below, because the emitted asset is named after whichever component happened
-   to pull the CSS in ("Masthead.css"), which is neither stable nor meaningful.
-   Matching on content instead of on a filename is what removed the old guess
-   between style.css / style2.css (#50).
-   Removing this declaration fails the build with
-   "No marketplace stylesheet at dist/style.css". */
-:root { --mp-marketplace-stylesheet: 1; }
-
 /* ── Design tokens ──────────────────────────────────────────────────────── */
 @theme {
   /* Brand palette */

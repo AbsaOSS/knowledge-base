@@ -20,6 +20,19 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const DIST = join(ROOT, 'dist');
 const read = (rel) => readFileSync(join(DIST, rel), 'utf8');
 
+/**
+ * The marketplace stylesheet a page loads. Astro injects this <link> from
+ * Base.astro's CSS import, so the name is content-hashed and changes whenever
+ * the stylesheet does — assert the shape, never a literal filename.
+ */
+function marketplaceCssHref(html) {
+  const href = [...html.matchAll(/<link\b[^>]*\brel="stylesheet"[^>]*>/gi)]
+    .map((tag) => tag[0].match(/\bhref="([^"]+)"/)?.[1])
+    .find((h) => h?.startsWith('/knowledge-base/_astro/'));
+  expect(href, 'page does not load the marketplace stylesheet').toBeTruthy();
+  return href;
+}
+
 test.describe('Build integrity', () => {
   test('produced dist/ with the landing page', () => {
     expect(existsSync(DIST), 'dist/ should exist after build').toBe(true);
@@ -41,11 +54,13 @@ test.describe('Build integrity', () => {
     }
   });
 
-  test('marketplace stylesheet is emitted at the stable /style.css name', () => {
-    // Every page references /knowledge-base/style.css → dist/style.css (the gateway
-    // also reaches it via /__wf/knowledge-base/style.css). It must exist or every
-    // fragment page 404s its CSS.
-    expect(existsSync(join(DIST, 'style.css')), 'dist/style.css missing — sub-app CSS would 404').toBe(true);
+  test('the marketplace stylesheet is published at the stable /style.css alias too', () => {
+    // Pages reference the content-hashed bundle; /knowledge-base/style.css stays
+    // available as an alias of the same bytes for anything outside this
+    // repository that still asks for it by that path.
+    expect(existsSync(join(DIST, 'style.css')), 'dist/style.css alias missing').toBe(true);
+    expect(read('style.css'), 'the alias is not a copy of the bundle the pages load')
+      .toBe(read(marketplaceCssHref(read('index.html')).slice('/knowledge-base/'.length)));
   });
 
   test('landing lists both app cards with absolute slug links', () => {
@@ -59,7 +74,7 @@ test.describe('Build integrity', () => {
   test('sub-app pages are marked headless and reference the marketplace CSS', () => {
     const html = read('user-guide/index.html');
     expect(html).toContain('data-mp-headless="true"');
-    expect(html).toContain('/knowledge-base/style.css');
+    expect(marketplaceCssHref(html)).toMatch(/\.css$/);
   });
 
   test('sub-app pages are re-hosted by the layout, keeping their own head + body', () => {
@@ -161,7 +176,7 @@ test.describe('single-page onboarding', () => {
   test('is re-hosted by the layout like any packaged page', () => {
     const html = read('platform-overview/index.html');
     expect(html).toContain('data-mp-headless="true"');
-    expect(html).toContain('/knowledge-base/style.css');
+    expect(marketplaceCssHref(html)).toMatch(/\.css$/);
     expect(html.match(/<html\b/gi) ?? []).toHaveLength(1);
     expect(html.match(/<head\b/gi) ?? []).toHaveLength(1);
     expect(html.match(/<body\b/gi) ?? []).toHaveLength(1);
@@ -339,20 +354,22 @@ test.describe('no inline scripts in the build output', () => {
 
 // ── CSS asset handling (#49, #50) ───────────────────────────────────────────
 test.describe('stylesheet emission', () => {
-  test('the stable marketplace stylesheet is the only unhashed CSS at the dist root', () => {
-    // Sub-app pages reference /{prefix}/style.css literally, so exactly one
-    // bundle may own that name. style2.css means Rollup disambiguated a
-    // collision and the build had to guess which one the pages meant (#50).
-    const rootCss = readdirSync(DIST).filter((f) => f.endsWith('.css'));
-    expect(rootCss).toEqual(['style.css']);
-    expect(read('style.css'), 'dist/style.css is not the marketplace bundle')
-      .toContain('--mp-marketplace-stylesheet');
+  test('the marketplace stylesheet is content-hashed, not pinned to a constant name', () => {
+    // Forcing "style.css" onto every CSS asset made Rollup disambiguate the
+    // collisions as style.css / style2.css / …, which the build then had to
+    // guess between — and it left the one stylesheet every page loads unable to
+    // be cache-busted (#50). Every page's <link> is Astro-injected, so nothing
+    // needed the constant name in the first place.
+    expect(marketplaceCssHref(read('index.html')))
+      .toMatch(/^\/knowledge-base\/_astro\/[^/]+\.[A-Za-z0-9_-]{8,}\.css$/);
+    expect(readdirSync(DIST).filter((f) => /^style\d+\.css$/.test(f)),
+      'a style2.css means two bundles collided on one name again').toEqual([]);
   });
 
-  test('every other CSS asset keeps its content hash', () => {
+  test('every CSS asset carries a content hash', () => {
     const astroDir = join(DIST, '_astro');
     const unhashed = (existsSync(astroDir) ? readdirSync(astroDir) : [])
-      .filter((f) => f.endsWith('.css') && !/-[A-Za-z0-9_-]{8,}\.css$/.test(f));
+      .filter((f) => f.endsWith('.css') && !/[.-][A-Za-z0-9_-]{8,}\.css$/.test(f));
     expect(unhashed, 'an unhashed CSS asset cannot be cached immutably').toEqual([]);
   });
 
