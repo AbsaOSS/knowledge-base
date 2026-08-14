@@ -17,6 +17,11 @@ so no `GITHUB_TOKEN`, network, or sibling repository is required.
 See [`CLAUDE.md`](CLAUDE.md) for an architecture overview and the full command
 list, and [`README.md`](README.md) for usage.
 
+[`AGENTS.md`](AGENTS.md) is the mechanical checklist for what CI enforces on a
+pull request — branch name, title format, description, size — plus the
+repository conventions a change is expected to respect. Worth a read before
+opening your first PR, and required reading for automated contributors.
+
 ## Tests
 
 | Command | What it runs |
