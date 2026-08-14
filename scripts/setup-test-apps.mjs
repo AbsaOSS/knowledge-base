@@ -23,7 +23,7 @@ import { mkdirSync, rmSync, writeFileSync, existsSync } from 'node:fs';
 import { dirname, join, resolve, isAbsolute } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { DOC_CSS, CSS_PATH, MERMAID_PATH, renderDocument } from '../actions/publish-single-page-docs/src/template.js';
+import { DOC_CSS, CSS_PATH, MERMAID_INIT_JS, MERMAID_INIT_PATH, MERMAID_PATH, renderDocument } from '../actions/publish-single-page-docs/src/template.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(__dirname, '..');
@@ -147,7 +147,13 @@ function writeSinglePageBundle() {
       hasHeading:  true,
     }));
     writeFileSync(join(docDir, CSS_PATH), DOC_CSS);
-    if (doc.usesMermaid) writeFileSync(join(docDir, MERMAID_PATH), MERMAID_STUB);
+    if (doc.usesMermaid) {
+      writeFileSync(join(docDir, MERMAID_PATH), MERMAID_STUB);
+      // Real init script, not a stub: it is the thing that must stay out of the
+      // HTML for the marketplace's script-src 'self' to hold, so the fixture
+      // ships it exactly as the action does.
+      writeFileSync(join(docDir, MERMAID_INIT_PATH), MERMAID_INIT_JS);
+    }
   }
 
   writeFileSync(join(root, 'bundle.json'), JSON.stringify({

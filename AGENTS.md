@@ -132,6 +132,18 @@ Artifacts come from other repositories' releases. Treat their HTML, CSS and
 archive contents as attacker-controlled: no unvalidated archive extraction, no
 unsanitised HTML re-hosting, no shell interpolation of registry values.
 
+### Nothing inline in the output
+
+The deployment serves `script-src 'self'` with no `'unsafe-inline'`. That holds
+only because no inline `<script>` survives into `dist/` — the publishing action
+emits its mermaid init as a file, and `scripts/hoist-inline-scripts.js` moves any
+inline script found in a sub-app artifact into one. A change that introduces an
+inline script fails `tests/build-integrity.spec.js` before it can start breaking
+pages silently in production.
+
+Inline `<style>` is still allowed (`style-src` keeps `'unsafe-inline'`); tightening
+that is a separate piece of work.
+
 ### Portability
 
 The build runs on Linux CI and on Windows developer machines. Prefer Node APIs

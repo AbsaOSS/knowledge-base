@@ -36,26 +36,6 @@
   client --&gt; gateway --&gt; service</pre>
 </article>
 <script src="assets/mermaid.min.js"></script>
-<script>(function () {
-  var render = function () {
-    if (!window.mermaid) return;
-    var nodes = document.querySelectorAll('pre.mermaid:not([data-processed])');
-    if (!nodes.length) return;
-    window.mermaid.initialize({
-      startOnLoad: false,
-      theme: 'base',
-      securityLevel: 'strict',
-      fontFamily: 'Inter, Noto Sans, ui-sans-serif, system-ui, sans-serif',
-      themeVariables: {
-        primaryColor: '#f8eaee', primaryTextColor: '#1b0e12', primaryBorderColor: '#af144b',
-        lineColor: '#93103f', secondaryColor: '#f0d0da', tertiaryColor: '#fdf8f9'
-      }
-    });
-    try { window.mermaid.run({ nodes: nodes }); } catch (e) { /* leave the source visible */ }
-  };
-  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', render);
-  else render();
-  document.addEventListener('astro:page-load', render);
-})();</script>
+<script src="assets/mermaid-init.js"></script>
 </body>
 </html>

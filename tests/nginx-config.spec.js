@@ -90,6 +90,26 @@ test.describe('nginx.conf header inheritance', () => {
     expect(uncomment(CONF) + uncomment(HEADERS_CONF)).not.toContain('X-XSS-Protection');
   });
 
+  // The Express mirror serves the same policy so the embedded harness exercises
+  // it through the gateway. Two copies means they can drift, so the drift is
+  // what gets asserted.
+  test('the CSP in nginx.headers.conf matches the one the test mirror serves', () => {
+    const nginxCsp = uncomment(HEADERS_CONF)
+      .match(/add_header\s+Content-Security-Policy\s+"([^"]+)"/)?.[1];
+    expect(nginxCsp, 'no CSP in nginx.headers.conf').toBeTruthy();
+
+    const mirror = readFileSync(join(ROOT, 'tests', 'fragment-server.mjs'), 'utf8');
+    const mirrorCsp = mirror
+      .match(/const CSP = \[([\s\S]*?)\]\.join\('; '\)/)?.[1]
+      ?.split('\n')
+      .map((l) => l.trim().replace(/^["']|["'],?$/g, ''))
+      .filter(Boolean)
+      .join('; ');
+
+    expect(mirrorCsp, 'no CSP in tests/fragment-server.mjs').toBeTruthy();
+    expect(mirrorCsp, 'the mirror and nginx must serve the same policy').toBe(nginxCsp);
+  });
+
   test('healthz sets its content type with default_type, not a post-return add_header', () => {
     const healthz = locationBlocks(uncomment(CONF)).find((b) => b.selector === '= /healthz');
     expect(healthz, '/healthz location block').toBeTruthy();

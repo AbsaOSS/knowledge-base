@@ -143,6 +143,37 @@ source stays visible rather than disappearing.
 If your markdown has no top-level `#` heading, the action synthesises one from
 `title` plus `description`. If it has one, nothing is injected.
 
+### Raw HTML: what survives
+
+Markdown may contain raw HTML, as GitHub-flavoured markdown allows. It is put
+through an **allowlist** before it is packed into the artifact, because your
+rendered doc is re-hosted on the knowledge base's own origin alongside every
+other team's docs — anything that executes there executes against all of them.
+
+**Kept:** the structural and inline elements the doc stylesheet renders —
+headings, paragraphs, lists, tables, `details`/`summary`, `figure`, `blockquote`,
+`pre`/`code`, `img`, `a`, `label`, emphasis and the rest of the usual inline set,
+along with their `class` and `id` attributes.
+
+**Dropped, with the inner text kept where there is any:**
+
+| Removed | Why |
+|---|---|
+| `<script>` | Would run on the knowledge base origin |
+| `on*` attributes (`onclick`, `onerror`, …) | Same |
+| `<style>` and `style="…"` | CSS can exfiltrate via `url()` and can cover the marketplace masthead |
+| `<iframe>`, `<object>`, `<embed>` | Arbitrary embedded documents |
+| `<form>` and form controls (except task-list checkboxes) | Credential-phishing surface |
+| `javascript:` and `data:` URLs | Script execution by another name |
+
+If you need something that is currently dropped and it is genuinely inert, open
+an issue — the allowlist lives in `actions/publish-single-page-docs/src/sanitize.js`
+and is asserted by the action's self-test.
+
+There is no way to opt out. A doc that depends on inline scripting is not a
+single-page doc; package it as a full static site instead
+(see [HEADLESS_RULES.md](./HEADLESS_RULES.md)).
+
 ### Artifact layout
 
 `dist.tar.gz` unpacks to a `bundle.json` manifest plus one directory per doc:
@@ -153,6 +184,8 @@ my-service/
   index.html
   assets/doc.css
   assets/mermaid.min.js     ← only when that doc uses mermaid
+  assets/mermaid-init.js    ← ditto; kept out of the HTML so the marketplace
+                              can serve script-src 'self'
 my-service-releases/
   index.html
   assets/doc.css
