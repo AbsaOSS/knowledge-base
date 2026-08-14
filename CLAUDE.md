@@ -23,11 +23,12 @@ npm run dev                          # Astro dev (needs artifacts in apps/ alrea
 npm run dev:fetch                    # fetch artifacts then start dev
 
 # Preview
-npm run preview                      # preview built output
-npm run preview:embedded             # headless preview (no compression, for web-fragments)
+npm run preview                      # serve the built dist/ (astro preview, :4321)
 
-# Test (Playwright E2E — self-contained; auto-starts both servers)
-npm test                             # headless
+# Test (Playwright E2E — self-contained; auto-starts its own servers)
+npm test                             # embedded web-fragment harness
+npx playwright test --config=playwright.config.ci.js   # standalone fragment server
+npm run test:container               # real nginx image (needs Docker)
 npm run test:ui                      # Playwright UI
 npm run test:headed                  # visible browser
 npm run test:debug                   # debug mode
@@ -51,12 +52,13 @@ apps.json (registry)
   → dist/
 ```
 
-Orchestrator: `scripts/build-vite.js`. Flags: `--local`, `--headless`, `--path-prefix=`.
+Orchestrator: `scripts/build-vite.js`. Flags: `--local`, `--headless`.
 
-## Two Build Configs
+## Build Config
 
-- **astro.config.mjs** — Astro SSG config, base `/knowledge-base`, used by `astro build`/`astro dev`
-- **vite.config.js** — standalone Vite config with custom `marketplacePlugin` from `plugins/marketplace.js`, base `/`, used for the non-Astro build path
+**astro.config.mjs** is the only build config — base `/knowledge-base`, used by `astro build`/`astro dev`. There is no non-Astro build path.
+
+`src/utils/config.js` holds what both the config and the pages need: `PATH_PREFIX`/`BASE_PATH` and `isHeadlessBuild()`. Import them; do not re-spell either one inline.
 
 ## Architecture
 
@@ -70,15 +72,16 @@ Orchestrator: `scripts/build-vite.js`. Flags: `--local`, `--headless`, `--path-p
 - `src/pages/index.astro` — Landing catalog page
 - `src/utils/apps.js` — `getAppPages()` enumerates sub-app HTML (manifest-driven or filesystem crawl)
 - `src/utils/transform.js` — `transformSubAppHtml()`: URL rewriting, document splitting (head/body/title/body-class), headless transforms
-- `src/layouts/Base.astro` — The one document shell: head, fonts, marketplace CSS, theme script, `<ClientRouter />`
-- `src/components/Chrome.astro` — 56px fixed top bar (standalone mode only)
+- `src/layouts/Base.astro` — The one document shell: head, fonts, marketplace CSS, `<ClientRouter />`, shadow-DOM compat styles
 - `src/components/Masthead.astro` — Persistent Knowledge base header + Library/current-app sub-nav (all pages, both modes)
-- `src/templates/chrome.js` — Inline theme script + shadow-DOM compat styles injected by the layout
+- `src/components/AppCard.astro`, `src/components/AppIcon.astro` — Catalog card and its icon
+- `src/templates/shadow-compat.js` — Shadow-DOM design-token styles, injected into the body by the layout
+- `src/utils/config.js` — `PATH_PREFIX`/`BASE_PATH` and `isHeadlessBuild()` — the build-wide constants
 - `src/utils/single-page.js` — Bundle manifest reading/validation + registry expansion, shared by both fetch paths and by Astro
-- `scripts/build-vite.js` — Build orchestrator (3-step pipeline)
+- `scripts/build-vite.js` — Build orchestrator (4 steps: prepare, hoist, copy assets, astro build)
 - `scripts/fetch-apps.js` — GitHub Release artifact downloader
 - `scripts/artifacts.js` — Safe tarball extraction + tree copy, shared by both fetch paths. Validates archive members (no traversal, no absolute paths, no symlinks) before anything is written, and replaces the old `cp -r`/`tar` shell-outs so the build runs on Windows
-- `scripts/hoist-inline-scripts.js` — Moves inline `<script>` bodies in sub-app HTML into files before the Astro build, so the deployment can serve `script-src 'self'`. Needed because bundles published before the action stopped emitting an inline mermaid bootstrap still contain one
+- `scripts/hoist-inline-scripts.js` — Moves inline `<script>` bodies in sub-app HTML into files before the Astro build, so the deployment can serve `script-src 'self'`. Needed because bundles published before the action stopped emitting an inline mermaid bootstrap still contain one. A sub-app's dark-mode bootstrap is deleted here rather than hoisted — light only, and hoisting would put it beyond the reach of `transform.js`
 - `actions/publish-single-page-docs/` — Reusable GitHub Action that turns a repo's markdown into a single-page bundle
 
 ### Three Onboarding Types
@@ -95,15 +98,21 @@ Both modes render the same document: the masthead (`Masthead.astro`) — brandin
 
 **Non-headless** (standalone): Plain marketplace pages. Navigation is Astro's `<ClientRouter />` (view transitions).
 
-**Headless** (web-fragment): Marks `data-mp-headless="true"` and injects shadow DOM compat styles. Designed for embedding in a web-fragments gateway.
+**Headless** (web-fragment): Marks `data-mp-headless="true"` on `<html>`, for embedding in a web-fragments gateway. That attribute is the only difference in the output — the shadow-DOM compat styles are emitted in both modes.
+
+Resolution order: a per-app `"headless"` in `apps.json` wins; otherwise `isHeadlessBuild()`.
 
 ### Light Only
 
-The marketplace has no dark mode: no theme toggle, no persisted theme, no `dark` class, no dark palette. `transformSubAppHtml()` strips any sub-app theme bootstrap and `dark` body class so an embedding host's theme cannot bleed into the fragment.
+The marketplace has no dark mode: no theme toggle, no persisted theme, no `dark` class, no dark palette. A sub-app's own theme bootstrap is removed twice over — `hoist-inline-scripts.js` deletes it while it is still inline, and `transformSubAppHtml()` strips any that reaches Astro, along with a `dark` body class — so an embedding host's theme cannot bleed into the fragment.
+
+Known gap: inline `on*` handlers in sub-app HTML are not stripped (#67). They are inert under the CSP but not under `astro dev`.
 
 ### URL Rewriting
 
-`transform.js` rewrites all relative and root-relative URLs to absolute `/{prefix}/{slug}/...` paths. Runs before the document is split so nothing is double-rewritten. Removes `<base>` tags.
+`transform.js` parses the document with **parse5** and rewrites every URL-bearing attribute to an absolute `/{prefix}/{slug}/…` path: `href`/`src`/`action`/`formaction`/`poster`, `object[data]`, `srcset`/`imagesrcset`, `url()` in inline `style=` and `<style>` blocks, and URL-bearing `<meta>` content. `<base>` tags are removed. Because it walks a parsed tree, markup quoted inside prose or comments is left alone.
+
+Root-relative `url()` inside a sub-app's **copied CSS files** is a separate rewrite, in `copyAssets()` (`scripts/build-vite.js`), targeting the same absolute path.
 
 ## Contract for Doc Apps
 
@@ -118,8 +127,9 @@ Apps registered in `apps.json` must comply with:
 Self-contained Playwright E2E — `npm test` auto-starts everything (no external gateway):
 
 1. **:3000 fragment** — `scripts/setup-test-apps.mjs` writes a hermetic `apps.json` that
-   registers the local `../knowledge-base-docs-example` prebuilt `dist.tar.gz` twice
-   (slugs `user-guide` + `guide-mirror`, for cross-app nav). `build:headless` builds it;
+   registers the vendored `tests/fixtures/docs-example.dist.tar.gz` twice
+   (slugs `user-guide` + `guide-mirror`, for cross-app nav), an iframe entry pinned
+   `"headless": false`, and the generated single-page bundle fixture. `build:headless` builds it;
    `tests/fragment-server.mjs` serves `dist/` mirroring the production **nginx** rewrites
    (`/__wf/knowledge-base/*` → `/knowledge-base/*`). NB: `astro preview` is NOT used — its
    Vite `configurePreviewServer` rewrite hook does not run for static output, so the
@@ -128,14 +138,23 @@ Self-contained Playwright E2E — `npm test` auto-starts everything (no external
    application" (`FragmentGateway` + `getNodeMiddleware`) that proxies/embeds the :3000
    fragment on a single origin via `<web-fragment fragment-id="knowledge-base">`.
 
-Tests drive the host origin (`http://localhost:4201`). Suites (`tests/`):
+Tests drive the host origin (`http://localhost:4201`). Suites (`tests/`), all four
+commands listed in `AGENTS.md`:
 - `build-integrity.spec.js` — `dist/` output: both apps enumerated, absolute URL rewriting,
-  headless markup, the content-hashed marketplace stylesheet plus its stable `dist/style.css`
-  alias, and single-page bundle expansion (`tests/fixtures/single-page-bundle/` → two apps).
-- `web-fragment.spec.js` — shadow-DOM isolation (reframed `wf-html`/`wf-body`; chrome must
+  headless markup and the per-app `"headless"` override, the content-hashed marketplace
+  stylesheet plus its stable `dist/style.css` alias, no inline script anywhere, and
+  single-page bundle expansion (`tests/fixtures/single-page-bundle/` → two apps).
+- `transform.spec.js` — unit tests for `transformSubAppHtml()`: the malformed and
+  hostile documents no fixture app happens to ship.
+- `web-fragment.spec.js` — shadow-DOM isolation (reframed `wf-html`/`wf-body`; host chrome must
   not leak in), routing + smooth no-reload SPA transitions, cross-app navigation, asset
   loading (no host-origin 404s), and the documented history limitation (fragment routing is
   internal to the reframed `wf:<id>` iframe and is not mirrored to top-window history).
+- `artifact-safety.spec.js` — tarball extraction guards (traversal, absolute paths, symlinks).
+- `nginx-config.spec.js` — static assertions on `nginx.conf`/`nginx.headers.conf`, including
+  that the CSP the Express mirror serves is byte-identical to nginx's.
+- `standalone.spec.js` — the `:3000` fragment server directly (`playwright.config.ci.js`).
+- `container.spec.js` — the real nginx image (`playwright.config.docker.js`, needs Docker).
 - `support/fragment.js` — shadow-DOM traversal + reframed-body wait/query helpers.
 
 Two build-pipeline pieces support this: `apps.json` entries may carry a `prebuilt` path
@@ -153,6 +172,9 @@ in the committed `apps.json` without breaking CI, which only has this repo.
 ## Environment Variables
 
 - `GITHUB_TOKEN` — GitHub API auth for fetching Release artifacts
-- `MP_HEADLESS` — `true`/`false`, controls headless mode
-- `MP_PREFIX` — URL prefix (default: `knowledge-base`)
+- `MP_HEADLESS` — `true` produces web-fragment output; **anything else, including unset, means standalone**. `scripts/build-vite.js` always exports an explicit value, so the default only applies when `astro build`/`astro dev` runs directly. Read it through `isHeadlessBuild()`, never inline. A per-app `"headless"` in `apps.json` overrides it in either direction.
 - `AWS_REGION`, `ECR_REPOSITORY`, `ECS_CLUSTER`, `ECS_SERVICE` — deployment config
+- `KB_EXAMPLE_ARTIFACT` — overrides the packaged artifact `scripts/setup-test-apps.mjs` registers
+- `KB_CONTAINER_PORT`, `KB_SKIP_BUILD` — container-suite harness (`tests/container/serve.mjs`); CI sets `KB_SKIP_BUILD` because its image job already built the image
+
+The URL prefix is **not** an environment variable: it is the `PATH_PREFIX` constant in `src/utils/config.js`. `nginx.conf`, `tests/fragment-server.mjs` and the gateway's route patterns hard-code the same string, so changing it means changing all of them together.

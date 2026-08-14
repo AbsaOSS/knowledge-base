@@ -103,6 +103,11 @@ is a second implementation of the same contract and it has drifted twice
 with this suite.** CI runs it inside the `image` job, which already builds the
 image.
 
+Locally it sets `reuseExistingServer`, so a container left running from an
+earlier run answers on `:8099` and the suite passes against the **old** `dist/`.
+Before trusting a green run: `docker ps --filter "publish=8099"`, remove
+anything there, rebuild, then run it.
+
 `npm audit --omit=dev --audit-level=high` must also stay clean; it gates CI.
 
 ## Repository conventions
@@ -123,8 +128,11 @@ strong reason.
 ### Light only
 
 The marketplace has no dark mode: no theme toggle, no persisted theme, no `dark`
-class, no dark palette. `src/utils/transform.js` actively strips a sub-app's
-theme bootstrap and `dark` body class. Do not reintroduce any of it.
+class, no dark palette. A sub-app's own theme bootstrap is removed twice:
+`scripts/hoist-inline-scripts.js` deletes it while it is still inline, and
+`src/utils/transform.js` strips any that survives, along with a `dark` body
+class. Do not reintroduce any of it, and keep both halves — hoisting a bootstrap
+instead of deleting it puts it beyond the reach of the transform.
 
 ### Sub-app HTML is untrusted input
 
@@ -141,6 +149,9 @@ inline script found in a sub-app artifact into one. A change that introduces an
 inline script fails `tests/build-integrity.spec.js` before it can start breaking
 pages silently in production.
 
+The check covers `<script>` elements. Inline `on*` handlers are a known gap
+(#67): they are equally blocked by the policy but nothing strips or reports them.
+
 Inline `<style>` is still allowed (`style-src` keeps `'unsafe-inline'`); tightening
 that is a separate piece of work.
 
@@ -148,8 +159,14 @@ that is a separate piece of work.
 
 The build runs on Linux CI and on Windows developer machines. Prefer Node APIs
 (`cpSync`, `rmSync`) over shelling out to `cp`/`rm`. Where `tar` is unavoidable,
-follow the drive-letter workaround documented in
-`scripts/build-vite.js` (`stageArtifact`).
+follow the drive-letter workaround documented in `scripts/artifacts.js`
+(`stageArtifact`).
+
+The repository has no `.gitattributes`, so a Windows checkout is CRLF. Two
+consequences: `git status` reports `apps.json` and the generated fixtures as
+modified when only line endings changed — check `git diff --stat`, which will
+show nothing, before staging — and a `$`-anchored regex over file text will not
+match, because `.` does not match `\r`.
 
 ### Contract changes
 

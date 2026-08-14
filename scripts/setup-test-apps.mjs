@@ -221,6 +221,12 @@ const apps = [
     type: 'iframe',
     url: 'https://example.com/docs',
     temporary: true,
+    // Pinned standalone so the suite covers the per-app override in the
+    // direction that used to be impossible: the harness builds headless, and
+    // this app must still come out without data-mp-headless (#52). This entry
+    // is the one with no headless assertions of its own, so it can carry the
+    // pin without weakening another test.
+    headless: false,
   },
   {
     // single-page onboarding mode (issue #35): one bundle, no per-doc metadata

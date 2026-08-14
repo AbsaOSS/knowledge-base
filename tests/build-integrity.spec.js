@@ -123,6 +123,15 @@ test.describe('iframe onboarding', () => {
     expect(existsSync(join(DIST, 'external-docs/docs')), 'unexpected packaged pages for iframe entry').toBe(false);
   });
 
+  test('a per-app "headless": false wins over a headless build', () => {
+    // The harness builds with --headless, and external-docs is pinned standalone
+    // in apps.json. Base.astro used to OR the prop with the global flag, so the
+    // override could only ever turn headless on (#52).
+    expect(read('external-docs/index.html')).not.toContain('data-mp-headless');
+    // …while its neighbours in the same build are still headless.
+    expect(read('user-guide/index.html')).toContain('data-mp-headless="true"');
+  });
+
   test('landing shows the iframe app card with an External badge', () => {
     const html = read('index.html');
     expect(html).toContain('External Docs');

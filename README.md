@@ -13,8 +13,9 @@ build time it:
 
 1. Obtains each registered app's built output (`dist/`) — from a **GitHub Release
    artifact** (`dist.tar.gz`), a **local repo**, or a **prebuilt** tarball/dir.
-2. Rewrites every page's URLs to absolute `/knowledge-base/{slug}/…` paths and,
-   in standalone mode, injects a persistent top **chrome** (nav + app switcher).
+2. Rewrites every page's URLs to absolute `/knowledge-base/{slug}/…` paths and
+   re-hosts each document under a persistent **masthead** (branding + Library /
+   current-app navigation), the same in both modes.
 3. Generates a **catalog landing page** listing all registered apps.
 4. Produces a single `dist/` served by **nginx** in Docker, or embedded into a
    host app as a **web fragment**.
@@ -67,11 +68,16 @@ npm test
 | `npm run build:local` | Build each app from a local checkout (`localPath`) |
 | `npm run build:local:headless` | Local + headless |
 
-`--headless` (or `MP_HEADLESS=true`) produces fragment-ready output: no chrome
-bar, `data-mp-headless="true"` on `<html>`, shadow-DOM compat styles.
+`--headless` (or `MP_HEADLESS=true`) produces fragment-ready output, marked with
+`data-mp-headless="true"` on `<html>`. Anything else — including an unset
+`MP_HEADLESS` — means standalone. An individual app can pin either mode with
+`"headless": true|false` in its `apps.json` entry, which wins over the build flag.
 
-Orchestrator: `scripts/build-vite.js` (flags: `--local`, `--headless`,
-`--path-prefix=`).
+Orchestrator: `scripts/build-vite.js` (flags: `--local`, `--headless`).
+
+The URL prefix (`/knowledge-base`) is not configurable: it is the `PATH_PREFIX`
+constant in `src/utils/config.js`, and `nginx.conf` and the fragment gateway's
+route patterns hard-code the same string.
 
 ---
 
@@ -109,7 +115,7 @@ never quietly produce an empty deployment.
 Teams that already host their docs elsewhere and can't yet produce a headless
 package can be listed immediately with an **iframe** entry — no `repo`,
 `marketplace.json`, or artifact needed. It renders as a full-viewport `<iframe>`
-inside the marketplace chrome and shows an **External** badge in the catalogue.
+below the marketplace masthead and shows an **External** badge in the catalogue.
 
 ```jsonc
 {
@@ -206,6 +212,7 @@ E2E tests use Playwright. Everything is hermetic — built from
 |---|---|
 | `npm test` | **Embedded** harness (`playwright.config.js`). Starts the fragment server (`:3000`) and a minimal web-fragments **host gateway** (`tests/host/server.mjs`, `:4201`) that embeds the fragment. Covers shadow-DOM isolation, smooth no-reload SPA routing, cross-app navigation, asset 404s, and the fragment-history limitation. |
 | `npx playwright test --config=playwright.config.ci.js` | **Standalone** layer. Hits the fragment server (`tests/fragment-server.mjs`, `:3000`) directly. Covers HTTP header safety (`X-Frame-Options`), the headless contract, CSS-link stability (web-fragments [#297](https://github.com/web-fragments/web-fragments/issues/297)), and asset routing. |
+| `npm run test:container` | **Container** layer (needs Docker). Runs the real production image — nginx serving `dist/` — instead of the Express mirror the other two use. Covers the shipped `nginx.conf`: rewrites, response headers, the CSP in a browser, and that the image does not run as root. |
 
 > `tests/fragment-server.mjs` serves `dist/` and mirrors the production
 > `nginx.conf` rewrites (including `/__wf/knowledge-base/* → /knowledge-base/*`).
@@ -213,7 +220,8 @@ E2E tests use Playwright. Everything is hermetic — built from
 > `configurePreviewServer` rewrite hook does not run for static output, so the
 > `/__wf` asset route would 404.
 
-Both layers run in CI (`.github/workflows/ci.yml`).
+All three layers run in CI (`.github/workflows/ci.yml`); the container layer runs
+inside the image job, which has already built the image.
 
 ---
 
@@ -269,7 +277,7 @@ Apps must comply with the marketplace contract before they can be registered:
 |---|---|
 | [`contract/schema.json`](contract/schema.json) | JSON Schema for `marketplace.json` |
 | [`contract/HEADLESS_RULES.md`](contract/HEADLESS_RULES.md) | Headless HTML, relative paths, `data-mp-headless` |
-| [`contract/STYLE_GUIDE.md`](contract/STYLE_GUIDE.md) | Design tokens (`--color-kb-*`), typography, dark mode |
+| [`contract/STYLE_GUIDE.md`](contract/STYLE_GUIDE.md) | Design tokens (`--color-kb-*`) and typography — light only; the marketplace has no dark mode |
 | [`contract/SINGLE_PAGE.md`](contract/SINGLE_PAGE.md) | `bundle.json` format + zero-config markdown onboarding |
 
 > The checklist and workflows below apply to **packaged** doc apps. Single-page
@@ -360,16 +368,20 @@ knowledge-base/
 │   ├── styles/marketplace.css ← Design tokens + Tailwind
 │   └── utils/
 │       ├── apps.js            ← loadRegistry() + getAppPages() page enumeration
+│       ├── config.js          ← PATH_PREFIX / BASE_PATH + isHeadlessBuild()
 │       ├── single-page.js     ← bundle.json parsing + registry expansion
-│       └── transform.js       ← URL rewriting + sub-app document splitting
+│       └── transform.js       ← parse5 URL rewriting + sub-app document splitting
 ├── scripts/
 │   ├── build-vite.js          ← Build orchestrator
 │   ├── fetch-apps.js          ← GitHub Release download + extract
+│   ├── artifacts.js           ← Safe tarball extraction + tree copy
+│   ├── hoist-inline-scripts.js ← Inline <script> → file, so the CSP can be strict
 │   └── setup-test-apps.mjs    ← Generates the hermetic test apps.json
 ├── tests/
 │   ├── web-fragment.spec.js   ← Embedded harness suite
 │   ├── standalone.spec.js     ← Standalone fragment-server suite
 │   ├── build-integrity.spec.js
+│   ├── transform.spec.js      ← Unit tests for the sub-app HTML transform
 │   ├── artifact-safety.spec.js ← Tarball extraction guards
 │   ├── nginx-config.spec.js   ← nginx header-inheritance guard (static)
 │   ├── container.spec.js      ← Integration suite vs. the real nginx image
@@ -379,7 +391,8 @@ knowledge-base/
 │   ├── support/fragment.js    ← Shadow-DOM test helpers
 │   └── fixtures/              ← Vendored docs-example dist.tar.gz + single-page bundle
 ├── contract/                  ← marketplace.json schema + rules + style guide
-├── .github/workflows/         ← ci.yml, validate-doc-app.yml
+├── .github/workflows/         ← ci.yml, pages.yml, pr-requirements.yml,
+│                                 validate-doc-app.yml (reusable, for doc repos)
 ├── Dockerfile
 ├── nginx.conf                 ← server block (rewrites, caching, routing)
 └── nginx.headers.conf         ← shared CORS + security headers, included by

@@ -13,15 +13,13 @@
 
 import { readFileSync } from 'node:fs';
 import { getAppPages } from '../utils/apps.js';
+import { BASE_PATH, PATH_PREFIX, isHeadlessBuild } from '../utils/config.js';
 import { transformSubAppHtml } from '../utils/transform.js';
 import Base from '../layouts/Base.astro';
 import Masthead from '../components/Masthead.astro';
 
-const PREFIX = 'knowledge-base';
-
 export function getStaticPaths() {
-  const headless = process.env.MP_HEADLESS !== 'false';
-  return getAppPages(process.cwd(), headless).map(({ routePath, ...props }) => ({
+  return getAppPages(process.cwd(), isHeadlessBuild()).map(({ routePath, ...props }) => ({
     params: { path: routePath },
     props,
   }));
@@ -32,7 +30,7 @@ const { slug, appHeadless, apps, title } = props;
 
 const parts = props.iframe
   ? null
-  : transformSubAppHtml(readFileSync(props.file, 'utf-8'), slug, props.fileRelDir, PREFIX);
+  : transformSubAppHtml(readFileSync(props.file, 'utf-8'), slug, props.fileRelDir, PATH_PREFIX);
 
 const app = apps.find((a: any) => a.slug === slug);
 const pageTitle = title ?? parts?.title ?? app?.name ?? 'Knowledge base';
@@ -49,7 +47,7 @@ const atAppRoot = !props.fileRelDir;
 >
   {parts && <Fragment slot="head" set:html={parts.headHtml} />}
 
-  <Masthead apps={apps} activeSlug={slug} base={`/${PREFIX}`} appRoot={atAppRoot} />
+  <Masthead apps={apps} activeSlug={slug} base={BASE_PATH} appRoot={atAppRoot} />
 
   {props.iframe ? (
     <main style="display:flex;flex:1 1 auto;min-height:0">

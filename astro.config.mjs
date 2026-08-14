@@ -1,10 +1,9 @@
 import { defineConfig } from 'astro/config';
 import tailwindcss from '@tailwindcss/vite';
-
-const PREFIX = 'knowledge-base';
+import { BASE_PATH, PATH_PREFIX } from './src/utils/config.js';
 
 export default defineConfig({
-  base: '/knowledge-base',
+  base: BASE_PATH,
   output: 'static',
 
   vite: {
@@ -16,8 +15,8 @@ export default defineConfig({
         name: 'wf-fragment-alias',
         configurePreviewServer(server) {
           server.middlewares.use((req, _res, next) => {
-            if (req.url?.startsWith(`/__wf/${PREFIX}`)) {
-              req.url = req.url.replace(`/__wf/${PREFIX}`, `/${PREFIX}`);
+            if (req.url?.startsWith(`/__wf/${PATH_PREFIX}`)) {
+              req.url = req.url.replace(`/__wf/${PATH_PREFIX}`, BASE_PATH);
             }
             next();
           });
