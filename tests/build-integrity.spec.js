@@ -20,6 +20,16 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const DIST = join(ROOT, 'dist');
 const read = (rel) => readFileSync(join(DIST, rel), 'utf8');
 
+/** Every .html file under dist/, recursively. */
+function htmlFiles(dir, acc = []) {
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    const full = join(dir, entry.name);
+    if (entry.isDirectory()) htmlFiles(full, acc);
+    else if (entry.name.endsWith('.html')) acc.push(full);
+  }
+  return acc;
+}
+
 /**
  * The marketplace stylesheet a page loads. Astro injects this <link> from
  * Base.astro's CSS import, so the name is content-hashed and changes whenever
@@ -289,16 +299,6 @@ test.describe('Masthead', () => {
 // ─────────────────────────────────────────────────────────────────────────────
 
 test.describe('no inline scripts in the build output', () => {
-  /** Every .html file under dist/, recursively. */
-  function htmlFiles(dir, acc = []) {
-    for (const entry of readdirSync(dir, { withFileTypes: true })) {
-      const full = join(dir, entry.name);
-      if (entry.isDirectory()) htmlFiles(full, acc);
-      else if (entry.name.endsWith('.html')) acc.push(full);
-    }
-    return acc;
-  }
-
   test('every <script> in dist/ has a src', () => {
     const offenders = [];
     for (const file of htmlFiles(DIST)) {
@@ -380,6 +380,31 @@ test.describe('stylesheet emission', () => {
     const unhashed = (existsSync(astroDir) ? readdirSync(astroDir) : [])
       .filter((f) => f.endsWith('.css') && !/[.-][A-Za-z0-9_-]{8,}\.css$/.test(f));
     expect(unhashed, 'an unhashed CSS asset cannot be cached immutably').toEqual([]);
+  });
+
+  test('the typeface is self-hosted, with no third-party font origin anywhere', () => {
+    // Inter used to come from fonts.googleapis.com on every page view (#54).
+    const offenders = [...htmlFiles(DIST), join(DIST, 'style.css')]
+      .filter((f) => /fonts\.(googleapis|gstatic)\.com/.test(readFileSync(f, 'utf8')))
+      .map((f) => relative(DIST, f));
+    expect(offenders, 'a Google Fonts origin survived into the build').toEqual([]);
+
+    // …and the faces it does load are same-origin, hashed and present.
+    const fonts = [...read('style.css').matchAll(/url\((\/knowledge-base\/[^)]+\.woff2)\)/g)].map((m) => m[1]);
+    expect(fonts.length, 'no self-hosted font in the marketplace stylesheet').toBeGreaterThan(0);
+    for (const font of fonts) {
+      expect(existsSync(join(DIST, font.replace('/knowledge-base/', ''))), `${font} is not in dist/`).toBe(true);
+    }
+  });
+
+  test('the CSS url() rewrite does not write back into the artifact', () => {
+    // Assets are hardlinked from apps/ into public/ rather than copied (#51), so
+    // a stylesheet edited in place would corrupt the extracted artifact itself.
+    // CSS is deliberately the one kind copied for real.
+    const source = readFileSync(join(ROOT, 'apps/platform-overview/assets/depth-check.css'), 'utf8');
+    expect(source, 'the rewrite reached back into apps/ — CSS must not be hardlinked')
+      .toContain('url(/fonts/demo.woff2)');
+    expect(read('platform-overview/assets/depth-check.css')).toContain('url(/knowledge-base/platform-overview/');
   });
 
   test('root-relative url() in sub-app CSS is rebased onto the app, at any depth', () => {

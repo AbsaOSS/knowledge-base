@@ -28,6 +28,7 @@
     "test:container": "npx playwright test --config=playwright.config.docker.js"
   },
   "dependencies": {
+    "@fontsource-variable/inter": "^5.3.0",
     "ajv": "^8.17.1",
     "parse5": "^7.3.0"
   },

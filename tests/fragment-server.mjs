@@ -39,9 +39,9 @@ if (!existsSync(DIST)) {
 const CSP = [
   "default-src 'self'",
   "script-src 'self'",
-  "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+  "style-src 'self' 'unsafe-inline'",
   "img-src 'self' data: https:",
-  "font-src 'self' data: https://fonts.gstatic.com",
+  "font-src 'self' data:",
   "connect-src 'self'",
   "frame-src 'self' https: blob:",
   "worker-src 'self' blob:",

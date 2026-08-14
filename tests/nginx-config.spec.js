@@ -95,6 +95,17 @@ test.describe('nginx.conf header inheritance', () => {
     expect(uncomment(CONF) + uncomment(HEADERS_CONF)).not.toContain('X-XSS-Protection');
   });
 
+  test('style-src and font-src allow no third-party origin', () => {
+    // Inter is served from this origin (#54), so neither directive needs a host
+    // allowlisted. Re-adding a CDN font would quietly widen the policy again.
+    const csp = uncomment(HEADERS_CONF).match(/add_header\s+Content-Security-Policy\s+"([^"]+)"/)?.[1] ?? '';
+    for (const directive of ['style-src', 'font-src']) {
+      const value = csp.split(';').map((d) => d.trim()).find((d) => d.startsWith(directive + ' ')) ?? '';
+      expect(value, `no ${directive} in the policy`).toBeTruthy();
+      expect(value, `${directive} allowlists an external origin`).not.toMatch(/https?:\/\//);
+    }
+  });
+
   // The Express mirror serves the same policy so the embedded harness exercises
   // it through the gateway. Two copies means they can drift, so the drift is
   // what gets asserted.
