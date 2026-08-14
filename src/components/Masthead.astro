@@ -20,16 +20,17 @@ interface App {
 }
 
 interface Props {
-  apps: App[];
-  activeSlug?: string;
+  /** The app being viewed, or undefined on the catalog. Not the whole registry:
+      the masthead names one app, and a per-page copy of every app's metadata is
+      what Astro would otherwise serialise into every route (#51). */
+  activeApp?: App;
   base?: string;
   /** True when the current page is the active app's own index (its crumb is then inert). */
   appRoot?: boolean;
 }
 
-const { apps, activeSlug = '', base = '/knowledge-base', appRoot = false } = Astro.props;
+const { activeApp, base = '/knowledge-base', appRoot = false } = Astro.props;
 
-const activeApp = apps.find(a => a.slug === activeSlug);
 const onLibrary = !activeApp;
 ---
 

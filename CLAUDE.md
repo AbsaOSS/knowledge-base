@@ -72,7 +72,7 @@ Orchestrator: `scripts/build-vite.js`. Flags: `--local`, `--headless`.
 - `src/pages/index.astro` — Landing catalog page
 - `src/utils/apps.js` — `getAppPages()` enumerates sub-app HTML (manifest-driven or filesystem crawl)
 - `src/utils/transform.js` — `transformSubAppHtml()`: URL rewriting, document splitting (head/body/title/body-class), headless transforms
-- `src/layouts/Base.astro` — The one document shell: head, fonts, marketplace CSS, `<ClientRouter />`, shadow-DOM compat styles
+- `src/layouts/Base.astro` — The one document shell: head, marketplace CSS (which carries the self-hosted Inter faces), `<ClientRouter />`, shadow-DOM compat styles
 - `src/components/Masthead.astro` — Persistent Knowledge base header + Library/current-app sub-nav (all pages, both modes)
 - `src/components/AppCard.astro`, `src/components/AppIcon.astro` — Catalog card and its icon
 - `src/templates/shadow-compat.js` — Shadow-DOM design-token styles, injected into the body by the layout

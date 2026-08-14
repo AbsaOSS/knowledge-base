@@ -7,6 +7,23 @@ import { join, relative, dirname } from 'node:path';
 import { isSinglePage, readExpansionMap, resolveRegistry } from './single-page.js';
 
 /**
+ * Cached result of loadRegistry, keyed by cwd and invalidated by mtime.
+ *
+ * getAppPages calls loadRegistry, and Astro may call getStaticPaths more than
+ * once per build, so the registry was being re-read, re-parsed and re-resolved
+ * for no new information. Keying on the mtimes rather than on cwd alone keeps
+ * `astro dev` honest: editing apps.json is still picked up on the next request,
+ * at the cost of two statSync calls instead of two full reads and parses.
+ */
+let registryCache = null;
+
+/** Modification stamp of the two files the registry is built from. */
+function registryStamp(cwd) {
+  const mtime = (p) => (existsSync(p) ? statSync(p).mtimeMs : 0);
+  return `${mtime(join(cwd, 'apps.json'))}:${mtime(join(cwd, 'apps', '.single-page.json'))}`;
+}
+
+/**
  * Reads the effective app registry.
  *
  * apps.json is the source of truth, except for `type: "single-page"` entries:
@@ -16,24 +33,36 @@ import { isSinglePage, readExpansionMap, resolveRegistry } from './single-page.j
  * @param {string} cwd - project root (process.cwd())
  */
 export function loadRegistry(cwd) {
+  const stamp = registryStamp(cwd);
+  if (registryCache && registryCache.cwd === cwd && registryCache.stamp === stamp) {
+    return registryCache.apps;
+  }
+
   const appsJson = join(cwd, 'apps.json');
   const registry = existsSync(appsJson)
     ? JSON.parse(readFileSync(appsJson, 'utf-8'))
     : [];
 
-  return resolveRegistry(registry, readExpansionMap(cwd), (msg) => {
+  const apps = resolveRegistry(registry, readExpansionMap(cwd), (msg) => {
     process.stderr.write(`  \x1b[33m⚠\x1b[0m  ${msg}\n`);
   });
+
+  registryCache = { cwd, stamp, apps };
+  return apps;
 }
 
-/** Recursively collect every .html file under a directory. */
+/** Recursively collect every .html file under a directory. Symlinks are skipped. */
 export function collectHtmlFiles(dir) {
   if (!existsSync(dir)) return [];
   const results = [];
-  for (const entry of readdirSync(dir)) {
-    const full = join(dir, entry);
-    if (statSync(full).isDirectory()) results.push(...collectHtmlFiles(full));
-    else if (entry.endsWith('.html')) results.push(full);
+  // withFileTypes: the type comes from the directory read that already happened,
+  // rather than a statSync per entry, and a symlink is reported as one instead
+  // of as its target.
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    if (entry.isSymbolicLink()) continue;
+    const full = join(dir, entry.name);
+    if (entry.isDirectory()) results.push(...collectHtmlFiles(full));
+    else if (entry.isFile() && entry.name.endsWith('.html')) results.push(full);
   }
   return results;
 }
@@ -42,6 +71,13 @@ export function collectHtmlFiles(dir) {
  * Returns all sub-app page descriptors for use in getStaticPaths.
  * Each descriptor contains the route path, the absolute file path,
  * the app slug, and the effective headless flag.
+ *
+ * Note what is *not* in a descriptor: the registry. getStaticPaths returns one
+ * entry per HTML file and every one of them used to carry the whole resolved
+ * registry, so the route table grew with apps × pages × apps. (It cost build
+ * memory, not output bytes — these props are never serialised into the static
+ * HTML.) Only the current app's card is needed: the masthead names it and the
+ * catchall titles the page with it.
  *
  * @param {string} cwd          - project root (process.cwd())
  * @param {boolean} headless    - global headless default
@@ -55,6 +91,8 @@ export function getAppPages(cwd, headless) {
   for (const app of apps) {
     const appDir      = join(appsDir, app.slug);
     const appHeadless = app.headless ?? headless;
+    /** The only registry data a sub-app page needs. */
+    const card        = { slug: app.slug, name: app.name ?? app.slug, icon: app.icon };
 
     if (app.type === 'iframe') {
       // iFrame onboarding mode: no artifact on disk — emit a single route that
@@ -65,7 +103,7 @@ export function getAppPages(cwd, headless) {
         slug:        app.slug,
         fileRelDir:  '',
         appHeadless,
-        apps,
+        app:         card,
         title:       app.name ?? app.slug,
         section:     null,
         iframe:      true,
@@ -84,7 +122,7 @@ export function getAppPages(cwd, headless) {
         slug:        app.slug,
         fileRelDir:  '',
         appHeadless,
-        apps,
+        app:         card,
         title:       app.name ?? app.slug,
         section:     null,
         singlePage:  true,
@@ -106,7 +144,7 @@ export function getAppPages(cwd, headless) {
           slug:        app.slug,
           fileRelDir,
           appHeadless,
-          apps,
+          app:         card,
           title:       page.title,
           section:     page.section ?? null,
         });
@@ -124,7 +162,7 @@ export function getAppPages(cwd, headless) {
           slug:        app.slug,
           fileRelDir,
           appHeadless,
-          apps,
+          app:         card,
           title:       null,
           section:     null,
         });

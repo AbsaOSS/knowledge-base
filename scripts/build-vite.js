@@ -16,7 +16,7 @@
  *       Sub-app pages are rendered by src/pages/[...path].astro via getStaticPaths.
  */
 
-import { existsSync, readFileSync, writeFileSync, mkdirSync, rmSync, copyFileSync, readdirSync, statSync } from 'node:fs';
+import { existsSync, readFileSync, writeFileSync, mkdirSync, rmSync, copyFileSync, linkSync, readdirSync } from 'node:fs';
 import { join, dirname, resolve, isAbsolute } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { homedir } from 'node:os';
@@ -124,6 +124,24 @@ function installBundle(app, stageDir, sourceLabel) {
 }
 
 function fail(msg) { throw new Error(msg); }
+
+/**
+ * Hardlinks a file, copying only if the filesystem will not link it.
+ *
+ * Every sub-app asset is already written twice — once by the tarball extraction
+ * into apps/{slug}/, once by Astro's static copy of public/ into dist/. The hop
+ * in between does not need a third set of bytes, and for an artifact carrying
+ * images or fonts that is the largest of the three. A link is not possible
+ * across devices (EXDEV) or on a filesystem without hardlink support, hence the
+ * fallback rather than a bare linkSync.
+ */
+function linkOrCopy(src, dest) {
+  try {
+    linkSync(src, dest);
+  } catch {
+    copyFileSync(src, dest);
+  }
+}
 
 async function build() {
   const startMs = Date.now();
@@ -280,23 +298,34 @@ async function build() {
    */
   function copyAssets(src, dest, slug) {
     mkdirSync(dest, { recursive: true });
-    for (const entry of readdirSync(src).sort()) {
-      const s = join(src, entry);
-      const d = join(dest, entry);
-      if (statSync(s).isDirectory()) copyAssets(s, d, slug);
-      else if (!entry.endsWith('.html')) {
+    // withFileTypes: the entry type comes out of the directory read that already
+    // happened, instead of a statSync syscall per file — and a symlink reports as
+    // one rather than as whatever it points at.
+    const entries = readdirSync(src, { withFileTypes: true }).sort((a, b) => (a.name < b.name ? -1 : 1));
+
+    for (const entry of entries) {
+      if (entry.isSymbolicLink()) continue;
+      const s = join(src, entry.name);
+      const d = join(dest, entry.name);
+
+      if (entry.isDirectory()) { copyAssets(s, d, slug); continue; }
+      if (!entry.isFile() || entry.name.endsWith('.html')) continue;
+
+      if (entry.name.endsWith('.css')) {
+        // A real copy, not a link: the rewrite below edits the destination in
+        // place, and a hardlink would write that edit back into apps/{slug}/.
         copyFileSync(s, d);
-        if (entry.endsWith('.css')) {
-          const css = readFileSync(d, 'utf8');
-          // url(/path) | url('/path') | url("/path") → url(/{prefix}/{slug}/path).
-          // The (?!\/) guard skips protocol-relative //host/…; data: and #ref
-          // never match, since neither starts with a slash.
-          const rewritten = css.replace(
-            /url\(\s*(['"]?)\/(?!\/)/g,
-            'url($1/' + PATH_PREFIX + '/' + slug + '/',
-          );
-          if (rewritten !== css) writeFileSync(d, rewritten);
-        }
+        const css = readFileSync(d, 'utf8');
+        // url(/path) | url('/path') | url("/path") → url(/{prefix}/{slug}/path).
+        // The (?!\/) guard skips protocol-relative //host/…; data: and #ref
+        // never match, since neither starts with a slash.
+        const rewritten = css.replace(
+          /url\(\s*(['"]?)\/(?!\/)/g,
+          'url($1/' + PATH_PREFIX + '/' + slug + '/',
+        );
+        if (rewritten !== css) writeFileSync(d, rewritten);
+      } else {
+        linkOrCopy(s, d);
       }
     }
   }
@@ -353,7 +382,9 @@ async function build() {
   // 4. Summary
   step('4/4  Build complete');
   const elapsed = ((Date.now() - startMs) / 1000).toFixed(1);
-  const slugs = readdirSync(APPS_DIR).filter(d => statSync(join(APPS_DIR, d)).isDirectory());
+  const slugs = readdirSync(APPS_DIR, { withFileTypes: true })
+    .filter(e => e.isDirectory())
+    .map(e => e.name);
   const appList = slugs.map(s => '    \u2022 \x1b[36m' + s + '\x1b[0m → dist/' + s + '/').join('\n');
   console.log('\n\x1b[32m✓\x1b[0m \x1b[1m' + (slugs.length + iframeApps.length) + ' app(s) integrated\x1b[0m in ' + elapsed + 's\n\n  Apps:\n' + appList + '\n  Prefix: \x1b[33m' + PATH_PREFIX + '\x1b[0m\n');
 }

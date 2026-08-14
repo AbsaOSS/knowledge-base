@@ -71,11 +71,8 @@ const bodyClasses = [
   */}
   <style is:inline>@layer base;</style>
   <slot name="head" />
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  {/* data-astro-transition-persist keeps the font stylesheet stable across
-      ClientRouter navigation so it isn't churned on every page swap — avoids
-      web-fragments #297 accumulation. */}
-  <link href="https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,400;0,14..32,500;0,14..32,600;0,14..32,700&display=swap" rel="stylesheet" data-astro-transition-persist="css-google-fonts-inter" />
+  {/* Inter is self-hosted: its @font-face lives in marketplace.css, which the
+      layout already imports, so there is nothing to link here (#54). */}
   <ClientRouter />
 </head>
 <body class={bodyClasses} style="background-color:var(--bg-page)">

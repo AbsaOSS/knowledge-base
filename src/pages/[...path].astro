@@ -26,13 +26,12 @@ export function getStaticPaths() {
 }
 
 const props = Astro.props;
-const { slug, appHeadless, apps, title } = props;
+const { slug, appHeadless, app, title } = props;
 
 const parts = props.iframe
   ? null
   : transformSubAppHtml(readFileSync(props.file, 'utf-8'), slug, props.fileRelDir, PATH_PREFIX);
 
-const app = apps.find((a: any) => a.slug === slug);
 const pageTitle = title ?? parts?.title ?? app?.name ?? 'Knowledge base';
 
 // The app's own crumb in the masthead is inert on the app index and a link deeper in.
@@ -47,7 +46,7 @@ const atAppRoot = !props.fileRelDir;
 >
   {parts && <Fragment slot="head" set:html={parts.headHtml} />}
 
-  <Masthead apps={apps} activeSlug={slug} base={BASE_PATH} appRoot={atAppRoot} />
+  <Masthead activeApp={app} base={BASE_PATH} appRoot={atAppRoot} />
 
   {props.iframe ? (
     <main style="display:flex;flex:1 1 auto;min-height:0">

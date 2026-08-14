@@ -22,6 +22,10 @@ build time it:
 
 Each app keeps its own sidebar, routing, and internal navigation.
 
+The output makes **no third-party requests at runtime**: the Inter typeface is
+self-hosted and mermaid is vendored into each artifact, so the deployment works
+unchanged behind restricted egress and sends no reader's IP to a CDN.
+
 ---
 
 ## Architecture
