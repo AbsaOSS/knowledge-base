@@ -60,15 +60,40 @@ app.use((req, _res, next) => {
   next();
 });
 
+// nginx: location = /knowledge-base { rewrite ^ /knowledge-base/ last; }
+// An INTERNAL rewrite, not a redirect — nginx.conf is explicit that a 3xx here
+// would expose the container's internal HTTP address to the browser and cause a
+// mixed-content error when the host app is served over HTTPS. This mirror used
+// to answer with a 308, i.e. the exact thing that comment forbids (#60).
+// Must run before the static mount so the rewritten path is what it sees.
+app.use((req, _res, next) => {
+  if (req.url === `/${PREFIX}`) req.url = `/${PREFIX}/`;
+  next();
+});
+
 // nginx: location ^~ /knowledge-base/ { rewrite strips prefix; try_files $uri $uri/index.html }
 // express.static strips the mount path and resolves files from dist root.
+//
+// redirect:false is essential. serve-static answers a directory path that lacks
+// a trailing slash with a 301, whereas nginx's try_files just serves
+// {path}/index.html with a 200 — verified against the image: /knowledge-base,
+// /knowledge-base/user-guide and their trailing-slash forms are all 200, no
+// Location header anywhere. A mirror that redirects is testing a contract the
+// production server does not have.
 app.use(
   `/${PREFIX}`,
-  express.static(DIST, { extensions: ['html'], index: 'index.html' }),
+  express.static(DIST, { extensions: ['html'], index: 'index.html', redirect: false }),
 );
 
-// nginx: location = /knowledge-base { rewrite ^ /knowledge-base/ }
-app.get(`/${PREFIX}`, (_req, res) => res.redirect(308, `/${PREFIX}/`));
+// nginx: the `$uri/index.html` half of try_files — a directory path resolves to
+// its index without a redirect, trailing slash or not.
+app.use(`/${PREFIX}`, (req, res, next) => {
+  const candidate = join(DIST, decodeURIComponent(req.path), 'index.html');
+  // Never serve outside dist/, whatever the request path claims.
+  if (!candidate.startsWith(DIST)) return next();
+  if (!existsSync(candidate)) return next();
+  res.sendFile(candidate);
+});
 
 app.get('/healthz', (_req, res) => res.type('text/plain').send('ok'));
 

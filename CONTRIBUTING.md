@@ -28,6 +28,7 @@ opening your first PR, and required reading for automated contributors.
 |---|---|
 | `npm test` | Embedded web-fragment harness (`playwright.config.js`) — host gateway proxies/embeds the fragment on `:4201`. |
 | `npx playwright test --config=playwright.config.ci.js` | Standalone fragment-server layer (`:3000`) — headers, headless contract, asset routing, #297. |
+| `npm run test:container` | Integration tests against the real nginx image. **Needs Docker**, so it is not part of `npm test`. Run it when changing `nginx.conf`, `nginx.headers.conf` or the `Dockerfile`. |
 
 Both run in CI (`.github/workflows/ci.yml`). Please make sure both pass before
 opening a PR.

@@ -24,7 +24,8 @@
     "test": "npx playwright test",
     "test:ui": "npx playwright test --ui",
     "test:headed": "npx playwright test --headed",
-    "test:debug": "npx playwright test --debug"
+    "test:debug": "npx playwright test --debug",
+    "test:container": "npx playwright test --config=playwright.config.docker.js"
   },
   "dependencies": {
     "ajv": "^8.17.1"

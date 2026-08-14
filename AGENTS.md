@@ -89,6 +89,20 @@ The build and both suites are hermetic: they use the committed
 no sibling repository is required. If a change makes any of them need network,
 that is the bug — fix the change, not the test.
 
+A fourth suite needs Docker and is therefore **not** part of `npm test`:
+
+```bash
+npm run test:container   # integration tests against the real nginx image
+```
+
+Run it when touching `nginx.conf`, `nginx.headers.conf` or the `Dockerfile`. It
+is the only place the shipped config is executed — the other suites run against
+`tests/fragment-server.mjs`, an Express mirror of the nginx rewrites. That mirror
+is a second implementation of the same contract and it has drifted twice
+(#45, #60), so **a change to nginx behaviour means changing both, and proving it
+with this suite.** CI runs it inside the `image` job, which already builds the
+image.
+
 `npm audit --omit=dev --audit-level=high` must also stay clean; it gates CI.
 
 ## Repository conventions

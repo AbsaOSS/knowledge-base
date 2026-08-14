@@ -16,10 +16,11 @@ import { defineConfig, devices } from '@playwright/test';
  */
 export default defineConfig({
   testDir: './tests',
-  // standalone.spec.js targets the fragment server directly on :3000 — it has its
-  // own config (playwright.config.ci.js). This embedded config drives the host
-  // gateway on :4201, so exclude it here.
-  testIgnore: '**/standalone.spec.js',
+  // Each of these targets a different server and has its own config:
+  //   standalone.spec.js → the fragment server on :3000 (playwright.config.ci.js)
+  //   container.spec.js  → the real nginx image     (playwright.config.docker.js)
+  // This embedded config drives the host gateway on :4201, so exclude both.
+  testIgnore: ['**/standalone.spec.js', '**/container.spec.js'],
   fullyParallel: false, // fragments share DOM/history — keep navigation sequential
   retries: process.env.CI ? 1 : 0,
   workers: 1,
