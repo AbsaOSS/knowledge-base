@@ -83,6 +83,26 @@ test.describe('HTTP headers', () => {
     const res = await request.get('/knowledge-base/');
     expect(res.headers()['x-xss-protection']).toBeUndefined();
   });
+
+  // nginx serves /knowledge-base (no trailing slash) with an internal rewrite,
+  // never a redirect: a 3xx would expose the container's internal HTTP address
+  // and break mixed-content under HTTPS. This mirror answered with a 308 — the
+  // opposite of production (#60) — and nothing asserted it either way.
+  // tests/container.spec.js makes the same assertion against real nginx.
+  test('serves /knowledge-base without a trailing slash by internal rewrite, not redirect', async ({ request }) => {
+    const res = await request.get('/knowledge-base', { maxRedirects: 0 });
+    expect(res.status()).toBe(200);
+    expect(res.headers()['location']).toBeUndefined();
+  });
+
+  // nginx's try_files serves a directory path as its index with a 200 whether or
+  // not it ends in a slash. express.static answers 301 by default, which is the
+  // wider half of the same drift.
+  test('serves a sub-app page without a trailing slash, not a redirect', async ({ request }) => {
+    const res = await request.get('/knowledge-base/user-guide', { maxRedirects: 0 });
+    expect(res.status()).toBe(200);
+    expect(res.headers()['location']).toBeUndefined();
+  });
 });
 
 // ─────────────────────────────────────────────────────────────────────────────

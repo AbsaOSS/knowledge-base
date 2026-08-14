@@ -371,7 +371,9 @@ knowledge-base/
 │   ├── standalone.spec.js     ← Standalone fragment-server suite
 │   ├── build-integrity.spec.js
 │   ├── artifact-safety.spec.js ← Tarball extraction guards
-│   ├── nginx-config.spec.js   ← nginx header-inheritance guard
+│   ├── nginx-config.spec.js   ← nginx header-inheritance guard (static)
+│   ├── container.spec.js      ← Integration suite vs. the real nginx image
+│   ├── container/serve.mjs    ← Builds + runs the image for that suite
 │   ├── host/server.mjs        ← Reference web-fragments host (gateway)
 │   ├── fragment-server.mjs    ← nginx-mirroring static server
 │   ├── support/fragment.js    ← Shadow-DOM test helpers
