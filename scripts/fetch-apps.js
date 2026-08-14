@@ -10,10 +10,13 @@
  * Legacy: also keeps tmp/apps/{slug}/ populated for non-Vite paths.
  */
 
-import { execSync, spawnSync } from 'child_process';
-import { mkdirSync, rmSync, existsSync, writeFileSync, readFileSync } from 'fs';
-import { join, dirname } from 'path';
-import { fileURLToPath } from 'url';
+import { spawnSync } from 'node:child_process';
+import { createWriteStream, mkdirSync, rmSync, existsSync, copyFileSync, readFileSync } from 'node:fs';
+import { join, dirname } from 'node:path';
+import { pipeline } from 'node:stream/promises';
+import { Readable } from 'node:stream';
+import { fileURLToPath } from 'node:url';
+import { copyDir, extractTarball } from './artifacts.js';
 import {
   BUNDLE_MANIFEST, bundleDirName, bundleKey, expandBundle,
   findBundleRoot, isSinglePage, readBundleManifest, toRegistryEntry,
@@ -36,20 +39,48 @@ function warn(msg) { process.stderr.write(`  \x1b[33m⚠\x1b[0m  ${msg}\n`); }
 function ok(msg)   { process.stdout.write(`  \x1b[32m✓\x1b[0m ${msg}\n`); }
 function fail(msg) { throw new Error(`\x1b[31m✗\x1b[0m ${msg}`); }
 
+/** `owner/name`, the only shape a registry `repo` may take. */
+const REPO_RE = /^[A-Za-z0-9._-]+\/[A-Za-z0-9._-]+$/;
+/** Git tag characters we are willing to put in a URL path. */
+const VERSION_RE = /^[A-Za-z0-9._/-]+$/;
+
+/**
+ * Rejects registry values that must never reach a URL or a subprocess argument.
+ *
+ * apps.json is a reviewed file, but it is also the one file an onboarding PR
+ * edits, so its values are validated rather than trusted.
+ */
+function assertSafeTarget(repo, version, label) {
+  if (typeof repo !== 'string' || !REPO_RE.test(repo)) {
+    fail(`${label}: "repo" must look like "owner/name", got ${JSON.stringify(repo)}.`);
+  }
+  if (typeof version !== 'string' || !VERSION_RE.test(version)) {
+    fail(`${label}: "version" ${JSON.stringify(version)} contains characters that are not valid in a git tag.`);
+  }
+}
+
 /**
  * Makes a GitHub API request. Uses GITHUB_TOKEN when available, otherwise
  * delegates to `gh api` CLI so developers don't need to set tokens locally.
+ *
+ * The token is passed as a request header, never as part of a command line:
+ * a shell string would put it in the process argv (readable by any local
+ * process, and echoed back in the error execSync throws on a failed request).
  */
-function ghApi(path) {
+async function ghApi(path) {
   if (GITHUB_TOKEN) {
-    const res = execSync(
-      `curl -fsSL -H "Authorization: Bearer ${GITHUB_TOKEN}" -H "Accept: application/vnd.github+json" "${API_BASE}${path}"`,
-      { encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'] }
-    );
-    return JSON.parse(res);
+    const res = await fetch(`${API_BASE}${path}`, {
+      headers: {
+        Authorization: `Bearer ${GITHUB_TOKEN}`,
+        Accept: 'application/vnd.github+json',
+        'X-GitHub-Api-Version': '2022-11-28',
+      },
+    });
+    if (!res.ok) fail(`GitHub API request failed: ${res.status} ${res.statusText} — ${path}`);
+    return res.json();
   }
 
-  // Fallback: gh CLI
+  // Fallback: gh CLI. spawnSync takes an argv array, so nothing is shell-parsed.
   const result = spawnSync('gh', ['api', path], { encoding: 'utf8' });
   if (result.status !== 0) fail(`gh api ${path} failed:\n${result.stderr}`);
   return JSON.parse(result.stdout);
@@ -58,34 +89,28 @@ function ghApi(path) {
 /**
  * Downloads a GitHub Release asset to a local path.
  *
- * Uses `gh release download` (preferred) because it correctly handles
- * the GitHub → S3 redirect for private repo assets — curl with a Bearer
- * token breaks on the S3 redirect since S3 rejects the auth header.
- *
- * Falls back to the GitHub API asset endpoint with --no-location + manual
- * redirect handling if gh CLI is unavailable.
+ * Uses the API asset endpoint with the numeric asset ID rather than
+ * browser_download_url: for a private repo the latter redirects to S3, which
+ * rejects requests carrying an Authorization header. `fetch` follows the
+ * redirect and drops the header across origins, which is exactly what is wanted.
  */
-function downloadAsset(repo, releaseTag, assetId, assetName, destPath) {
-  // Download via GitHub API asset endpoint using the numeric asset ID.
-  // Must use the asset ID URL (not browser_download_url) to avoid the
-  // broken Bearer-token-on-S3-redirect issue with private repos.
+async function downloadAsset(repo, assetId, assetName, destPath) {
   if (!GITHUB_TOKEN) {
     throw new Error(
       'GITHUB_TOKEN is not set. Cannot download release assets from private repos.'
     );
   }
-  const assetApiUrl = `${API_BASE}/repos/${repo}/releases/assets/${assetId}`;
-  const cmd = [
-    'curl', '-fsSL',
-    '-H', `Authorization: Bearer ${GITHUB_TOKEN}`,
-    '-H', 'Accept: application/octet-stream',
-    '-L', assetApiUrl,
-    '-o', destPath,
-  ];
-  const result = spawnSync(cmd[0], cmd.slice(1), { stdio: 'inherit' });
-  if (result.status !== 0) {
-    throw new Error(`curl download failed for ${repo} asset ${assetName}`);
+  const res = await fetch(`${API_BASE}/repos/${repo}/releases/assets/${assetId}`, {
+    headers: {
+      Authorization: `Bearer ${GITHUB_TOKEN}`,
+      Accept: 'application/octet-stream',
+      'X-GitHub-Api-Version': '2022-11-28',
+    },
+  });
+  if (!res.ok || !res.body) {
+    throw new Error(`Download failed for ${repo} asset ${assetName}: ${res.status} ${res.statusText}`);
   }
+  await pipeline(Readable.fromWeb(res.body), createWriteStream(destPath));
 }
 
 /**
@@ -93,10 +118,10 @@ function downloadAsset(repo, releaseTag, assetId, assetName, destPath) {
  * - version "latest": fetches the latest release
  * - version "v1.2.3": fetches that specific tag
  */
-function fetchRelease(repo, version) {
+async function fetchRelease(repo, version) {
   const path = version === 'latest'
     ? `/repos/${repo}/releases/latest`
-    : `/repos/${repo}/releases/tags/${version}`;
+    : `/repos/${repo}/releases/tags/${encodeURIComponent(version)}`;
   return ghApi(path);
 }
 
@@ -130,6 +155,7 @@ function findDistAsset(release, repo) {
 async function fetchBundle(app) {
   const { repo, version = 'latest' } = app;
   const key = bundleKey(app);
+  assertSafeTarget(repo, version, key);
 
   console.log(`\n\x1b[1m[${key}]\x1b[0m Fetching single-page bundle from ${repo}@${version}`);
 
@@ -140,7 +166,7 @@ async function fetchBundle(app) {
   log(`Fetching release info (${version})…`);
   let release;
   try {
-    release = fetchRelease(repo, version);
+    release = await fetchRelease(repo, version);
   } catch (err) {
     fail(`Could not fetch release for ${repo}@${version}: ${err.message}`);
   }
@@ -149,10 +175,10 @@ async function fetchBundle(app) {
   const asset   = findDistAsset(release, repo);
   const tarPath = join(workDir, 'dist.tar.gz');
   log(`Downloading ${asset.name} (${(asset.size / 1024).toFixed(1)} KB)…`);
-  downloadAsset(repo, release.tag_name, asset.id, asset.name, tarPath);
+  await downloadAsset(repo, asset.id, asset.name, tarPath);
 
   log('Extracting…');
-  execSync(`tar -xzf "${tarPath}" -C "${workDir}"`, { stdio: 'pipe' });
+  extractTarball(tarPath, workDir, `${key}@${release.tag_name}`);
 
   const bundleRoot = findBundleRoot(workDir);
   if (!bundleRoot) {
@@ -168,7 +194,7 @@ async function fetchBundle(app) {
   for (const doc of docs) {
     const appsSlugDir = join(APPS_DIR, doc.slug);
     if (existsSync(appsSlugDir)) rmSync(appsSlugDir, { recursive: true });
-    execSync(`cp -r "${doc.docDir}" "${appsSlugDir}"`, { stdio: 'pipe' });
+    copyDir(doc.docDir, appsSlugDir);
 
     const html = readFileSync(join(appsSlugDir, doc.entryPoint), 'utf8');
     if (!html.includes('data-mp-headless="true"')) {
@@ -209,6 +235,7 @@ export async function fetchApps(apps) {
     }
 
     const { repo, slug, version = 'latest' } = app;
+    assertSafeTarget(repo, version, slug);
 
     console.log(`\n\x1b[1m[${slug}]\x1b[0m Fetching from ${repo}@${version}`);
 
@@ -222,7 +249,7 @@ export async function fetchApps(apps) {
     log(`Fetching release info (${version})…`);
     let release;
     try {
-      release = fetchRelease(repo, version);
+      release = await fetchRelease(repo, version);
     } catch (err) {
       fail(`Could not fetch release for ${repo}@${version}: ${err.message}`);
     }
@@ -234,11 +261,11 @@ export async function fetchApps(apps) {
 
     // 3. Download artifact
     log(`Downloading ${asset.name} (${(asset.size / 1024).toFixed(1)} KB)…`);
-    downloadAsset(repo, release.tag_name, asset.id, asset.name, tarPath);
+    await downloadAsset(repo, asset.id, asset.name, tarPath);
 
-    // 4. Extract
+    // 4. Extract — validated against traversal and symlink members first.
     log('Extracting…');
-    execSync(`tar -xzf "${tarPath}" -C "${appDir}"`, { stdio: 'pipe' });
+    extractTarball(tarPath, appDir, `${slug}@${release.tag_name}`);
 
     // Determine extracted dist location (may be dist/ or root-level files)
     const distDir = existsSync(join(appDir, 'dist'))
@@ -248,13 +275,12 @@ export async function fetchApps(apps) {
     // 4b. Mirror into apps/{slug}/ for the Vite dev server and build pipeline
     const appsSlugDir = join(APPS_DIR, slug);
     if (existsSync(appsSlugDir)) rmSync(appsSlugDir, { recursive: true });
-    execSync(`cp -r "${distDir}" "${appsSlugDir}"`, { stdio: 'pipe' });
+    copyDir(distDir, appsSlugDir);
     // 5. Validate marketplace.json exists (in the tarball root, not dist/)
     const manifestInTar  = join(appDir, 'marketplace.json');
 
     // Also copy marketplace.json if present alongside the dist dir
     if (existsSync(manifestInTar)) {
-      const { copyFileSync } = await import('fs');
       copyFileSync(manifestInTar, join(appsSlugDir, 'marketplace.json'));
     }
     log(`Synced to apps/${slug}/`);

@@ -14,11 +14,12 @@
  *      Sub-app pages are rendered by src/pages/[...path].astro via getStaticPaths.
  */
 
-import { existsSync, readFileSync, writeFileSync, mkdirSync, rmSync, copyFileSync, readdirSync, statSync } from 'fs';
-import { join, dirname, basename, resolve, isAbsolute } from 'path';
-import { fileURLToPath } from 'url';
-import { homedir } from 'os';
-import { execSync } from 'child_process';
+import { existsSync, readFileSync, writeFileSync, mkdirSync, rmSync, copyFileSync, readdirSync, statSync } from 'node:fs';
+import { join, dirname, resolve, isAbsolute } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { homedir } from 'node:os';
+import { execSync } from 'node:child_process';
+import { copyDir, stageArtifact } from './artifacts.js';
 import { fetchApps } from './fetch-apps.js';
 import {
   BUNDLE_MANIFEST, bundleDirName, bundleKey, expandBundle, findBundleRoot,
@@ -39,38 +40,8 @@ const ok   = (msg) => console.log('\x1b[32m✓\x1b[0m ' + msg);
 const warn = (msg) => console.warn('\x1b[33m⚠\x1b[0m  ' + msg);
 const step = (msg) => console.log('\n\x1b[1m' + msg + '\x1b[0m');
 
-function copyDir(src, dest) {
-  mkdirSync(dest, { recursive: true });
-  for (const entry of readdirSync(src).sort()) {
-    const srcPath  = join(src, entry);
-    const destPath = join(dest, entry);
-    if (statSync(srcPath).isDirectory()) copyDir(srcPath, destPath);
-    else copyFileSync(srcPath, destPath);
-  }
-}
-
-/**
- * Materialises a local artifact into a staging directory.
- *
- * The artifact may be a `.tar.gz` tarball (as published to GitHub Releases) or a
- * directory. Tarballs are extracted under tmp/prebuilt/{name}/; directories are
- * used in place.
- */
-function stageArtifact(srcPath, name) {
-  if (!statSync(srcPath).isFile()) return srcPath;
-
-  const stageDir = join(ROOT, 'tmp', 'prebuilt', name);
-  if (existsSync(stageDir)) rmSync(stageDir, { recursive: true });
-  mkdirSync(stageDir, { recursive: true });
-  // Portable across GNU tar (git-bash) and bsdtar (Windows System32): GNU tar
-  // parses a leading "C:" in the ARCHIVE name as a remote host, so run from the
-  // tarball's dir and pass only its basename to -f (the -C target is not parsed
-  // that way). This avoids --force-local, which bsdtar rejects.
-  const posix = (p) => p.replace(/\\/g, '/');
-  execSync('tar -xzf "' + basename(srcPath) + '" -C "' + posix(stageDir) + '"',
-    { cwd: dirname(srcPath), stdio: 'pipe' });
-  return stageDir;
-}
+/** Where `prebuilt` tarballs are unpacked before being copied into apps/. */
+const STAGE_ROOT = join(ROOT, 'tmp', 'prebuilt');
 
 /** Expands a registry path (`~` and repo-relative forms allowed) to an absolute one. */
 function artifactPath(raw) {
@@ -98,8 +69,9 @@ function resolveArtifactPath(app, raw, label) {
  * @returns {Array|null} expanded app entries for a single-page bundle, else null
  */
 function preparePrebuilt(app) {
+  const label    = app.slug ?? bundleKey(app);
   const srcPath  = resolveArtifactPath(app, app.prebuilt, 'prebuilt');
-  const stageDir = stageArtifact(srcPath, bundleDirName(app.slug ?? bundleKey(app)));
+  const stageDir = stageArtifact(srcPath, bundleDirName(label), STAGE_ROOT, label);
 
   if (isSinglePage(app)) return installBundle(app, stageDir, 'prebuilt');
 
