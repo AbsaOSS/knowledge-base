@@ -8,7 +8,7 @@
 # Pinned by digest, matching how every GitHub Action in .github/workflows is
 # pinned. Dependabot bumps the tag; the digest keeps the deployment from moving
 # underneath it in the meantime.
-FROM nginxinc/nginx-unprivileged:1.27-alpine@sha256:65e3e85dbaed8ba248841d9d58a899b6197106c23cb0ff1a132b7bfe0547e4c0 AS runtime
+FROM nginxinc/nginx-unprivileged:1.29-alpine@sha256:0c79d56aee561a1d81c63f00eee5fb5fe29279560cdc55e91425133104c7fbe6 AS runtime
 
 # Overwrite the stock config rather than `RUN rm`-ing it: this image drops to a
 # non-root user, which cannot delete files under /etc/nginx.
