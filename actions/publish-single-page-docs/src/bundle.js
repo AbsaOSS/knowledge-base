@@ -6,7 +6,9 @@
  *   bundle.json                 ← manifest listing every doc in this bundle
  *   {slug}/index.html           ← headless document
  *   {slug}/assets/doc.css
- *   {slug}/assets/mermaid.min.js  (only when that doc uses mermaid)
+ *   {slug}/assets/mermaid.min.js   (only when that doc uses mermaid)
+ *   {slug}/assets/mermaid-init.js  (ditto — kept out of the HTML so the
+ *                                   marketplace can run script-src 'self')
  *
  * One release asset carries every doc from the repo; the knowledge base expands
  * the manifest into one marketplace app per doc (see contract/SINGLE_PAGE.md).
@@ -18,7 +20,9 @@ import { createRequire } from 'node:module';
 import { basename, dirname, join } from 'node:path';
 
 import { renderMarkdown } from './markdown.js';
-import { CSS_PATH, DOC_CSS, MERMAID_PATH, renderDocument } from './template.js';
+import {
+  CSS_PATH, DOC_CSS, MERMAID_INIT_JS, MERMAID_INIT_PATH, MERMAID_PATH, renderDocument,
+} from './template.js';
 
 const require = createRequire(import.meta.url);
 
@@ -56,7 +60,12 @@ export function buildBundle(docs, stageDir) {
     }));
     writeFileSync(join(docDir, CSS_PATH), DOC_CSS);
 
-    if (usesMermaid) copyFileSync(resolveMermaidBundle(), join(docDir, MERMAID_PATH));
+    if (usesMermaid) {
+      copyFileSync(resolveMermaidBundle(), join(docDir, MERMAID_PATH));
+      // The init runs from a file, not an inline <script>, so the marketplace
+      // can serve these pages under script-src 'self'.
+      writeFileSync(join(docDir, MERMAID_INIT_PATH), MERMAID_INIT_JS);
+    }
 
     rendered.push({ ...doc, usesMermaid });
   }

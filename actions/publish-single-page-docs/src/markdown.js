@@ -15,6 +15,7 @@ import footnote from 'markdown-it-footnote';
 import taskLists from 'markdown-it-task-lists';
 import hljs from 'highlight.js';
 
+import { sanitizeDocHtml } from './sanitize.js';
 import { escapeHtml } from './template.js';
 
 /** Language aliases authors reach for that highlight.js does not know verbatim. */
@@ -33,7 +34,12 @@ const LANG_ALIASES = {
  */
 function createRenderer(state) {
   const md = new MarkdownIt({
-    html: true,       // authors may drop in raw HTML — GFM allows it
+    // Authors may drop in raw HTML — GFM allows it. Everything this produces is
+    // put through an allowlist in sanitize.js before it leaves the action: the
+    // rendered doc is re-hosted on the knowledge base's own origin alongside
+    // every other doc, so unsanitised markup from any onboarding repo would be
+    // script execution against all of them.
+    html: true,
     linkify: true,    // bare URLs become links (GFM autolinks)
     breaks: false,
     typographer: false,
@@ -101,7 +107,7 @@ function createRenderer(state) {
 export function renderMarkdown(source) {
   const state = { usesMermaid: false };
   const md = createRenderer(state);
-  const html = md.render(source);
+  const html = sanitizeDocHtml(md.render(source));
   return {
     html,
     usesMermaid: state.usesMermaid,

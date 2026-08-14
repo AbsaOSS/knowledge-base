@@ -32,6 +32,25 @@ if (!existsSync(DIST)) {
   process.exit(1);
 }
 
+/**
+ * Kept byte-identical to the policy in nginx.headers.conf.
+ * tests/nginx-config.spec.js asserts the two do not drift.
+ */
+const CSP = [
+  "default-src 'self'",
+  "script-src 'self'",
+  "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+  "img-src 'self' data: https:",
+  "font-src 'self' data: https://fonts.gstatic.com",
+  "connect-src 'self'",
+  "frame-src 'self' https: blob:",
+  "worker-src 'self' blob:",
+  "frame-ancestors 'self'",
+  "base-uri 'none'",
+  "form-action 'self'",
+  "object-src 'none'",
+].join('; ');
+
 const app = express();
 
 // nginx: include /etc/nginx/kb-headers.conf — the shared CORS + security set.
@@ -46,6 +65,10 @@ app.use((_req, res, next) => {
     'X-Content-Type-Options': 'nosniff',
     'X-Frame-Options': 'SAMEORIGIN',
     'Referrer-Policy': 'strict-origin',
+    // Same policy nginx.headers.conf serves. Mirrored here so the embedded
+    // harness exercises it through the web-fragments gateway — a CSP that
+    // breaks reframing fails silently, and this is where that would show up.
+    'Content-Security-Policy': CSP,
   });
   next();
 });

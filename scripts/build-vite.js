@@ -21,6 +21,8 @@ import { homedir } from 'node:os';
 import { execSync } from 'node:child_process';
 import { copyDir, stageArtifact } from './artifacts.js';
 import { fetchApps } from './fetch-apps.js';
+import { HOIST_DIR, hoistAppInlineScripts } from './hoist-inline-scripts.js';
+import { collectHtmlFiles } from '../src/utils/apps.js';
 import {
   BUNDLE_MANIFEST, bundleDirName, bundleKey, expandBundle, findBundleRoot,
   isSinglePage, readBundleManifest, resolveRegistry, toRegistryEntry, writeExpansionMap,
@@ -228,6 +230,24 @@ async function build() {
   writeExpansionMap(ROOT, expansions);
   const resolvedApps = resolveRegistry(registeredApps, expansions, warn);
   const packagedResolved = resolvedApps.filter(a => a.type !== 'iframe');
+
+  // 1b. Hoist inline <script> bodies out of sub-app HTML into files.
+  //     The marketplace serves script-src 'self'; an inline script anywhere would
+  //     force 'unsafe-inline' on every page. Bundles published before the action
+  //     stopped emitting one still contain it, and this repo does not control
+  //     when those repos re-publish — so it is fixed here rather than assumed.
+  step('1b/4  Hoisting inline scripts → files');
+  let hoisted = 0;
+  for (const app of resolvedApps.filter(a => a.type !== 'iframe')) {
+    const appDir = join(APPS_DIR, app.slug);
+    if (!existsSync(appDir)) continue;
+    const count = hoistAppInlineScripts(appDir, collectHtmlFiles(appDir));
+    if (count > 0) {
+      hoisted += count;
+      ok(app.slug + ': ' + count + ' inline script(s) → ' + HOIST_DIR + '/');
+    }
+  }
+  if (hoisted === 0) log('No inline scripts found — every artifact is already CSP-clean');
 
   // 2. Copy non-HTML sub-app assets → public/{slug}/ so Astro copies them to dist/{slug}/
   //    HTML files are excluded — they're handled by src/pages/[...path].astro.

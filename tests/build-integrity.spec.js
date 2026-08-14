@@ -11,9 +11,9 @@
  */
 
 import { test, expect } from '@playwright/test';
-import { readFileSync, existsSync } from 'node:fs';
+import { readFileSync, existsSync, readdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { dirname, join } from 'node:path';
+import { dirname, join, relative } from 'node:path';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const DIST = join(ROOT, 'dist');
@@ -250,6 +250,71 @@ test.describe('Masthead', () => {
       const hrefs = [...nav(read(p)).matchAll(/href="([^"]*)"/g)].map(m => m[1]);
       expect(hrefs.length, `no masthead links on ${p}`).toBeGreaterThan(0);
       for (const h of hrefs) expect(h, `${h} on ${p} is not an absolute prefixed path`).toMatch(/^\/knowledge-base\//);
+    }
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// CSP preconditions
+//
+// The marketplace serves script-src 'self' with no 'unsafe-inline'. That only
+// holds while nothing inline survives the build — so the build output is the
+// thing asserted, not the intent. If this fails, the CSP is about to start
+// breaking pages silently.
+// ─────────────────────────────────────────────────────────────────────────────
+
+test.describe('no inline scripts in the build output', () => {
+  /** Every .html file under dist/, recursively. */
+  function htmlFiles(dir, acc = []) {
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      const full = join(dir, entry.name);
+      if (entry.isDirectory()) htmlFiles(full, acc);
+      else if (entry.name.endsWith('.html')) acc.push(full);
+    }
+    return acc;
+  }
+
+  test('every <script> in dist/ has a src', () => {
+    const offenders = [];
+    for (const file of htmlFiles(DIST)) {
+      const html = readFileSync(file, 'utf8');
+      for (const [tag, attrs, body] of html.matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script>/gi)) {
+        if (/\bsrc\s*=/i.test(attrs)) continue;
+        if (body.trim() === '') continue;
+        // Data blocks are not executable and CSP does not apply to them.
+        const type = attrs.match(/\btype\s*=\s*["']([^"']*)["']/i)?.[1]?.toLowerCase() ?? '';
+        if (type && !['module', 'text/javascript', 'application/javascript'].includes(type)) continue;
+        offenders.push(`${relative(DIST, file)}: ${tag.slice(0, 80)}`);
+      }
+    }
+    expect(
+      offenders,
+      "inline <script> in the output — script-src 'self' would block it. " +
+      'scripts/hoist-inline-scripts.js should have moved it to a file.',
+    ).toEqual([]);
+  });
+
+  test('inline scripts from sub-app artifacts were hoisted to files', () => {
+    // The vendored docs-example fixture ships inline scripts, so this asserts
+    // the hoist actually ran rather than that there was nothing to do.
+    const hoistDirs = htmlFiles(DIST)
+      .map((f) => dirname(f))
+      .filter((d) => existsSync(join(d, '_kb-inline')));
+    expect(hoistDirs.length, 'no _kb-inline/ directory anywhere — did the hoist step run?')
+      .toBeGreaterThan(0);
+  });
+
+  test('hoisted scripts are referenced by absolute prefixed paths', () => {
+    // A nested page: the fixture's inline scripts live on inner pages, so this
+    // also covers the ../ depth computation — a hoisted script referenced from
+    // user-guide/docs/ must still resolve to the app root, not one level up.
+    const html = read('user-guide/docs/index.html');
+    const srcs = [...html.matchAll(/<script[^>]+src="([^"]+)"/g)].map((m) => m[1]);
+    const hoisted = srcs.filter((s) => s.includes('_kb-inline'));
+    expect(hoisted.length, 'user-guide/docs should reference hoisted scripts').toBeGreaterThan(0);
+    for (const src of hoisted) {
+      expect(src, 'hoisted script must be rewritten like every other URL').toMatch(/^\/knowledge-base\/user-guide\/_kb-inline\//);
+      expect(existsSync(join(DIST, src.replace(/^\/knowledge-base\//, ''))), `${src} is not in dist/`).toBe(true);
     }
   });
 });

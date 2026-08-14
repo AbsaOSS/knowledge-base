@@ -42,6 +42,8 @@ docker run -p 8080:8080 knowledge-base
 ```
 apps.json (registry)
   → [1] Fetch Release artifacts OR build local repos → apps/{slug}/
+  → [1b] Hoist inline <script> bodies → apps/{slug}/_kb-inline/*.js
+         (keeps script-src 'self' viable for already-published bundles)
   → [2] Copy non-HTML assets → public/{slug}/ (Astro serves as static)
   → [3] astro build: [...path].astro enumerates all HTML via getStaticPaths
          → transformSubAppHtml() rewrites URLs + splits the document,
@@ -76,6 +78,7 @@ Orchestrator: `scripts/build-vite.js`. Flags: `--local`, `--headless`, `--path-p
 - `scripts/build-vite.js` — Build orchestrator (3-step pipeline)
 - `scripts/fetch-apps.js` — GitHub Release artifact downloader
 - `scripts/artifacts.js` — Safe tarball extraction + tree copy, shared by both fetch paths. Validates archive members (no traversal, no absolute paths, no symlinks) before anything is written, and replaces the old `cp -r`/`tar` shell-outs so the build runs on Windows
+- `scripts/hoist-inline-scripts.js` — Moves inline `<script>` bodies in sub-app HTML into files before the Astro build, so the deployment can serve `script-src 'self'`. Needed because bundles published before the action stopped emitting an inline mermaid bootstrap still contain one
 - `actions/publish-single-page-docs/` — Reusable GitHub Action that turns a repo's markdown into a single-page bundle
 
 ### Three Onboarding Types

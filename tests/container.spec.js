@@ -144,11 +144,100 @@ test.describe('response headers', () => {
     expect(res.headers()['x-xss-protection']).toBeUndefined();
   });
 
+  // The CSP is the defence-in-depth half of #42, behind the publish-time
+  // sanitiser. script-src with no 'unsafe-inline' is the part that matters, and
+  // it only holds because nothing inline survives the build — see
+  // tests/build-integrity.spec.js and scripts/hoist-inline-scripts.js.
+  test('a Content-Security-Policy is served, with script-src locked down', async ({ request }) => {
+    const res = await request.get('/knowledge-base/');
+    const csp = res.headers()['content-security-policy'];
+    expect(csp, 'no CSP header').toBeTruthy();
+
+    const directives = Object.fromEntries(
+      csp.split(';').map((d) => d.trim()).filter(Boolean).map((d) => {
+        const [name, ...values] = d.split(/\s+/);
+        return [name, values.join(' ')];
+      }),
+    );
+
+    expect(directives['script-src']).toBe("'self'");
+    expect(directives['script-src'], "'unsafe-inline' would let an injected script run")
+      .not.toContain('unsafe-inline');
+    expect(directives['script-src'], "'unsafe-eval' is not needed by anything here")
+      .not.toContain('unsafe-eval');
+    expect(directives['object-src']).toBe("'none'");
+    expect(directives['base-uri'], 'a <base> tag can redirect every relative URL').toBe("'none'");
+    expect(directives['default-src']).toBe("'self'");
+    expect(directives['frame-ancestors']).toBe("'self'");
+  });
+
+  test('the CSP reaches static assets too, not just pages', async ({ request }) => {
+    const res = await request.get('/knowledge-base/style.css');
+    expect(res.headers()['content-security-policy']).toBeTruthy();
+  });
+
   test('knowledge-base responses carry Cache-Control: no-transform', async ({ request }) => {
     // Stops an intermediate proxy (the FragmentGateway) re-encoding the body and
     // leaking a Content-Encoding header the browser then fails to decode.
     const res = await request.get('/knowledge-base/');
     expect(res.headers()['cache-control']).toContain('no-transform');
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// The CSP in a real browser
+//
+// Asserting the header is not the same as asserting the page still works under
+// it. A CSP that blocks something the page needs fails silently — no error
+// status, no failed request in a header check, just a page that quietly stopped
+// doing part of its job. Only a browser reports the violation.
+// ─────────────────────────────────────────────────────────────────────────────
+
+test.describe('CSP in a browser', () => {
+  const pages = [
+    ['the landing catalog', '/knowledge-base/'],
+    ['a packaged sub-app page', '/knowledge-base/user-guide/'],
+    ['a single-page doc with a diagram', '/knowledge-base/platform-overview/'],
+    ['a single-page doc without one', '/knowledge-base/release-process/'],
+  ];
+
+  for (const [label, path] of pages) {
+    test(`${label} loads with no CSP violation`, async ({ page }) => {
+      const violations = [];
+      page.on('console', (msg) => {
+        const text = msg.text();
+        if (/Content Security Policy|Refused to (load|execute|apply|connect)/i.test(text)) {
+          violations.push(text);
+        }
+      });
+      page.on('pageerror', (err) => violations.push(`page error: ${err.message}`));
+
+      await page.goto(path, { waitUntil: 'networkidle' });
+
+      expect(violations, `CSP blocked something on ${path}`).toEqual([]);
+      // A blocked stylesheet or script often still leaves a rendered body, so
+      // assert the masthead specifically — it is the one thing every page has.
+      await expect(page.locator('header, [class*="masthead"]').first()).toBeVisible();
+    });
+  }
+
+  test('the hoisted sub-app scripts actually execute under the policy', async ({ page }) => {
+    const blocked = [];
+    page.on('response', (res) => {
+      if (res.url().includes('_kb-inline') && !res.ok()) blocked.push(`${res.status()} ${res.url()}`);
+    });
+    const loaded = [];
+    page.on('request', (req) => {
+      if (req.url().includes('_kb-inline')) loaded.push(req.url());
+    });
+
+    // A nested page, not the app index: the docs-example fixture's inline
+    // scripts live on its inner pages, and this also exercises the ../ depth
+    // computation in scripts/hoist-inline-scripts.js.
+    await page.goto('/knowledge-base/user-guide/docs/', { waitUntil: 'networkidle' });
+
+    expect(loaded.length, 'no hoisted script was requested — did the hoist step run?').toBeGreaterThan(0);
+    expect(blocked, 'a hoisted script failed to load').toEqual([]);
   });
 });
 

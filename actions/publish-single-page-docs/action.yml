@@ -74,6 +74,12 @@ runs:
         GH_TOKEN: ${{ inputs.github-token }}
         KB_RELEASE_TAG: ${{ inputs.release-tag }}
         KB_ARTIFACT: ${{ steps.build.outputs.artifact }}
+        # Read through the environment, never interpolated into the script body:
+        # a ${{ }} expression is substituted into the shell text before bash sees
+        # it, so any metacharacter in the value would execute rather than quote.
+        # These come from the consuming repo's `docs` input.
+        KB_COUNT: ${{ steps.build.outputs.count }}
+        KB_SLUGS: ${{ steps.build.outputs.slugs }}
       run: |
         set -euo pipefail
 
@@ -96,4 +102,4 @@ runs:
         gh release upload "$tag" "$KB_ARTIFACT" --clobber --repo "$GITHUB_REPOSITORY"
 
         echo "release-tag=$tag" >> "$GITHUB_OUTPUT"
-        echo "Published ${{ steps.build.outputs.count }} doc(s): ${{ steps.build.outputs.slugs }}" >> "$GITHUB_STEP_SUMMARY"
+        echo "Published $KB_COUNT doc(s): $KB_SLUGS" >> "$GITHUB_STEP_SUMMARY"

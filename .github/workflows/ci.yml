@@ -187,6 +187,11 @@ jobs:
       # Also proves the Dockerfile's dist/ sanity checks pass on a real build.
       - name: Build image
         run: docker build -t knowledge-base:ci .
+      # The CSP checks in the container suite need a real browser: a policy that
+      # blocks something the page needs fails silently, and only a browser
+      # reports the violation.
+      - name: Install Playwright browser
+        run: npx playwright install --with-deps chromium
       # The only place nginx.conf itself is executed. The other suites run
       # against tests/fragment-server.mjs, an Express mirror of the rewrites —
       # see playwright.config.docker.js for why that is not sufficient.

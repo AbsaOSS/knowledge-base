@@ -21,7 +21,7 @@
 // web-fragments gateway that sits in front of it in production — that is what
 // the embedded harness in playwright.config.js is for.
 
-import { defineConfig } from '@playwright/test';
+import { defineConfig, devices } from '@playwright/test';
 
 const PORT = process.env.KB_CONTAINER_PORT || '8099';
 
@@ -49,6 +49,8 @@ export default defineConfig({
     stderr: 'pipe',
   },
 
-  // No browser needed — every assertion is an HTTP request against nginx.
-  projects: [{ name: 'nginx' }],
+  // Most assertions are plain HTTP requests against nginx, but the CSP ones need
+  // a real browser: a policy that blocks something the page needs fails
+  // silently, and only a browser reports the violation.
+  projects: [{ name: 'nginx', use: { ...devices['Desktop Chrome'] } }],
 });
