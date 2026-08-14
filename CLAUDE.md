@@ -51,12 +51,13 @@ apps.json (registry)
   → dist/
 ```
 
-Orchestrator: `scripts/build-vite.js`. Flags: `--local`, `--headless`, `--path-prefix=`.
+Orchestrator: `scripts/build-vite.js`. Flags: `--local`, `--headless`.
 
-## Two Build Configs
+## One Build Config
 
-- **astro.config.mjs** — Astro SSG config, base `/knowledge-base`, used by `astro build`/`astro dev`
-- **vite.config.js** — standalone Vite config with custom `marketplacePlugin` from `plugins/marketplace.js`, base `/`, used for the non-Astro build path
+**astro.config.mjs** — Astro SSG config, base `/knowledge-base`, used by `astro build`/`astro dev`. There is no second, non-Astro build path; a `vite.config.js` claiming to be one was dead code that imported a `plugins/` directory the repo does not have (#47).
+
+`src/utils/config.js` holds the two build-wide constants both the config and the pages read: `PATH_PREFIX`/`BASE_PATH` and `isHeadlessBuild()`.
 
 ## Architecture
 
@@ -153,6 +154,7 @@ in the committed `apps.json` without breaking CI, which only has this repo.
 ## Environment Variables
 
 - `GITHUB_TOKEN` — GitHub API auth for fetching Release artifacts
-- `MP_HEADLESS` — `true`/`false`, controls headless mode
-- `MP_PREFIX` — URL prefix (default: `knowledge-base`)
+- `MP_HEADLESS` — `true` produces web-fragment output; **anything else, including unset, means standalone**. `scripts/build-vite.js` always exports an explicit value, so the default only applies when `astro build`/`astro dev` runs directly. Read it through `isHeadlessBuild()` in `src/utils/config.js`, never inline — the two inline copies used to disagree about the default (#52). A per-app `"headless"` in `apps.json` overrides it in either direction.
 - `AWS_REGION`, `ECR_REPOSITORY`, `ECS_CLUSTER`, `ECS_SERVICE` — deployment config
+
+The URL prefix is deliberately **not** an environment variable. `MP_PREFIX` and `--path-prefix=` were parsed and then ignored by the Astro build (#46); the prefix is now the `PATH_PREFIX` constant in `src/utils/config.js`, and `nginx.conf`, `tests/fragment-server.mjs` and the gateway's route patterns bake in the same string. Changing it means changing all of them together.

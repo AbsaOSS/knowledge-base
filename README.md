@@ -68,10 +68,15 @@ npm test
 | `npm run build:local:headless` | Local + headless |
 
 `--headless` (or `MP_HEADLESS=true`) produces fragment-ready output: no chrome
-bar, `data-mp-headless="true"` on `<html>`, shadow-DOM compat styles.
+bar, `data-mp-headless="true"` on `<html>`, shadow-DOM compat styles. Anything
+else — including an unset `MP_HEADLESS` — means standalone. An individual app can
+pin either mode with `"headless": true|false` in its `apps.json` entry.
 
-Orchestrator: `scripts/build-vite.js` (flags: `--local`, `--headless`,
-`--path-prefix=`).
+Orchestrator: `scripts/build-vite.js` (flags: `--local`, `--headless`).
+
+The URL prefix (`/knowledge-base`) is not configurable: it is the `PATH_PREFIX`
+constant in `src/utils/config.js`, and `nginx.conf` and the fragment gateway's
+route patterns hard-code the same string.
 
 ---
 

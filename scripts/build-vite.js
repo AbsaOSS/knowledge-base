@@ -23,6 +23,7 @@ import { copyDir, stageArtifact } from './artifacts.js';
 import { fetchApps } from './fetch-apps.js';
 import { HOIST_DIR, hoistAppInlineScripts } from './hoist-inline-scripts.js';
 import { collectHtmlFiles } from '../src/utils/apps.js';
+import { PATH_PREFIX } from '../src/utils/config.js';
 import {
   BUNDLE_MANIFEST, bundleDirName, bundleKey, expandBundle, findBundleRoot,
   isSinglePage, readBundleManifest, resolveRegistry, toRegistryEntry, writeExpansionMap,
@@ -32,10 +33,8 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(__dirname, '..');
 const APPS_DIR = join(ROOT, 'apps');
 
-const LOCAL_MODE  = process.argv.includes('--local');
-const HEADLESS    = process.argv.includes('--headless') || process.env.MP_HEADLESS === 'true';
-const prefixArg   = process.argv.find(a => a.startsWith('--path-prefix='));
-const PATH_PREFIX = prefixArg ? prefixArg.split('=').slice(1).join('=') : 'knowledge-base';
+const LOCAL_MODE = process.argv.includes('--local');
+const HEADLESS   = process.argv.includes('--headless') || process.env.MP_HEADLESS === 'true';
 
 const log  = (msg) => console.log('\x1b[36m→\x1b[0m ' + msg);
 const ok   = (msg) => console.log('\x1b[32m✓\x1b[0m ' + msg);
@@ -309,11 +308,9 @@ async function build() {
 
   // 3. Run Astro build
   step('3/4  Running astro build');
-  const env = {
-    ...process.env,
-    MP_PREFIX:   PATH_PREFIX,
-    MP_HEADLESS: HEADLESS ? 'true' : 'false',
-  };
+  // Always explicit: src/utils/config.js treats an unset MP_HEADLESS as
+  // standalone, and a build that says "--headless" must not depend on that.
+  const env = { ...process.env, MP_HEADLESS: HEADLESS ? 'true' : 'false' };
   execSync('npx astro build', { cwd: ROOT, stdio: 'inherit', env });
   ok('Astro build complete');
 

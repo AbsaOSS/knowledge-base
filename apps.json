@@ -31,7 +31,8 @@
     ],
     "type": "iframe",
     "url": "https://example.com/docs",
-    "temporary": true
+    "temporary": true,
+    "headless": false
   },
   {
     "type": "single-page",

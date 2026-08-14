@@ -11,9 +11,11 @@
 import '../styles/marketplace.css';
 import { ClientRouter } from 'astro:transitions';
 import { shadowCompatStyle } from '../templates/shadow-compat.js';
+import { isHeadlessBuild } from '../utils/config.js';
 
 interface Props {
   title?: string;
+  /** Per-app override. Undefined means "whatever this build is" — see config.js. */
   headless?: boolean;
   /** Extra classes for <body> — packaged sub-app pages pass their own body class. */
   bodyClass?: string;
@@ -23,13 +25,15 @@ interface Props {
 
 const {
   title = 'Knowledge base',
-  headless = false,
+  headless,
   bodyClass = '',
   flexBody = true,
 } = Astro.props;
 
-const HEADLESS = process.env.MP_HEADLESS !== 'false';
-const effectiveHeadless = headless || HEADLESS;
+// `??`, not `||`: an app pinned "headless": false in apps.json must be able to
+// opt out of a headless build. With `||` the prop could only ever turn headless
+// on, so the override was write-only in one direction (#52).
+const effectiveHeadless = headless ?? isHeadlessBuild();
 
 const bodyClasses = [
   flexBody ? 'min-h-screen flex flex-col' : '',

@@ -4,8 +4,7 @@ import Base from '../layouts/Base.astro';
 import Masthead from '../components/Masthead.astro';
 import AppCard from '../components/AppCard.astro';
 import { loadRegistry } from '../utils/apps.js';
-
-const HEADLESS = process.env.MP_HEADLESS !== 'false';
+import { BASE_PATH } from '../utils/config.js';
 
 // The effective registry: apps.json, with every single-page bundle replaced by
 // the docs it expanded into, so each one gets its own catalog card.
@@ -14,8 +13,8 @@ const apps = loadRegistry(process.cwd());
 const buildDate = new Date().toISOString().slice(0, 10);
 ---
 
-<Base headless={HEADLESS}>
-  <Masthead apps={apps} activeSlug="" base="/knowledge-base" />
+<Base>
+  <Masthead apps={apps} activeSlug="" base={BASE_PATH} />
 
   <div class="flex flex-col flex-1">
     <!-- App catalog -->
@@ -27,7 +26,7 @@ const buildDate = new Date().toISOString().slice(0, 10);
       </div>
       <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5" role="list">
         {apps.map((app: any, i: number) => (
-          <AppCard app={app} delay={i < 4 ? i + 1 : 0} base="/knowledge-base" />
+          <AppCard app={app} delay={i < 4 ? i + 1 : 0} base={BASE_PATH} />
         ))}
       </div>
     </main>
