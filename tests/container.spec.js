@@ -231,10 +231,12 @@ test.describe('CSP in a browser', () => {
       if (req.url().includes('_kb-inline')) loaded.push(req.url());
     });
 
-    // A nested page, not the app index: the docs-example fixture's inline
-    // scripts live on its inner pages, and this also exercises the ../ depth
-    // computation in scripts/hoist-inline-scripts.js.
-    await page.goto('/knowledge-base/user-guide/docs/', { waitUntil: 'networkidle' });
+    // A nested page, not the app index: the docs-example fixture's remaining
+    // inline script lives on its admin page, and this also exercises the ../
+    // depth computation in scripts/hoist-inline-scripts.js. (The fixture's other
+    // inline script was its dark-mode bootstrap, which the build now deletes
+    // rather than hoisting — see #48.)
+    await page.goto('/knowledge-base/user-guide/admin/', { waitUntil: 'networkidle' });
 
     expect(loaded.length, 'no hoisted script was requested — did the hoist step run?').toBeGreaterThan(0);
     expect(blocked, 'a hoisted script failed to load').toEqual([]);
