@@ -56,6 +56,33 @@ test.describe('HTTP headers', () => {
     const xfo = (res.headers()['x-frame-options'] ?? '').toUpperCase();
     expect(xfo).not.toBe('DENY');
   });
+
+  // The CORS and security headers must reach *every* response, not just the
+  // ones served by the catch-all. In nginx a location block declaring any
+  // add_header discards the inherited set, which had left both the static-asset
+  // block and the whole /knowledge-base/ prefix without them.
+  // nginx.conf is asserted directly in tests/nginx-config.spec.js; these check
+  // the paths end to end against the mirroring server.
+  for (const [label, path] of [
+    ['a page', '/knowledge-base/'],
+    ['a sub-app page', '/knowledge-base/user-guide/'],
+    ['a static asset', '/knowledge-base/style.css'],
+    ['a fragment-prefixed asset', '/__wf/knowledge-base/style.css'],
+  ]) {
+    test(`serves CORS and security headers on ${label}`, async ({ request }) => {
+      const res = await request.get(path);
+      const headers = res.headers();
+      expect(headers['access-control-allow-origin']).toBe('*');
+      expect(headers['x-content-type-options']).toBe('nosniff');
+      expect(headers['referrer-policy']).toBe('strict-origin');
+      expect((headers['x-frame-options'] ?? '').toUpperCase()).toBe('SAMEORIGIN');
+    });
+  }
+
+  test('does not send the deprecated X-XSS-Protection header', async ({ request }) => {
+    const res = await request.get('/knowledge-base/');
+    expect(res.headers()['x-xss-protection']).toBeUndefined();
+  });
 });
 
 // ─────────────────────────────────────────────────────────────────────────────

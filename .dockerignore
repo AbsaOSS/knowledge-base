@@ -1,4 +1,5 @@
-# The Docker image only needs nginx.conf + the prebuilt dist/ (see Dockerfile).
+# The Docker image only needs nginx.conf, nginx.headers.conf and the prebuilt
+# dist/ (see Dockerfile).
 # Keep the build context small and avoid leaking source/secrets into the image.
 node_modules
 .git

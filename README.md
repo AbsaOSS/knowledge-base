@@ -370,6 +370,8 @@ knowledge-base/
 │   ├── web-fragment.spec.js   ← Embedded harness suite
 │   ├── standalone.spec.js     ← Standalone fragment-server suite
 │   ├── build-integrity.spec.js
+│   ├── artifact-safety.spec.js ← Tarball extraction guards
+│   ├── nginx-config.spec.js   ← nginx header-inheritance guard
 │   ├── host/server.mjs        ← Reference web-fragments host (gateway)
 │   ├── fragment-server.mjs    ← nginx-mirroring static server
 │   ├── support/fragment.js    ← Shadow-DOM test helpers
@@ -377,7 +379,9 @@ knowledge-base/
 ├── contract/                  ← marketplace.json schema + rules + style guide
 ├── .github/workflows/         ← ci.yml, validate-doc-app.yml
 ├── Dockerfile
-└── nginx.conf
+├── nginx.conf                 ← server block (rewrites, caching, routing)
+└── nginx.headers.conf         ← shared CORS + security headers, included by
+                                 every block in nginx.conf that sets a header
 ```
 
 ---

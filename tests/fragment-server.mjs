@@ -34,6 +34,22 @@ if (!existsSync(DIST)) {
 
 const app = express();
 
+// nginx: include /etc/nginx/kb-headers.conf — the shared CORS + security set.
+// Applied to every response, which is what the nginx config does now that each
+// location declaring an add_header re-includes the snippet. Kept in sync with
+// nginx.headers.conf; tests/nginx-config.spec.js asserts the nginx side.
+app.use((_req, res, next) => {
+  res.set({
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Methods': 'GET, OPTIONS',
+    'Access-Control-Allow-Headers': 'Content-Type, x-web-fragment-id, x-fragment-mode',
+    'X-Content-Type-Options': 'nosniff',
+    'X-Frame-Options': 'SAMEORIGIN',
+    'Referrer-Policy': 'strict-origin',
+  });
+  next();
+});
+
 // nginx: location ^~ /__wf/knowledge-base/ { rewrite ^/__wf/knowledge-base/(.*)$ /$1 }
 // Map the fragment-asset prefix onto the normal page prefix so one static handler
 // serves both (e.g. /__wf/knowledge-base/style.css → dist/style.css).
