@@ -61,7 +61,7 @@ app.use((_req, res, next) => {
   res.set({
     'Access-Control-Allow-Origin': '*',
     'Access-Control-Allow-Methods': 'GET, OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type, x-web-fragment-id, x-fragment-mode',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization, x-web-fragment-id, x-fragment-mode',
     'X-Content-Type-Options': 'nosniff',
     'X-Frame-Options': 'SAMEORIGIN',
     'Referrer-Policy': 'strict-origin',
