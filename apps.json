@@ -1,25 +1,6 @@
 [
   {
-    "slug": "user-guide",
-    "name": "User Guide",
-    "description": "Primary docs app — the vendored docs-example fixture used as the integration guinea pig.",
-    "icon": "book-open",
-    "tags": [
-      "guide",
-      "getting-started"
-    ],
-    "prebuilt": "tests/fixtures/docs-example.dist.tar.gz"
-  },
-  {
-    "slug": "guide-mirror",
-    "name": "Guide Mirror",
-    "description": "Second registered app (same artifact, different slug) for cross-app navigation tests.",
-    "icon": "book-open",
-    "tags": [
-      "mirror",
-      "cross-app"
-    ],
-    "prebuilt": "tests/fixtures/docs-example.dist.tar.gz"
+    "prebuilt": "tests/fixtures/docs-example.kb-docs.tar.gz"
   },
   {
     "slug": "external-docs",
@@ -35,12 +16,10 @@
     "headless": false
   },
   {
-    "type": "single-page",
     "prebuilt": "tests/fixtures/single-page-bundle"
   },
   {
-    "type": "single-page",
-    "prebuilt": "../knowledge-base-example-single-page/dist.tar.gz",
+    "prebuilt": "../knowledge-base-example-single-page/kb-docs.tar.gz",
     "optional": true
   }
 ]

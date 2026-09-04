@@ -40,3 +40,17 @@ export const BASE_PATH = `/${PATH_PREFIX}`;
 export function isHeadlessBuild(env = process.env) {
   return env.KB_HEADLESS === 'true';
 }
+
+/**
+ * The registry file this build reads, relative to the project root.
+ *
+ * `apps.json` here is the CI and preview registry: the vendored fixture plus the
+ * optional sibling example. A real deployment owns its own registry in its own
+ * repository and points this at it, so that this repo is a build tool rather
+ * than a list of somebody's documentation.
+ *
+ * Read at module load: both the orchestrator and Astro's getStaticPaths need the
+ * same answer within one build, and an environment variable that changed
+ * halfway would silently produce a dist/ assembled from two registries.
+ */
+export const REGISTRY_FILE = process.env.KB_REGISTRY?.trim() || 'apps.json';

@@ -1,33 +1,30 @@
 /**
  * fetch-apps.js
  *
- * Downloads the latest (or pinned) GitHub Release artifact for each app in apps.json.
- * Requires either:
+ * Downloads the kb-docs.tar.gz release asset for a registry entry that names a
+ * `repo`. Requires either:
  *   - GITHUB_TOKEN env variable, OR
- *   - `gh` CLI authenticated (used as fallback)
+ *   - `gh` CLI authenticated (used as fallback for the API, not for downloads)
  *
- * Artifacts are extracted to apps/{slug}/ (the Vite source directory for sub-apps).
- * Legacy: also keeps tmp/apps/{slug}/ populated for non-Vite paths.
+ * This module only *obtains* an artifact. Reading its manifest, validating it
+ * and installing its apps into apps/{slug}/ is the same code for every source
+ * and lives in scripts/build-vite.js — see contract/ARTIFACT.md. Keeping the two
+ * apart is what stopped the GitHub path and the prebuilt path from drifting the
+ * way they used to.
  */
 
 import { spawnSync } from 'node:child_process';
-import { createWriteStream, mkdirSync, rmSync, existsSync, copyFileSync, readFileSync } from 'node:fs';
+import { createWriteStream, mkdirSync, rmSync, existsSync, statSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { pipeline } from 'node:stream/promises';
 import { Readable } from 'node:stream';
 import { fileURLToPath } from 'node:url';
-import { copyDir, extractTarball } from './artifacts.js';
-import {
-  BUNDLE_MANIFEST, bundleDirName, bundleKey, expandBundle,
-  findBundleRoot, isSinglePage, readBundleManifest, toRegistryEntry,
-} from '../src/utils/single-page.js';
+import { ARTIFACT_NAME, SIZE_LIMIT, SIZE_WARN } from '../src/utils/registry.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT      = join(__dirname, '..');
-// Primary output: apps/{slug}/ — consumed by the Vite build and dev server
-const APPS_DIR  = join(ROOT, 'apps');
-// Legacy output kept for compatibility with old build.js path
-const TMP_DIR   = join(ROOT, 'tmp', 'apps');
+/** Where downloaded artifacts land before they are staged. */
+const DOWNLOAD_DIR = join(ROOT, 'tmp', 'downloads');
 
 const GITHUB_TOKEN = process.env.GITHUB_TOKEN;
 const API_BASE     = 'https://api.github.com';
@@ -36,39 +33,12 @@ const API_BASE     = 'https://api.github.com';
 
 function log(msg)  { process.stdout.write(`  \x1b[36m→\x1b[0m ${msg}\n`); }
 function warn(msg) { process.stderr.write(`  \x1b[33m⚠\x1b[0m  ${msg}\n`); }
-function ok(msg)   { process.stdout.write(`  \x1b[32m✓\x1b[0m ${msg}\n`); }
 function fail(msg) { throw new Error(`\x1b[31m✗\x1b[0m ${msg}`); }
 
 /** `owner/name`, the only shape a registry `repo` may take. */
 const REPO_RE = /^[A-Za-z0-9._-]+\/[A-Za-z0-9._-]+$/;
 /** Git tag characters we are willing to put in a URL path. */
 const VERSION_RE = /^[A-Za-z0-9._/-]+$/;
-
-/** The marker a headless artifact must carry on `<html>`. */
-const HEADLESS_MARKER = 'data-kb-headless="true"';
-/** Its pre-rename spelling — see issue #77. */
-const LEGACY_HEADLESS_MARKER = 'data-mp-headless';
-
-/**
- * Warns when an artifact's entry point is not marked headless.
- *
- * A bundle published before the rename carries `data-mp-headless` instead, which
- * is indistinguishable from "not headless at all" to every downstream consumer.
- * Saying so explicitly is the difference between a publisher re-reading the
- * contract and a publisher re-reading their build script.
- */
-function checkHeadlessMarker(html, label, hint) {
-  if (html.includes(HEADLESS_MARKER)) return;
-  if (html.includes(LEGACY_HEADLESS_MARKER)) {
-    warn(
-      `${label} carries ${LEGACY_HEADLESS_MARKER}, which this knowledge base no longer reads.\n` +
-      `     The artifact was produced against the pre-rename contract — republish it with a\n` +
-      `     current AbsaOSS/knowledge-base action so it emits ${HEADLESS_MARKER}.`
-    );
-    return;
-  }
-  warn(`${label} is missing ${HEADLESS_MARKER} on <html>.\n     ${hint}`);
-}
 
 /**
  * Rejects registry values that must never reach a URL or a subprocess argument.
@@ -140,7 +110,7 @@ async function downloadAsset(repo, assetId, assetName, destPath) {
 }
 
 /**
- * Fetches the release info for an app.
+ * Fetches the release info for an entry.
  * - version "latest": fetches the latest release
  * - version "v1.2.3": fetches that specific tag
  */
@@ -151,45 +121,67 @@ async function fetchRelease(repo, version) {
   return ghApi(path);
 }
 
-/**
- * Finds the dist.tar.gz asset in a release.
- */
-function findDistAsset(release, repo) {
-  const asset = release.assets?.find(a => a.name === 'dist.tar.gz');
+/** Finds the kb-docs.tar.gz asset in a release. */
+function findArtifactAsset(release, repo) {
+  const asset = release.assets?.find((a) => a.name === ARTIFACT_NAME);
   if (!asset) {
+    const available = release.assets?.map((a) => a.name).join(', ') || 'none';
+    const legacy = release.assets?.some((a) => a.name === 'dist.tar.gz');
     fail(
-      `No 'dist.tar.gz' asset found in release '${release.tag_name}' of ${repo}.\n` +
-      `Available assets: ${release.assets?.map(a => a.name).join(', ') || 'none'}\n` +
-      `See contract/HEADLESS_RULES.md for how to publish release artifacts.`
+      `No '${ARTIFACT_NAME}' asset in release '${release.tag_name}' of ${repo}.\n` +
+      `     Available assets: ${available}\n` +
+      (legacy
+        ? `     This release carries 'dist.tar.gz', the pre-v1 asset name. Republish it with a\n` +
+          `     current AbsaOSS/knowledge-base publishing action.\n`
+        : '') +
+      `     See contract/ARTIFACT.md for what a release must carry.`,
     );
   }
   return asset;
 }
 
-// ── Single-page bundles ───────────────────────────────────────────────────────
+/**
+ * Enforces the artifact size budget from contract/ARTIFACT.md.
+ *
+ * Every registered artifact is downloaded on every deployment build, so an
+ * oversized one is a cost the whole knowledge base pays rather than a private
+ * matter for the publishing repo.
+ */
+export function checkArtifactSize(bytes, label) {
+  if (bytes > SIZE_LIMIT) {
+    fail(
+      `${label}: the artifact is ${mb(bytes)} MB, over the ${mb(SIZE_LIMIT)} MB limit.\n` +
+      `     See contract/ARTIFACT.md — the usual cause is uncompressed images or a vendored\n` +
+      `     toolchain the built site does not need at runtime.`,
+    );
+  }
+  if (bytes > SIZE_WARN) {
+    warn(
+      `${label}: the artifact is ${mb(bytes)} MB, over the ${mb(SIZE_WARN)} MB target. ` +
+      `Every deployment build downloads it — see contract/ARTIFACT.md.`,
+    );
+  }
+}
+
+const mb = (bytes) => (bytes / 1024 / 1024).toFixed(1);
+
+// ── Main export ───────────────────────────────────────────────────────────────
 
 /**
- * Downloads a single-page bundle and expands it into one app per doc.
+ * Downloads one entry's release artifact.
  *
- * Same release/asset logic as a packaged app — the difference is what the
- * tarball contains: a bundle.json manifest plus one directory per doc, each of
- * which is mirrored into apps/{slug}/ exactly like a packaged app's dist.
- * See contract/SINGLE_PAGE.md.
- *
- * @returns {Promise<Array>} expanded app entries, each tagged with its bundleKey
+ * @param {object} app - an apps.json entry naming a `repo`
+ * @returns {Promise<{tarPath: string, releaseTag: string, releasedAt: string}>}
  */
-async function fetchBundle(app) {
+export async function downloadArtifact(app) {
   const { repo, version = 'latest' } = app;
-  const key = bundleKey(app);
-  assertSafeTarget(repo, version, key);
+  assertSafeTarget(repo, version, repo ?? '(unnamed entry)');
 
-  console.log(`\n\x1b[1m[${key}]\x1b[0m Fetching single-page bundle from ${repo}@${version}`);
-
-  const workDir = join(TMP_DIR, '_bundles', bundleDirName(key));
+  const workDir = join(DOWNLOAD_DIR, repo.replace('/', '__'));
   if (existsSync(workDir)) rmSync(workDir, { recursive: true });
   mkdirSync(workDir, { recursive: true });
 
-  log(`Fetching release info (${version})…`);
+  log(`Fetching release info for ${repo}@${version}…`);
   let release;
   try {
     release = await fetchRelease(repo, version);
@@ -198,161 +190,15 @@ async function fetchBundle(app) {
   }
   log(`Found release: ${release.tag_name} (${release.published_at?.slice(0, 10)})`);
 
-  const asset   = findDistAsset(release, repo);
-  const tarPath = join(workDir, 'dist.tar.gz');
-  log(`Downloading ${asset.name} (${(asset.size / 1024).toFixed(1)} KB)…`);
+  const asset   = findArtifactAsset(release, repo);
+  const tarPath = join(workDir, ARTIFACT_NAME);
+
+  checkArtifactSize(asset.size, `${repo}@${release.tag_name}`);
+  log(`Downloading ${asset.name} (${mb(asset.size)} MB)…`);
   await downloadAsset(repo, asset.id, asset.name, tarPath);
 
-  log('Extracting…');
-  extractTarball(tarPath, workDir, `${key}@${release.tag_name}`);
+  // The API reports a size; trust the bytes on disk over the metadata.
+  checkArtifactSize(statSync(tarPath).size, `${repo}@${release.tag_name}`);
 
-  const bundleRoot = findBundleRoot(workDir);
-  if (!bundleRoot) {
-    fail(
-      `${key}: the release artifact has no ${BUNDLE_MANIFEST} at its root.\n` +
-      `     A "single-page" entry expects a bundle published by ` +
-      `AbsaOSS/knowledge-base/actions/publish-single-page-docs — see contract/SINGLE_PAGE.md.`,
-    );
-  }
-
-  const docs = expandBundle(app, readBundleManifest(bundleRoot, key), bundleRoot);
-
-  for (const doc of docs) {
-    const appsSlugDir = join(APPS_DIR, doc.slug);
-    if (existsSync(appsSlugDir)) rmSync(appsSlugDir, { recursive: true });
-    copyDir(doc.docDir, appsSlugDir);
-
-    const html = readFileSync(join(appsSlugDir, doc.entryPoint), 'utf8');
-    checkHeadlessMarker(
-      html,
-      `${doc.slug}: ${doc.entryPoint}`,
-      'See contract/HEADLESS_RULES.md.',
-    );
-    ok(`${doc.slug} ready (single-page doc, ${release.tag_name})`);
-  }
-
-  return docs.map(doc => ({
-    ...toRegistryEntry(doc),
-    bundleKey:  key,
-    releaseTag: release.tag_name,
-    releasedAt: release.published_at,
-  }));
-}
-
-// ── Main export ───────────────────────────────────────────────────────────────
-
-/**
- * Downloads and extracts all app artifacts.
- * Returns enriched app metadata array (apps.json entries + release info).
- *
- * @param {Array} apps - Contents of apps.json
- * @returns {Promise<Array>} - Enriched app list with { ...app, distDir, releaseTag, releasedAt }
- */
-export async function fetchApps(apps) {
-  mkdirSync(TMP_DIR, { recursive: true });
-  mkdirSync(APPS_DIR, { recursive: true });
-
-  const enriched = [];
-
-  for (const app of apps) {
-    // A single-page entry is one artifact holding many docs — it expands into
-    // several enriched entries rather than one.
-    if (isSinglePage(app)) {
-      enriched.push(...await fetchBundle(app));
-      continue;
-    }
-
-    const { repo, slug, version = 'latest' } = app;
-    assertSafeTarget(repo, version, slug);
-
-    console.log(`\n\x1b[1m[${slug}]\x1b[0m Fetching from ${repo}@${version}`);
-
-    const appDir = join(TMP_DIR, slug);
-    if (existsSync(appDir)) {
-      rmSync(appDir, { recursive: true });
-    }
-    mkdirSync(appDir, { recursive: true });
-
-    // 1. Fetch release metadata
-    log(`Fetching release info (${version})…`);
-    let release;
-    try {
-      release = await fetchRelease(repo, version);
-    } catch (err) {
-      fail(`Could not fetch release for ${repo}@${version}: ${err.message}`);
-    }
-    log(`Found release: ${release.tag_name} (${release.published_at?.slice(0, 10)})`);
-
-    // 2. Find the dist.tar.gz asset
-    const asset = findDistAsset(release, repo);
-    const tarPath = join(appDir, 'dist.tar.gz');
-
-    // 3. Download artifact
-    log(`Downloading ${asset.name} (${(asset.size / 1024).toFixed(1)} KB)…`);
-    await downloadAsset(repo, asset.id, asset.name, tarPath);
-
-    // 4. Extract — validated against traversal and symlink members first.
-    log('Extracting…');
-    extractTarball(tarPath, appDir, `${slug}@${release.tag_name}`);
-
-    // Determine extracted dist location (may be dist/ or root-level files)
-    const distDir = existsSync(join(appDir, 'dist'))
-      ? join(appDir, 'dist')
-      : appDir;
-
-    // 4b. Mirror into apps/{slug}/ for the Vite dev server and build pipeline
-    const appsSlugDir = join(APPS_DIR, slug);
-    if (existsSync(appsSlugDir)) rmSync(appsSlugDir, { recursive: true });
-    copyDir(distDir, appsSlugDir);
-    // 5. Validate marketplace.json exists (in the tarball root, not dist/)
-    const manifestInTar  = join(appDir, 'marketplace.json');
-
-    // Also copy marketplace.json if present alongside the dist dir
-    if (existsSync(manifestInTar)) {
-      copyFileSync(manifestInTar, join(appsSlugDir, 'marketplace.json'));
-    }
-    log(`Synced to apps/${slug}/`);
-    const manifestInDist = join(distDir, 'marketplace.json');
-    let manifest = null;
-
-    if (existsSync(manifestInTar)) {
-      manifest = JSON.parse(readFileSync(manifestInTar, 'utf8'));
-    } else if (existsSync(manifestInDist)) {
-      manifest = JSON.parse(readFileSync(manifestInDist, 'utf8'));
-    } else {
-      warn(`No marketplace.json found in artifact for ${slug}. Using apps.json metadata.`);
-    }
-
-    // 6. Validate headless HTML (spot-check index.html)
-    const indexHtml = join(distDir, app.entryPoint || 'index.html');
-    if (existsSync(indexHtml)) {
-      const html = readFileSync(indexHtml, 'utf8');
-      checkHeadlessMarker(
-        html,
-        `${slug}/index.html`,
-        'See contract/HEADLESS_RULES.md — ensure the app is built with --headless.',
-      );
-    } else {
-      warn(`${slug}: entryPoint '${app.entryPoint || 'index.html'}' not found in artifact.`);
-    }
-
-    ok(`${slug} ready (${release.tag_name})`);
-
-    enriched.push({
-      ...app,
-      // Merge manifest fields if present (manifest wins over apps.json for display fields)
-      name:        manifest?.name        ?? app.name,
-      description: manifest?.description ?? app.description,
-      icon:        manifest?.icon        ?? app.icon,
-      tags:        manifest?.tags        ?? app.tags ?? [],
-      entryPoint:  manifest?.entryPoint  ?? app.entryPoint ?? 'index.html',
-      pages:       manifest?.pages       ?? null,
-      // Build metadata
-      distDir,
-      releaseTag:  release.tag_name,
-      releasedAt:  release.published_at,
-    });
-  }
-
-  return enriched;
+  return { tarPath, releaseTag: release.tag_name, releasedAt: release.published_at };
 }

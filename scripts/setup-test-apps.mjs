@@ -6,17 +6,23 @@
  *
  * The committed apps.json is this script's output; the Playwright webServer runs
  * it before every build so the registry stays in sync. It registers:
- *   • the vendored docs-example fixture twice (two slugs) so the suite can
- *     exercise both the landing catalog and cross-app navigation,
+ *   • the vendored docs-example fixture, whose manifest declares two apps —
+ *     `user-guide` (crawled) and `guide-mirror` (a `pages` manifest) — so the
+ *     suite can exercise the landing catalog, cross-app navigation and both
+ *     routing paths from one artifact,
  *   • an iframe entry (issue #10),
- *   • a single-page bundle holding two docs (issue #35).
+ *   • a markdown bundle holding two docs (issue #35).
  * No network, no GITHUB_TOKEN, no sibling repo or per-app build toolchain.
  *
- * The `prebuilt` field is consumed by scripts/build-vite.js (preparePrebuilt).
+ * Note what the entries do *not* carry: no slug, name, description, icon or
+ * tags. Those live in each artifact's kb-docs.json — the registry only records
+ * where an artifact comes from. See contract/ARTIFACT.md.
+ *
+ * The `prebuilt` field is consumed by scripts/build-vite.js (stageEntry).
  *
  * Override the packaged artifact with KB_EXAMPLE_ARTIFACT (absolute path or path
  * relative to the repo root) — e.g. to point at a different doc app's
- * dist.tar.gz / dist.
+ * kb-docs.tar.gz / an unpacked artifact directory.
  */
 
 import { mkdirSync, rmSync, writeFileSync, existsSync } from 'node:fs';
@@ -30,15 +36,15 @@ const ROOT = join(__dirname, '..');
 
 // Vendored fixture (committed under tests/fixtures/) keeps the build + tests fully
 // hermetic — no sibling repo, no network, no GITHUB_TOKEN.
-const DEFAULT_ARTIFACT = 'tests/fixtures/docs-example.dist.tar.gz';
+const DEFAULT_ARTIFACT = 'tests/fixtures/docs-example.kb-docs.tar.gz';
 const artifact = process.env.KB_EXAMPLE_ARTIFACT || DEFAULT_ARTIFACT;
 const artifactAbs = isAbsolute(artifact) ? artifact : resolve(ROOT, artifact);
 
 if (!existsSync(artifactAbs)) {
   console.error(
     `\x1b[31m✗ Example artifact not found:\x1b[0m ${artifactAbs}\n` +
-    `  Expected the vendored fixture at tests/fixtures/docs-example.dist.tar.gz\n` +
-    `  or set KB_EXAMPLE_ARTIFACT to a dist.tar.gz / dist directory.`,
+    `  Expected the vendored fixture at tests/fixtures/docs-example.kb-docs.tar.gz\n` +
+    `  or set KB_EXAMPLE_ARTIFACT to a kb-docs.tar.gz or an unpacked artifact directory.`,
   );
   process.exit(1);
 }
@@ -95,7 +101,7 @@ const RELEASE_PROCESS_BODY = `<h1 id="release-process" tabindex="-1">Release Pro
 <ol>
 <li>Tag the commit.</li>
 <li>Publish the GitHub Release.</li>
-<li>The publish-single-page-docs action attaches <code>dist.tar.gz</code>.</li>
+<li>The publish-single-page-docs action attaches <code>kb-docs.tar.gz</code>.</li>
 </ol>`;
 
 /**
@@ -177,11 +183,10 @@ function writeSinglePageBundle() {
     }
   }
 
-  writeFileSync(join(root, 'bundle.json'), JSON.stringify({
-    marketplaceVersion: '1',
-    type: 'single-page',
-    docs: bundleDocs.map(({ slug, title, description, icon, tags }) => ({
-      slug, title, description, icon, tags, entryPoint: 'index.html',
+  writeFileSync(join(root, 'kb-docs.json'), JSON.stringify({
+    kbVersion: '1',
+    apps: bundleDocs.map(({ slug, title, description, icon, tags }) => ({
+      slug, name: title, description, icon, tags, entryPoint: 'index.html',
     })),
   }, null, 2) + '\n');
 
@@ -196,19 +201,10 @@ const bundleRoot = writeSinglePageBundle();
 // navigation (clicking from one app's card to another) is testable.
 const apps = [
   {
-    slug: 'user-guide',
-    name: 'User Guide',
-    description: 'Primary docs app — the vendored docs-example fixture used as the integration guinea pig.',
-    icon: 'book-open',
-    tags: ['guide', 'getting-started'],
-    prebuilt: artifact,
-  },
-  {
-    slug: 'guide-mirror',
-    name: 'Guide Mirror',
-    description: 'Second registered app (same artifact, different slug) for cross-app navigation tests.',
-    icon: 'book-open',
-    tags: ['mirror', 'cross-app'],
+    // One artifact, two apps: `user-guide` (crawled) and `guide-mirror` (which
+    // carries a `pages` manifest). Their names, descriptions and slugs live in
+    // the artifact's kb-docs.json, not here — the registry only says where the
+    // artifact comes from.
     prebuilt: artifact,
   },
   {
@@ -229,23 +225,22 @@ const apps = [
     headless: false,
   },
   {
-    // single-page onboarding mode (issue #35): one bundle, no per-doc metadata
-    // here — the build expands it into one app per doc from bundle.json.
-    type: 'single-page',
+    // A markdown bundle: one artifact, one app per doc, all of it described by
+    // the artifact's own kb-docs.json. Structurally identical to the packaged
+    // entry above — that sameness is the point.
     prebuilt: BUNDLE_DIR,
   },
   {
     // The sibling example repo (knowledge-base-example-single-page), for looking
     // at real action output in a browser: `npm run build:local && npm run preview`.
-    // Its dist.tar.gz is produced by the real action, so it is the closest thing
-    // to a published bundle without a network round-trip.
+    // Its artifact is produced by the real action, so it is the closest thing to
+    // a published bundle without a network round-trip.
     //
     // `optional` because that repo is not part of this one: when it is not
     // checked out next door — CI, a fresh clone — the build skips this entry with
     // a warning instead of failing. Keep it last so the hermetic fixture above
-    // stays the first single-page entry the suites look at.
-    type: 'single-page',
-    prebuilt: '../knowledge-base-example-single-page/dist.tar.gz',
+    // stays the first bundle the suites look at.
+    prebuilt: '../knowledge-base-example-single-page/kb-docs.tar.gz',
     optional: true,
   },
 ];

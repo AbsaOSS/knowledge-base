@@ -87,25 +87,29 @@ route patterns hard-code the same string.
 
 ## The registry: `apps.json`
 
-Each entry registers one doc app. A `slug` is required; the source is one of
-`repo` (+ optional `version`), `localPath`, `prebuilt`, or an `iframe` URL:
+Each entry says **where an artifact comes from, and nothing else**. The slug,
+name, description, icon, tags and page list all come from the artifact's own
+`kb-docs.json` (see [`contract/ARTIFACT.md`](contract/ARTIFACT.md)), so one entry
+may register several apps and onboarding a new doc never edits this repository
+again. The build rejects an entry that carries display fields.
 
 ```jsonc
 [
-  {
-    "slug": "my-app",
-    "name": "My App Documentation",
-    "description": "What this app documents.",
-    "icon": "book-open",
-    "tags": ["guide"],
-
-    // pick ONE source:
-    "repo": "AbsaOSS/my-docs", "version": "latest", // GitHub Release artifact
-    // "localPath": "../my-docs",                    // build from local checkout
-    // "prebuilt": "tests/fixtures/my-docs.kb-docs.tar.gz" // prebuilt tarball or dist dir
-  }
+  // pick ONE source per entry:
+  { "repo": "AbsaOSS/my-docs", "version": "latest" },      // GitHub Release artifact
+  { "localPath": "../my-docs" },                            // pack from a local checkout
+  { "prebuilt": "tests/fixtures/my-docs.kb-docs.tar.gz" }   // tarball or unpacked directory
 ]
 ```
+
+`version` accepts `latest` (the default) or a pinned tag. `localPath` runs the
+checkout's pack command — `npm run pack:kb` unless the entry sets `"pack"` — and
+then reads the `kb-docs.tar.gz` it leaves behind; `"pack": false` skips that when
+the artifact is already built. An entry may also set `"headless"` to pin one app
+against the build flag.
+
+`KB_REGISTRY` points the build at a different registry file, which is how a
+deployment repository owns its own list without forking this one.
 
 Add `"optional": true` to a `prebuilt`/`localPath` entry whose artifact lives
 outside this repo — a sibling checkout, say. The build then **skips it with a
@@ -170,7 +174,7 @@ to headless HTML — GFM tables, task lists, footnotes, highlighted code and
 vendored-mermaid diagrams — packs every doc into one `kb-docs.tar.gz` with a
 `kb-docs.json` manifest, and attaches it to the repo's latest release.
 
-The registry entry then carries **no per-doc metadata at all**:
+The registry entry is the same two lines every artifact gets:
 
 ```jsonc
 {
@@ -209,7 +213,7 @@ own apps for a real deployment.
 ## Testing
 
 E2E tests use Playwright. Everything is hermetic — built from
-`tests/fixtures/docs-example.dist.tar.gz` (no network, token, or sibling repo).
+`tests/fixtures/docs-example.kb-docs.tar.gz` (no network, token, or sibling repo).
 
 | Command | Layer |
 |---|---|
@@ -371,7 +375,7 @@ knowledge-base/
 │   └── utils/
 │       ├── apps.js            ← loadRegistry() + getAppPages() page enumeration
 │       ├── config.js          ← PATH_PREFIX / BASE_PATH + isHeadlessBuild()
-│       ├── single-page.js     ← manifest parsing + registry expansion
+│       ├── registry.js         ← registry rules + manifest parsing + expansion
 │       └── transform.js       ← parse5 URL rewriting + sub-app document splitting
 ├── scripts/
 │   ├── build-vite.js          ← Build orchestrator
