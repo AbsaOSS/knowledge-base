@@ -25,7 +25,7 @@ export const BUNDLE_MANIFEST = 'bundle.json';
 /** Where the build records what each bundle expanded into, for Astro to read. */
 export const EXPANSION_FILE = join('apps', '.single-page.json');
 
-/** Icon set — kept in sync with contract/schema.json. */
+/** Icon set — kept in sync with contract/kb-docs.schema.json. */
 const ICONS = [
   'book-open', 'cube', 'chip', 'chart-bar', 'shield',
   'cog', 'terminal', 'globe', 'layers', 'lightning-bolt',

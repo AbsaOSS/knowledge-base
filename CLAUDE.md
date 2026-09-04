@@ -64,7 +64,7 @@ Orchestrator: `scripts/build-vite.js`. Flags: `--local`, `--headless`.
 
 ### Core Data Flow
 
-`apps.json` → `scripts/fetch-apps.js` downloads `dist.tar.gz` per app → `apps/{slug}/` → Astro's `src/pages/[...path].astro` catchall uses `getStaticPaths()` from `src/utils/apps.js` to enumerate every HTML file → `src/utils/transform.js` rewrites URLs and splits the document → `Base.astro` re-hosts the parts → static output in `dist/`.
+`apps.json` → `scripts/fetch-apps.js` downloads `kb-docs.tar.gz` per app → `apps/{slug}/` → Astro's `src/pages/[...path].astro` catchall uses `getStaticPaths()` from `src/utils/apps.js` to enumerate every HTML file → `src/utils/transform.js` rewrites URLs and splits the document → `Base.astro` re-hosts the parts → static output in `dist/`.
 
 ### Key Source Files
 
@@ -88,9 +88,9 @@ Orchestrator: `scripts/build-vite.js`. Flags: `--local`, `--headless`.
 
 An `apps.json` entry is one of:
 
-- **default (packaged)** — a repo publishes a headless static site as `dist.tar.gz` plus `marketplace.json`. Every HTML file becomes a route.
+- **default (packaged)** — a repo publishes a headless static site as `kb-docs.tar.gz` carrying a `kb-docs.json` manifest. Every HTML file becomes a route unless the manifest lists `pages`.
 - **`type: "iframe"`** — no artifact; a single route renders a full-viewport `<iframe>` for an external URL. Explicit stopgap (issue #10).
-- **`type: "single-page"`** — one release artifact holding *many* docs, published by `actions/publish-single-page-docs` from plain markdown. The entry carries **no per-doc metadata** (`{ "repo": …, "type": "single-page", "version": "latest" }`); the build reads the artifact's `bundle.json` and **expands** the entry into one app per doc, extracting each into `apps/{slug}/`. The expansion is recorded in `apps/.single-page.json` and spliced back into the registry by `loadRegistry()` so Astro sees the same registry the build did. Slugs must be globally unique — `resolveRegistry()` fails the build otherwise. Rendering: masthead, no sidebar, content in a centred `main.kb-single-page` reading column. See issue #35 and `contract/SINGLE_PAGE.md`.
+- **`type: "single-page"`** — one release artifact holding *many* docs, published by `actions/publish-single-page-docs` from plain markdown. The entry carries **no per-doc metadata** (`{ "repo": …, "type": "single-page", "version": "latest" }`); the build reads the artifact's `kb-docs.json` and **expands** the entry into one app per doc, extracting each into `apps/{slug}/`. The expansion is recorded in `apps/.single-page.json` and spliced back into the registry by `loadRegistry()` so Astro sees the same registry the build did. Slugs must be globally unique — `resolveRegistry()` fails the build otherwise. Rendering: masthead, no sidebar, content in a centred `main.kb-single-page` reading column. See issue #35 and `contract/SINGLE_PAGE.md`.
 
 ### Two Modes
 
@@ -117,10 +117,11 @@ Root-relative `url()` inside a sub-app's **copied CSS files** is a separate rewr
 ## Contract for Doc Apps
 
 Apps registered in `apps.json` must comply with:
-- `contract/schema.json` — JSON Schema for `marketplace.json` manifest (packaged apps)
+- `contract/ARTIFACT.md` — Normative: the `kb-docs.tar.gz` layout, the `kb-docs.json` manifest, archive and size rules
+- `contract/kb-docs.schema.json` — JSON Schema for `kb-docs.json`
 - `contract/HEADLESS_RULES.md` — Structural requirements (headless HTML, relative paths, `data-kb-headless` attribute)
 - `contract/STYLE_GUIDE.md` — Design tokens and typography (light only — the knowledge base has no dark mode)
-- `contract/SINGLE_PAGE.md` — `bundle.json` format + the copy-paste onboarding workflow for single-page docs
+- `contract/SINGLE_PAGE.md` — The copy-paste onboarding workflow for single-page docs
 
 ## Testing
 
@@ -165,7 +166,7 @@ reference the content-hashed bundle Astro injects, so nothing depends on that fi
 
 An entry may also carry `"optional": true`: the build then skips it with a warning when its
 `prebuilt`/`localPath` artifact is missing, instead of failing. That is how the sibling
-`knowledge-base-example-single-page` repo (a mock docs repo whose `dist.tar.gz` comes from
+`knowledge-base-example-single-page` repo (a mock docs repo whose `kb-docs.tar.gz` comes from
 the real action — `npm run build:local && npm run preview` to view it) can stay registered
 in the committed `apps.json` without breaking CI, which only has this repo.
 

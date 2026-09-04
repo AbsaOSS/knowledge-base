@@ -1,0 +1,108 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://raw.githubusercontent.com/AbsaOSS/knowledge-base/master/contract/kb-docs.schema.json",
+  "title": "kb-docs.json",
+  "description": "Manifest at the root of a kb-docs.tar.gz release artifact. Describes every app the archive publishes. See contract/ARTIFACT.md.",
+  "type": "object",
+  "required": ["kbVersion", "apps"],
+  "additionalProperties": false,
+  "properties": {
+    "kbVersion": {
+      "type": "string",
+      "enum": ["1"],
+      "description": "Contract version. Must be '1'."
+    },
+    "apps": {
+      "type": "array",
+      "minItems": 1,
+      "description": "One entry per app in the archive. A packaged documentation site is a list of one.",
+      "items": { "$ref": "#/definitions/app" }
+    }
+  },
+  "definitions": {
+    "app": {
+      "type": "object",
+      "required": ["slug", "name", "description"],
+      "additionalProperties": false,
+      "properties": {
+        "slug": {
+          "type": "string",
+          "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$",
+          "minLength": 2,
+          "maxLength": 32,
+          "description": "Names the app's directory in the archive and its public URL prefix /knowledge-base/{slug}/. Must be unique across the whole knowledge base — prefix it with your service name."
+        },
+        "name": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 64,
+          "description": "Human-readable app name, shown on the catalog card and in the masthead."
+        },
+        "description": {
+          "type": "string",
+          "minLength": 10,
+          "maxLength": 280,
+          "description": "One sentence, shown on the catalog card."
+        },
+        "entryPoint": {
+          "type": "string",
+          "default": "index.html",
+          "description": "Landing page, relative to the app's directory in the archive.",
+          "$comment": "Relative, forward-slashed, no traversal — enforced by the pattern below rather than by prose.",
+          "pattern": "^(?!/)(?!.*(^|/)\\.\\.(/|$))[^\\\\]+$"
+        },
+        "icon": {
+          "type": "string",
+          "default": "book-open",
+          "description": "Icon name from the supported set. An unrecognised value falls back to book-open rather than failing the build.",
+          "enum": [
+            "book-open", "cube", "chip", "chart-bar", "shield",
+            "cog", "terminal", "globe", "layers", "lightning-bolt",
+            "document", "collection", "puzzle", "database"
+          ]
+        },
+        "tags": {
+          "type": "array",
+          "maxItems": 5,
+          "description": "Taxonomy tags shown as pills on the catalog card.",
+          "items": { "type": "string", "minLength": 1, "maxLength": 32 }
+        },
+        "pages": {
+          "type": "array",
+          "minItems": 1,
+          "description": "Navigation manifest. When present it is the authoritative route list for the app and the knowledge base does not crawl the directory.",
+          "items": { "$ref": "#/definitions/page" }
+        }
+      }
+    },
+    "page": {
+      "type": "object",
+      "required": ["title", "path", "order"],
+      "additionalProperties": false,
+      "properties": {
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "description": "Human-readable page title used in navigation."
+        },
+        "path": {
+          "type": "string",
+          "description": "Path to the HTML file, relative to the app's directory in the archive.",
+          "pattern": "^(?!/)(?!.*(^|/)\\.\\.(/|$))[^\\\\]+$"
+        },
+        "order": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Sort position within the app's navigation (lower sorts higher)."
+        },
+        "section": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "description": "Optional group heading to display above this page."
+        }
+      }
+    }
+  }
+}

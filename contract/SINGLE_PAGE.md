@@ -2,10 +2,11 @@
 
 The zero-config way into the knowledge base. Your repo has one or more markdown
 files; you add **one workflow file and nothing else**. No mkdocs, no theme, no
-`marketplace.json`, no build script, no headless flag.
+manifest to write, no build script, no headless flag — the action derives the
+manifest from the workflow inputs below.
 
 The reusable action renders your markdown into headless HTML, packs it as
-`dist.tar.gz`, and attaches it to your latest GitHub Release. The knowledge base
+`kb-docs.tar.gz`, and attaches it to your latest GitHub Release. The knowledge base
 picks it up on its next build and gives every doc its own catalog card and URL.
 
 > Choosing between the three onboarding types:
@@ -13,7 +14,7 @@ picks it up on its next build and gives every doc its own catalog card and URL.
 > | Type | Use when | Cost to your repo |
 > |---|---|---|
 > | **single-page** | You have markdown files, not a docs *site* | one workflow file |
-> | *default* (packaged) | You have a real static docs site (mkdocs, Starlight…) | headless build + `marketplace.json` + release workflow — see [HEADLESS_RULES.md](./HEADLESS_RULES.md) |
+> | *default* (packaged) | You have a real static docs site (mkdocs, Starlight…) | headless build + `kb-docs.json` + release workflow — see [HEADLESS_RULES.md](./HEADLESS_RULES.md) |
 > | *iframe* | Your docs are already hosted elsewhere and can't be packaged yet | an `apps.json` entry — explicit stopgap, see [HEADLESS_RULES.md](./HEADLESS_RULES.md) |
 
 ---
@@ -67,7 +68,7 @@ That is the entire onboarding on your side. Multiple docs go in the same list:
 | Input | Required | Default | Description |
 |---|---|---|---|
 | `docs` | ✅ | — | YAML (or JSON) **list** of doc definitions — see below |
-| `release-tag` | ☐ | the triggering release, else the repo's latest | Release to attach `dist.tar.gz` to |
+| `release-tag` | ☐ | the triggering release, else the repo's latest | Release to attach `kb-docs.tar.gz` to |
 | `github-token` | ☐ | `${{ github.token }}` | Needs `contents: write` |
 
 ### Each doc definition
@@ -90,7 +91,7 @@ naming the entry and the fix.
 |---|---|
 | `slugs` | Comma-separated list of published slugs |
 | `count` | Number of docs in the bundle |
-| `artifact` | Absolute path of the packed `dist.tar.gz` |
+| `artifact` | Absolute path of the packed `kb-docs.tar.gz` |
 | `release-tag` | Tag the bundle was uploaded to |
 
 ### Prerequisite: a release must exist
@@ -108,15 +109,15 @@ Open a PR against `AbsaOSS/knowledge-base` adding **one** entry to `apps.json`:
 ```json
 {
   "repo": "AbsaOSS/my-service",
-  "type": "single-page",
   "version": "latest"
 }
 ```
 
-Note what is *not* there: no slug, no name, no description, no icon, no tags. All
-of it is discovered from the bundle, so adding, renaming or removing a doc later
-never touches the knowledge base repo again — publish a new release and the next
-knowledge-base build picks it up.
+Note what is *not* there: no slug, no name, no description, no icon, no tags, and
+no type. All of it is read from your manifest, so adding, renaming or removing a
+doc later never touches the knowledge base repo again — publish a new release and
+the next knowledge-base build picks it up. It is also the same entry a packaged
+docs site gets: the registry records where an artifact comes from, nothing more.
 
 `version` accepts `latest` (default) or a pinned tag such as `v1.4.0`.
 
@@ -176,10 +177,10 @@ single-page doc; package it as a full static site instead
 
 ### Artifact layout
 
-`dist.tar.gz` unpacks to a `bundle.json` manifest plus one directory per doc:
+`kb-docs.tar.gz` unpacks to a `kb-docs.json` manifest plus one directory per doc:
 
 ```
-bundle.json
+kb-docs.json
 my-service/
   index.html
   assets/doc.css
@@ -191,16 +192,15 @@ my-service-releases/
   assets/doc.css
 ```
 
-### `bundle.json`
+### `kb-docs.json`
 
 ```json
 {
-  "marketplaceVersion": "1",
-  "type": "single-page",
-  "docs": [
+  "kbVersion": "1",
+  "apps": [
     {
       "slug": "my-service",
-      "title": "Service Overview",
+      "name": "Service Overview",
       "description": "What the service does and how to use it.",
       "icon": "cube",
       "tags": ["platform", "api"],
@@ -210,15 +210,14 @@ my-service-releases/
 }
 ```
 
-| Field | Required | Description |
-|---|---|---|
-| `marketplaceVersion` | ✅ | Contract version. Must be `"1"`. |
-| `type` | ✅ | Must be `"single-page"`. |
-| `docs` | ✅ | Non-empty list. Each doc needs `slug`, `title` and `description`; `icon`, `tags` and `entryPoint` (default `index.html`) are optional. |
+Your `title` becomes the app's `name`; everything else carries over as you wrote
+it. One entry per doc.
 
-`bundle.json` is the single-page counterpart of `marketplace.json` — one manifest
-describing a *set* of apps rather than one app. Packaged doc sites keep using
-`marketplace.json` and [`schema.json`](./schema.json) unchanged.
+This is the same manifest a packaged documentation site publishes, specified in
+[`ARTIFACT.md`](./ARTIFACT.md) and validated against
+[`kb-docs.schema.json`](./kb-docs.schema.json). There is no separate single-page
+format: a set of markdown docs is a manifest listing several apps, a docs site is
+a manifest listing one, and the knowledge base reads both the same way.
 
 ### Generated HTML
 
@@ -261,7 +260,7 @@ only navigation; there is no sidebar and no in-app chrome.
 | `md "…" does not exist in the repository` | Wrong path, or `actions/checkout` is missing from the job. |
 | `slug "…" is invalid` | Slugs are lowercase kebab-case only — no underscores, capitals or spaces. |
 | `Duplicate app slug "…"` (knowledge-base build) | Another registered app already owns that URL prefix. Rename yours and republish. |
-| `the release artifact has no bundle.json at its root` | The release's `dist.tar.gz` was not produced by this action. |
+| `the release artifact has no kb-docs.json at its root` | The release's `kb-docs.tar.gz` was not produced by this action. |
 
 ---
 
@@ -270,5 +269,5 @@ only navigation; there is no sidebar and no in-app chrome.
 - [ ] `.github/workflows/publish-docs.yml` added, with `permissions: contents: write`
 - [ ] Every `slug` is lowercase kebab-case and prefixed with your service name
 - [ ] Each `description` is 10–280 characters
-- [ ] The workflow ran and `dist.tar.gz` is attached to the release
-- [ ] A PR adds the `{ "repo": …, "type": "single-page" }` entry to `apps.json`
+- [ ] The workflow ran and `kb-docs.tar.gz` is attached to the release
+- [ ] A PR adds the `{ "repo": … }` entry to `apps.json`

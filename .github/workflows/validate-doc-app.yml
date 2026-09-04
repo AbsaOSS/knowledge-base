@@ -1,190 +1,70 @@
-# Reusable workflow — validate a doc app against the knowledge-base contract.
+# Reusable workflow — DEPRECATED.
 #
-# Called by doc-app repos in their own CI to verify the app meets the knowledge base
-# contract before raising a PR or publishing a release.
+# This workflow validated a doc app against the pre-v1 contract: a
+# `marketplace.json` in the repo root, a `dist/` produced by
+# `npm run build -- --headless`, and a schema fetched from
+# `contract/schema.json`.
 #
-# Usage in a doc repo (.github/workflows/validate.yml):
+# None of those exist any more. The v1 contract is one release asset,
+# `kb-docs.tar.gz`, carrying a `kb-docs.json` manifest — see
+# `contract/ARTIFACT.md`. Validation is no longer a separate workflow a doc repo
+# has to remember to call: the publishing action validates the manifest and the
+# built HTML before it packs anything, so a repo that publishes is a repo that
+# was checked.
 #
-#   jobs:
-#     validate:
-#       uses: AbsaOSS/knowledge-base/.github/workflows/validate-doc-app.yml@master
+# Replace a call to this workflow with the publishing step itself:
 #
-# The calling repo must have:
-#   - marketplace.json in the repo root
-#   - `npm run build -- --headless` producing dist/
+#   - uses: actions/checkout@v4
+#   - run: <your headless build>
+#   - uses: AbsaOSS/knowledge-base/actions/publish-docs@v1
+#     with:
+#       manifest: kb-docs.json
+#       dist: dist
 #
-name: Validate Doc App
+# It fails loudly rather than silently passing, because a green check against a
+# contract that no longer exists is worse than no check.
+#
+# Removed once the migration is done — see issue #76.
+name: Validate Doc App (deprecated)
 
 on:
   workflow_call:
     inputs:
       node-version:
-        description: 'Node.js version to use'
+        description: 'Unused. Kept so an existing caller fails on the message below rather than on an unexpected-input error.'
         type: string
+        required: false
         default: '24'
 
 permissions:
   contents: read
 
 jobs:
-  validate:
-    name: Validate knowledge base contract
+  deprecated:
+    name: Deprecated — use actions/publish-docs
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-
-      - name: Setup Node.js
-        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
-        with:
-          node-version: ${{ inputs.node-version }}
-          cache: npm
-
-      - name: Install dependencies
-        run: npm ci
-
-      # ── Validate marketplace.json ──────────────────────────────────────────
-      - name: Validate marketplace.json exists
+      - name: Explain the replacement
         run: |
-          if [ ! -f marketplace.json ]; then
-            echo "::error file=marketplace.json::marketplace.json not found in repo root."
-            echo "See https://github.com/AbsaOSS/knowledge-base/blob/master/contract/HEADLESS_RULES.md"
-            exit 1
-          fi
-          echo "✓ marketplace.json found"
+          {
+            echo "### This workflow is deprecated"
+            echo
+            echo "It validated the pre-v1 contract (\`marketplace.json\` + \`dist/\`), which no longer exists."
+            echo
+            echo "The v1 contract is a single \`kb-docs.tar.gz\` release asset carrying a \`kb-docs.json\` manifest."
+            echo "Validation now happens inside the publishing action, so replace your call to this workflow with:"
+            echo
+            echo '```yaml'
+            echo "- uses: actions/checkout@v4"
+            echo "- run: <your headless build>"
+            echo "- uses: AbsaOSS/knowledge-base/actions/publish-docs@v1"
+            echo "  with:"
+            echo "    manifest: kb-docs.json"
+            echo "    dist: dist"
+            echo '```'
+            echo
+            echo "See https://github.com/AbsaOSS/knowledge-base/blob/master/contract/ARTIFACT.md"
+          } >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Validate marketplace.json schema
-        run: |
-          # ajv may not be a dependency of the doc repo — install it transiently.
-          npm install --no-save ajv@^8
-          node --input-type=module <<'EOF'
-          import { readFileSync } from 'node:fs';
-          import Ajv from 'ajv';
-
-          const manifest = JSON.parse(readFileSync('marketplace.json', 'utf8'));
-          const schemaUrl =
-            'https://raw.githubusercontent.com/AbsaOSS/knowledge-base/master/contract/schema.json';
-
-          const res = await fetch(schemaUrl);
-          if (!res.ok) {
-            console.warn('⚠ Could not fetch remote schema — skipping schema validation');
-            process.exit(0);
-          }
-          const schema = await res.json();
-          const validate = new Ajv({ allErrors: true }).compile(schema);
-
-          if (!validate(manifest)) {
-            console.error('✗ marketplace.json validation errors:');
-            for (const err of validate.errors) {
-              console.error(`  ${err.instancePath || '/'}: ${err.message}`);
-            }
-            process.exit(1);
-          }
-          console.log('✓ marketplace.json is valid');
-          EOF
-
-      # ── Build headless ─────────────────────────────────────────────────────
-      - name: Build headless
-        run: npm run build -- --headless
-
-      # ── Check dist/ output ─────────────────────────────────────────────────
-      - name: Check dist/ exists
-        run: |
-          if [ ! -d dist ]; then
-            echo "::error::dist/ directory not found after build. Check your build script."
-            exit 1
-          fi
-          echo "✓ dist/ exists"
-
-      - name: Check entryPoint exists
-        run: |
-          ENTRY=$(node -e "const m=require('./marketplace.json'); console.log(m.entryPoint || 'index.html')")
-          if [ ! -f "dist/${ENTRY}" ]; then
-            echo "::error::dist/${ENTRY} (entryPoint) not found after headless build."
-            exit 1
-          fi
-          echo "✓ dist/${ENTRY} found"
-
-      # ── Validate headless HTML structure ───────────────────────────────────
-      - name: Check data-kb-headless attribute
-        run: |
-          ENTRY=$(node -e "const m=require('./marketplace.json'); console.log(m.entryPoint || 'index.html')")
-          if ! grep -q 'data-kb-headless="true"' "dist/${ENTRY}"; then
-            echo "::error file=dist/${ENTRY}::Missing data-kb-headless=\"true\" on <html> element."
-            echo "Add data-kb-headless=\"true\" to the <html> tag when building with --headless."
-            exit 1
-          fi
-          echo "✓ data-kb-headless=\"true\" found"
-
-      - name: Check no fixed site header in headless output
-        run: |
-          VIOLATIONS=$(grep -rl 'class="[^"]*fixed[^"]*top-0[^"]*inset-x-0' dist/ || true)
-          if [ -n "$VIOLATIONS" ]; then
-            echo "::warning::Found potential fixed top-bar elements in headless output:"
-            echo "$VIOLATIONS"
-            echo "Ensure the site header is omitted when building with --headless."
-          else
-            echo "✓ No fixed site headers detected in headless output"
-          fi
-
-      - name: Check all asset paths are relative
-        run: |
-          node --input-type=module <<'EOF'
-          import { readdirSync, statSync, readFileSync } from 'node:fs';
-          import { join, extname } from 'node:path';
-
-          function collectHtml(dir) {
-            const files = [];
-            for (const e of readdirSync(dir)) {
-              const p = join(dir, e);
-              if (statSync(p).isDirectory()) files.push(...collectHtml(p));
-              else if (extname(e) === '.html') files.push(p);
-            }
-            return files;
-          }
-
-          let violations = 0;
-          for (const file of collectHtml('dist')) {
-            const html = readFileSync(file, 'utf8');
-            const matches = [...html.matchAll(/(?:href|src|action)="(\/[^/"'][^"]*?)"/g)];
-            for (const [, path] of matches) {
-              if (!path.startsWith('//') && !path.startsWith('/favicon')) {
-                console.error(`::warning file=${file}::Absolute path found: ${path}`);
-                violations++;
-              }
-            }
-          }
-          if (violations > 0) {
-            console.error(
-              `\n${violations} absolute path(s) found. The knowledge-base mounts each app under ` +
-              `/knowledge-base/{slug}/ and rewrites relative paths — absolute paths will 404.`,
-            );
-            process.exit(1);
-          }
-          console.log('✓ All asset paths are relative');
-          EOF
-
-      # ── Design tokens (soft check) ─────────────────────────────────────────
-      - name: Check knowledge-base design tokens in CSS
-        run: |
-          CSS_FILES=$(find dist/ -name "*.css" | head -5)
-          if [ -z "$CSS_FILES" ]; then
-            echo "::warning::No CSS files found in dist/"
-          else
-            FOUND=false
-            for f in $CSS_FILES; do
-              if grep -q -- '--color-kb-500\|#af144b' "$f"; then
-                FOUND=true
-                break
-              fi
-            done
-            if [ "$FOUND" = "false" ]; then
-              echo "::warning::knowledge-base brand token (--color-kb-500 / #af144b) not found in dist CSS."
-              echo "See contract/STYLE_GUIDE.md for the design-token contract."
-            else
-              echo "✓ knowledge-base design tokens detected in CSS"
-            fi
-          fi
-
-      - name: Validation summary
-        run: echo "✓ All contract checks passed for $(node -e "console.log(require('./marketplace.json').slug)")"
+          echo "::error::validate-doc-app.yml is deprecated. The pre-v1 contract it checked (marketplace.json + dist/) no longer exists. Use AbsaOSS/knowledge-base/actions/publish-docs@v1 instead — see contract/ARTIFACT.md."
+          exit 1

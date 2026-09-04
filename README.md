@@ -12,7 +12,7 @@
 build time it:
 
 1. Obtains each registered app's built output (`dist/`) — from a **GitHub Release
-   artifact** (`dist.tar.gz`), a **local repo**, or a **prebuilt** tarball/dir.
+   artifact** (`kb-docs.tar.gz`), a **local repo**, or a **prebuilt** tarball/dir.
 2. Rewrites every page's URLs to absolute `/knowledge-base/{slug}/…` paths and
    re-hosts each document under a persistent **masthead** (branding + Library /
    current-app navigation), the same in both modes.
@@ -102,7 +102,7 @@ Each entry registers one doc app. A `slug` is required; the source is one of
     // pick ONE source:
     "repo": "AbsaOSS/my-docs", "version": "latest", // GitHub Release artifact
     // "localPath": "../my-docs",                    // build from local checkout
-    // "prebuilt": "tests/fixtures/my-docs.dist.tar.gz" // prebuilt tarball or dist dir
+    // "prebuilt": "tests/fixtures/my-docs.kb-docs.tar.gz" // prebuilt tarball or dist dir
   }
 ]
 ```
@@ -118,7 +118,7 @@ never quietly produce an empty deployment.
 
 Teams that already host their docs elsewhere and can't yet produce a headless
 package can be listed immediately with an **iframe** entry — no `repo`,
-`marketplace.json`, or artifact needed. It renders as a full-viewport `<iframe>`
+manifest, or artifact needed. It renders as a full-viewport `<iframe>`
 below the knowledge base masthead and shows an **External** badge in the catalogue.
 
 ```jsonc
@@ -167,20 +167,19 @@ jobs:
 
 The action ([`actions/publish-single-page-docs/`](actions/publish-single-page-docs)) renders the markdown
 to headless HTML — GFM tables, task lists, footnotes, highlighted code and
-vendored-mermaid diagrams — packs every doc into one `dist.tar.gz` with a
-`bundle.json` manifest, and attaches it to the repo's latest release.
+vendored-mermaid diagrams — packs every doc into one `kb-docs.tar.gz` with a
+`kb-docs.json` manifest, and attaches it to the repo's latest release.
 
 The registry entry then carries **no per-doc metadata at all**:
 
 ```jsonc
 {
   "repo": "AbsaOSS/my-service",
-  "type": "single-page",
   "version": "latest"
 }
 ```
 
-The build reads `bundle.json` and expands that one entry into one app per doc —
+The build reads `kb-docs.json` and expands that one entry into one app per doc —
 each with its own catalogue card and URL — so adding or renaming a doc later
 never touches this repository again. Pages render with the masthead and a centred
 reading column, no sidebar. See [`contract/SINGLE_PAGE.md`](contract/SINGLE_PAGE.md)
@@ -189,7 +188,7 @@ and issue #35.
 #### Seeing it for real
 
 `knowledge-base-example-single-page` is a mock docs repo — three markdown files
-and the workflow above, nothing else — whose `dist.tar.gz` is produced by the
+and the workflow above, nothing else — whose `kb-docs.tar.gz` is produced by the
 real action. Check it out next to this repo and:
 
 ```bash
@@ -279,57 +278,56 @@ Apps must comply with the knowledge base contract before they can be registered:
 
 | Document | Description |
 |---|---|
-| [`contract/schema.json`](contract/schema.json) | JSON Schema for `marketplace.json` |
+| [`contract/ARTIFACT.md`](contract/ARTIFACT.md) | Normative: artifact layout, manifest, archive and size rules |
+| [`contract/kb-docs.schema.json`](contract/kb-docs.schema.json) | JSON Schema for `kb-docs.json` |
 | [`contract/HEADLESS_RULES.md`](contract/HEADLESS_RULES.md) | Headless HTML, relative paths, `data-kb-headless` |
 | [`contract/STYLE_GUIDE.md`](contract/STYLE_GUIDE.md) | Design tokens (`--color-kb-*`) and typography — light only; the knowledge base has no dark mode |
-| [`contract/SINGLE_PAGE.md`](contract/SINGLE_PAGE.md) | `bundle.json` format + zero-config markdown onboarding |
+| [`contract/SINGLE_PAGE.md`](contract/SINGLE_PAGE.md) | Zero-config markdown onboarding |
 
 > The checklist and workflows below apply to **packaged** doc apps. Single-page
 > docs skip all of it — the action produces a compliant artifact for you.
 
 ### Checklist
-- [ ] `marketplace.json` in repo root, valid against `contract/schema.json`
+- [ ] `kb-docs.json` in repo root, valid against `contract/kb-docs.schema.json`
 - [ ] `npm run build -- --headless` produces a headless `dist/`
 - [ ] `data-kb-headless="true"` on `<html>` in headless output
 - [ ] No fixed site-level header in headless output
 - [ ] All asset paths relative (no leading `/`)
-- [ ] GitHub Release tagged `v*` with a `dist.tar.gz` asset
+- [ ] GitHub Release with a `kb-docs.tar.gz` asset
 
 ### Reusable validation workflow
 
-Doc repos can enforce the contract in their own CI:
-
-```yaml
-# .github/workflows/validate.yml (in your doc repo)
-on: [push, pull_request]
-jobs:
-  validate:
-    uses: AbsaOSS/knowledge-base/.github/workflows/validate-doc-app.yml@master
-```
+Doc repos do not need a separate validation workflow: the publishing action
+validates the manifest and the built HTML before it packs anything, so a repo
+that publishes successfully is a repo that met the contract.
 
 ### Release workflow for doc repos
 
+Build the site, then hand the output to the publishing action. It validates the
+manifest, checks the HTML against the contract, packs `kb-docs.tar.gz` and
+uploads it to the release — the repo does not assemble the archive itself.
+
 ```yaml
-# .github/workflows/release.yml (in your doc repo)
+# .github/workflows/publish-docs.yml (in your doc repo)
 on:
-  push:
-    tags: ['v*']
+  release:
+    types: [published]
 permissions:
   contents: write
 jobs:
-  release:
+  publish:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
-        with: { node-version: '24', cache: npm }
-      - run: npm ci
-      - run: npm run build -- --headless
-      - run: tar -czf dist.tar.gz dist/ marketplace.json
-      - uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2.6.2
+      - run: npm ci && npm run build -- --headless
+      - uses: AbsaOSS/knowledge-base/actions/publish-docs@v1
         with:
-          files: dist.tar.gz
+          manifest: kb-docs.json
+          dist: dist
 ```
+
+The archive layout and the manifest are specified in
+[`contract/ARTIFACT.md`](contract/ARTIFACT.md).
 
 ---
 
@@ -373,7 +371,7 @@ knowledge-base/
 │   └── utils/
 │       ├── apps.js            ← loadRegistry() + getAppPages() page enumeration
 │       ├── config.js          ← PATH_PREFIX / BASE_PATH + isHeadlessBuild()
-│       ├── single-page.js     ← bundle.json parsing + registry expansion
+│       ├── single-page.js     ← manifest parsing + registry expansion
 │       └── transform.js       ← parse5 URL rewriting + sub-app document splitting
 ├── scripts/
 │   ├── build-vite.js          ← Build orchestrator
@@ -393,8 +391,8 @@ knowledge-base/
 │   ├── host/server.mjs        ← Reference web-fragments host (gateway)
 │   ├── fragment-server.mjs    ← nginx-mirroring static server
 │   ├── support/fragment.js    ← Shadow-DOM test helpers
-│   └── fixtures/              ← Vendored docs-example dist.tar.gz + single-page bundle
-├── contract/                  ← marketplace.json schema + rules + style guide
+│   └── fixtures/              ← Vendored docs-example tarball + single-page bundle
+├── contract/                  ← Artifact contract: schema, rules, style guide
 ├── .github/workflows/         ← ci.yml, pages.yml, pr-requirements.yml,
 │                                 validate-doc-app.yml (reusable, for doc repos)
 ├── Dockerfile

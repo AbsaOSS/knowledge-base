@@ -11,7 +11,7 @@ import { existsSync, statSync } from 'node:fs';
 import { isAbsolute, join, normalize, relative, sep } from 'node:path';
 import YAML from 'yaml';
 
-/** Icon set — kept in sync with contract/schema.json. */
+/** Icon set — kept in sync with contract/kb-docs.schema.json. */
 export const ICONS = [
   'book-open', 'cube', 'chip', 'chart-bar', 'shield',
   'cog', 'terminal', 'globe', 'layers', 'lightning-bolt',
@@ -20,7 +20,7 @@ export const ICONS = [
 
 export const DEFAULT_ICON = 'book-open';
 
-/** Same rule as contract/schema.json, minus leading/trailing/double hyphens. */
+/** Same rule as contract/kb-docs.schema.json, minus leading/trailing/double hyphens. */
 const SLUG_RE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 
 const MIN_DESCRIPTION = 10;
