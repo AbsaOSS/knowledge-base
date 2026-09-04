@@ -1,9 +1,9 @@
 /**
- * selftest.js — `npm run selftest` inside actions/publish-single-page-docs.
+ * selftest.js — `npm run selftest:single-page` inside actions/.
  *
  * Exercises the action without a runner: renders a sample markdown file through
  * the real pipeline and asserts the markdown features the contract promises, the
- * headless rules, and the shape of bundle.json. Also pins the validation error
+ * headless rules, and the shape of kb-docs.json. Also pins the validation error
  * messages, since those are the action's user interface for onboarding repos.
  *
  * Kept out of the knowledge base's Playwright suite on purpose: that suite must stay
@@ -11,11 +11,12 @@
  */
 
 import assert from 'node:assert/strict';
+import { execFileSync } from 'node:child_process';
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync, mkdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { buildBundle, packBundle, BUNDLE_MANIFEST } from './bundle.js';
+import { buildBundle, packBundle, ASSET_NAME, MANIFEST } from './bundle.js';
 import { InputError, parseDocsInput, validateDocs } from './inputs.js';
 import { renderMarkdown } from './markdown.js';
 
@@ -139,18 +140,20 @@ try {
   const { manifest } = buildBundle(docs, stage);
   const html = readFileSync(join(stage, 'my-service', 'index.html'), 'utf8');
 
-  check('manifest declares the single-page type and every doc', () => {
-    assert.equal(manifest.marketplaceVersion, '1');
-    assert.equal(manifest.type, 'single-page');
-    assert.deepEqual(manifest.docs, [{
+  check('manifest is a contract kb-docs.json listing every doc as an app', () => {
+    assert.equal(manifest.kbVersion, '1');
+    // No `type`, no `docs`: a markdown bundle and a packaged site publish the
+    // same manifest, and buildManifest validates it against the contract schema
+    // before this ever returns.
+    assert.deepEqual(manifest.apps, [{
       slug: 'my-service',
-      title: 'Service Overview',
+      name: 'Service Overview',
       description: 'What the service does and how to use it.',
       icon: 'cube',
       tags: ['platform', 'api'],
       entryPoint: 'index.html',
     }]);
-    assert.ok(existsSync(join(stage, BUNDLE_MANIFEST)));
+    assert.ok(existsSync(join(stage, MANIFEST)));
   });
 
   check('document complies with contract/HEADLESS_RULES.md', () => {
@@ -207,9 +210,23 @@ try {
     assert.match(css, /\.kb-doc\b/);
   });
 
-  check('packs a tarball with bundle.json at the root', () => {
-    const tar = packBundle(stage, join(root, 'out', 'dist.tar.gz'));
+  check('packs a tarball with kb-docs.json at the root', () => {
+    const tar = packBundle(stage, join(root, 'out', ASSET_NAME), manifest);
     assert.ok(existsSync(tar));
+    const members = execFileSync('tar', ['--force-local', '-tzf', tar], { encoding: 'utf8' })
+      .split('\n').filter(Boolean);
+    assert.ok(members.includes(MANIFEST), `expected ${MANIFEST} at the archive root`);
+    assert.ok(members.some((m) => m.startsWith('my-service/')), 'expected the doc directory');
+    // No wrapper directory, and nothing the manifest does not declare.
+    assert.ok(!members.some((m) => m.startsWith('./') || m.startsWith('dist/')), members.join(' '));
+  });
+
+  check('packing is deterministic — identical input, identical bytes', () => {
+    // Republishing an unchanged doc set must not produce a different asset, or
+    // nobody can tell a real change from a rebuild.
+    const a = packBundle(stage, join(root, 'out', 'a.tar.gz'), manifest);
+    const b = packBundle(stage, join(root, 'out', 'b.tar.gz'), manifest);
+    assert.deepEqual(readFileSync(a), readFileSync(b));
   });
 
   // ── Sanitisation ───────────────────────────────────────────────────────────

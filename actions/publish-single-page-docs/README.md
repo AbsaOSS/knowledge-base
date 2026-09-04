@@ -5,7 +5,7 @@ your repository's latest GitHub Release as `dist.tar.gz`, ready for the AbsaOSS
 knowledge base to pick up.
 
 ```yaml
-- uses: AbsaOSS/knowledge-base/actions/publish-single-page-docs@master
+- uses: AbsaOSS/knowledge-base/actions/publish-single-page-docs@v1
   with:
     docs: |
       - md: docs/overview.md
@@ -14,8 +14,13 @@ knowledge base to pick up.
         slug: my-service
 ```
 
-**Full documentation — inputs, `bundle.json`, the copy-paste workflow and
-troubleshooting — lives in [`contract/SINGLE_PAGE.md`](../../contract/SINGLE_PAGE.md).**
+**Full documentation — inputs, the copy-paste workflow and troubleshooting — lives
+in [`contract/SINGLE_PAGE.md`](../../contract/SINGLE_PAGE.md); the artifact and
+manifest it produces are specified in
+[`contract/ARTIFACT.md`](../../contract/ARTIFACT.md).**
+
+If your docs are a real site rather than a markdown file or two, you want
+[`publish-docs`](../publish-docs) instead.
 
 ---
 
@@ -28,19 +33,21 @@ troubleshooting — lives in [`contract/SINGLE_PAGE.md`](../../contract/SINGLE_P
 | `src/inputs.js` | Parses and validates the `docs` list. Every message names the entry and the fix. |
 | `src/markdown.js` | markdown-it pipeline: GFM, highlight.js, mermaid passthrough. |
 | `src/template.js` | The headless document shell and `assets/doc.css`. **Dependency-free** — also imported by the knowledge base's test fixture generator, so the fixture cannot drift from real output. |
-| `src/bundle.js` | Stages the doc directories, writes `bundle.json`, packs the tarball. |
+| `src/bundle.js` | Stages the doc directories, then delegates the manifest and the packing to `actions/lib/`. |
 | `src/selftest.js` | `npm run selftest` — renders a sample end to end and pins the validation messages. |
 
-Dependencies are pinned and vendored here (`package.json` + `package-lock.json`)
-rather than in the repository root, so the action stays self-contained and an
-onboarding repo needs no toolchain of its own.
+Dependencies are pinned once in [`actions/package.json`](../package.json), shared
+with the packaged-site action, so an onboarding repo needs no toolchain of its
+own. Manifest validation, deterministic packing and the runner plumbing live in
+[`actions/lib/`](../lib) and are the same code both actions run.
 
 ## Working on it
 
 ```bash
-cd actions/publish-single-page-docs
+cd actions
 npm ci
-npm run selftest
+npm run selftest                # both actions
+npm run selftest:single-page    # this one
 ```
 
 The self-test is deliberately **not** part of the knowledge base's Playwright

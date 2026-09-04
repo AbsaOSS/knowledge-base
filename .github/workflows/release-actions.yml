@@ -1,0 +1,61 @@
+# Moves the floating major tag for the publishing actions.
+#
+# Consuming repos pin `AbsaOSS/knowledge-base/actions/publish-docs@v1` rather
+# than `@master`: a branch means every doc repo picks up an unreleased change the
+# moment it merges, which is exactly what a contract must not do.
+#
+# Push a semver tag here and this moves `vN` to it:
+#
+#   git tag v1.2.0 && git push origin v1.2.0     ->  v1 now points at v1.2.0
+#
+# A breaking contract change is a new major: cut v2.0.0, this creates `v2`, and
+# repos pinned to `v1` keep publishing against the contract they were written
+# for until they choose to move. The manifest's `kbVersion` moves with it.
+name: Release actions
+
+on:
+  push:
+    tags: ['v*.*.*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Existing semver tag to point the major tag at (e.g. v1.2.0)'
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  move-major-tag:
+    name: Move the floating major tag
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Point the major tag at this release
+        env:
+          # Through the environment, never interpolated into the script body: a
+          # ${{ }} expression is substituted before bash parses the line (#55).
+          KB_TAG: ${{ github.event.inputs.tag || github.ref_name }}
+        run: |
+          set -euo pipefail
+
+          if ! printf '%s' "$KB_TAG" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "::error::'$KB_TAG' is not a vMAJOR.MINOR.PATCH tag."
+            exit 1
+          fi
+          if ! git rev-parse -q --verify "refs/tags/$KB_TAG" >/dev/null; then
+            echo "::error::Tag '$KB_TAG' does not exist in this repository."
+            exit 1
+          fi
+
+          major="${KB_TAG%%.*}"
+
+          git config user.name  'github-actions[bot]'
+          git config user.email 'github-actions[bot]@users.noreply.github.com'
+          git tag -f "$major" "$KB_TAG"
+          git push -f origin "refs/tags/$major"
+
+          echo "\`$major\` now points at \`$KB_TAG\`." >> "$GITHUB_STEP_SUMMARY"

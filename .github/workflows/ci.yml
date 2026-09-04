@@ -102,15 +102,15 @@ jobs:
           path: playwright-report/
           retention-days: 7
 
-  # ── 4. publish-single-page-docs action self-test ───────────────────────────
+  # ── 4. Publishing actions self-test ────────────────────────────────────────
   #
-  # actions/publish-single-page-docs/ ships its own pinned dependency tree, so it is not
-  # covered by the root `npm ci` or by the Playwright suites (which stay hermetic
-  # and must not depend on the action's node_modules). This job renders a sample
-  # markdown file through the real pipeline and pins the validation messages —
-  # they are the action's user interface for onboarding repos.
-  publish-single-page-docs:
-    name: publish-single-page-docs action self-test
+  # actions/ ships its own pinned dependency tree, so it is not covered by the
+  # root `npm ci` or by the Playwright suites (which stay hermetic and must not
+  # depend on the actions' node_modules). This job runs both actions end to end
+  # and pins their validation messages — those messages are the whole interface a
+  # docs repo has with the contract.
+  actions:
+    name: Publishing actions self-test
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -119,21 +119,21 @@ jobs:
           # Matches the node-version the composite action pins in action.yml.
           node-version: '20'
           cache: npm
-          cache-dependency-path: actions/publish-single-page-docs/package-lock.json
+          cache-dependency-path: actions/package-lock.json
       - run: npm ci
-        working-directory: actions/publish-single-page-docs
+        working-directory: actions
       # Action manifests are only parsed by *consuming* repositories' runners, so
       # a syntax error here ships green and breaks every downstream workflow at
       # "Set up job" (#39). Parse them with the same pinned `yaml` package the
       # action already depends on, so this needs no extra tooling.
       - name: Validate action manifests
-        working-directory: actions/publish-single-page-docs
+        working-directory: actions
         run: |
           node -e '
             const fs = require("node:fs");
             const path = require("node:path");
             const YAML = require("yaml");
-            const root = path.resolve("../..");
+            const root = path.resolve("..");
             const files = [];
             (function walk(dir) {
               for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
@@ -161,7 +161,7 @@ jobs:
             process.exit(failed === 0 ? 0 : 1);
           '
       - run: npm run selftest
-        working-directory: actions/publish-single-page-docs
+        working-directory: actions
 
   # ── 5. Container image ─────────────────────────────────────────────────────
   #

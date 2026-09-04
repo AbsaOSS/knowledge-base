@@ -10,7 +10,7 @@
  *   KB_DOCS       (required) YAML/JSON list of doc definitions
  *   KB_WORKSPACE  repo checkout root                    (default: cwd)
  *   KB_STAGE      staging directory for the bundle      (default: <cwd>/.kb-single-page)
- *   KB_ARTIFACT   destination tarball                   (default: <stage>/../dist.tar.gz)
+ *   KB_ARTIFACT   destination tarball                   (default: <stage>/../kb-docs.tar.gz)
  *   GITHUB_OUTPUT step-output file written by the runner (optional)
  */
 
@@ -44,14 +44,14 @@ function main() {
 
   console.log(`Rendering ${docs.length} doc(s) for the knowledge base:`);
   mkdirSync(stageDir, { recursive: true });
-  const { rendered } = buildBundle(docs, stageDir);
+  const { manifest, rendered } = buildBundle(docs, stageDir);
 
   for (const doc of rendered) {
     const extras = doc.usesMermaid ? ' [mermaid]' : '';
     console.log(`  • ${doc.slug.padEnd(24)} ← ${doc.md}${extras}`);
   }
 
-  packBundle(stageDir, artifact);
+  packBundle(stageDir, artifact, manifest);
   console.log(`\nBundle packed: ${artifact}`);
 
   setOutput('artifact', artifact);
