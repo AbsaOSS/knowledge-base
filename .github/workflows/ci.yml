@@ -16,8 +16,10 @@ name: CI
 on:
   push:
     branches: [master, main]
+  # Every pull request, whatever it targets. A base-branch filter here would
+  # skip each layer of a stacked PR except the bottom one, which is exactly the
+  # work that most needs checking before it reaches master.
   pull_request:
-    branches: [master, main]
 
 # Least privilege: jobs only read the repo. Override per-job if more is needed.
 permissions:
