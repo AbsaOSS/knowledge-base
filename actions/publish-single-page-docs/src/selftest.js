@@ -6,7 +6,7 @@
  * headless rules, and the shape of bundle.json. Also pins the validation error
  * messages, since those are the action's user interface for onboarding repos.
  *
- * Kept out of the marketplace's Playwright suite on purpose: that suite must stay
+ * Kept out of the knowledge base's Playwright suite on purpose: that suite must stay
  * hermetic and must not depend on this action's node_modules.
  */
 
@@ -154,11 +154,11 @@ try {
   });
 
   check('document complies with contract/HEADLESS_RULES.md', () => {
-    assert.match(html, /<html lang="en" data-mp-headless="true">/);
+    assert.match(html, /<html lang="en" data-kb-headless="true">/);
     assert.doesNotMatch(html, /<base\b/i);
     assert.doesNotMatch(html, /localStorage/);
     assert.doesNotMatch(html, /\bclass="dark"/);
-    // No site-level header and no sidebar — the marketplace masthead is the chrome.
+    // No site-level header and no sidebar — the knowledge base masthead is the chrome.
     assert.doesNotMatch(html, /<header class="fixed/);
     assert.doesNotMatch(html, /id="sidebar"/);
     // All asset references are relative (no leading slash).
@@ -175,7 +175,7 @@ try {
   });
 
   check('highlights code fences', () => {
-    assert.match(html, /<pre class="mp-code"><code class="hljs language-js">/);
+    assert.match(html, /<pre class="kb-code"><code class="hljs language-js">/);
     assert.match(html, /hljs-keyword/);
   });
 
@@ -193,7 +193,7 @@ try {
       'mermaid init not written',
     );
     // Every <script> must carry a src. An inline one would force the
-    // marketplace's CSP to allow script-src 'unsafe-inline', which would allow
+    // knowledge base's CSP to allow script-src 'unsafe-inline', which would allow
     // an injected script too.
     for (const [tag] of html.matchAll(/<script\b[^>]*>/g)) {
       assert.match(tag, /\bsrc=/, `inline <script> in the document: ${tag}`);
@@ -204,7 +204,7 @@ try {
     assert.match(html, /<link rel="stylesheet" href="assets\/doc\.css">/);
     const css = readFileSync(join(stage, 'my-service', 'assets', 'doc.css'), 'utf8');
     assert.match(css, /--color-kb-500: #af144b;/);
-    assert.match(css, /\.mp-doc\b/);
+    assert.match(css, /\.kb-doc\b/);
   });
 
   check('packs a tarball with bundle.json at the root', () => {
@@ -246,7 +246,7 @@ try {
 
   check('strips inline <style> and style attributes', () => {
     // CSS is not inert: it can exfiltrate through url(), and absolute positioning
-    // lets a doc cover the marketplace masthead.
+    // lets a doc cover the knowledge base masthead.
     const html = rendered('<style>body{background:url("https://evil.example/beacon")}</style>\n\n<p style="position:fixed;inset:0">covered</p>\n');
     assert.doesNotMatch(html, /<style/i);
     assert.doesNotMatch(html, /evil\.example/);
@@ -285,7 +285,7 @@ try {
     ].join('\n'));
 
     assert.match(html, /<h1[^>]*id="heading"/, 'heading anchors');
-    assert.match(html, /class="mp-anchor"/, 'anchor permalinks');
+    assert.match(html, /class="kb-anchor"/, 'anchor permalinks');
     assert.match(html, /task-list-item/, 'task lists');
     // Attribute order is not stable through the sanitiser, so assert each
     // independently rather than pinning a sequence.

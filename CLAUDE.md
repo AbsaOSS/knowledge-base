@@ -72,7 +72,7 @@ Orchestrator: `scripts/build-vite.js`. Flags: `--local`, `--headless`.
 - `src/pages/index.astro` — Landing catalog page
 - `src/utils/apps.js` — `getAppPages()` enumerates sub-app HTML (manifest-driven or filesystem crawl)
 - `src/utils/transform.js` — `transformSubAppHtml()`: URL rewriting, document splitting (head/body/title/body-class), headless transforms
-- `src/layouts/Base.astro` — The one document shell: head, marketplace CSS (which carries the self-hosted Inter faces), `<ClientRouter />`, shadow-DOM compat styles
+- `src/layouts/Base.astro` — The one document shell: head, knowledge base CSS (which carries the self-hosted Inter faces), `<ClientRouter />`, shadow-DOM compat styles
 - `src/components/Masthead.astro` — Persistent Knowledge base header + Library/current-app sub-nav (all pages, both modes)
 - `src/components/AppCard.astro`, `src/components/AppIcon.astro` — Catalog card and its icon
 - `src/templates/shadow-compat.js` — Shadow-DOM design-token styles, injected into the body by the layout
@@ -90,21 +90,21 @@ An `apps.json` entry is one of:
 
 - **default (packaged)** — a repo publishes a headless static site as `dist.tar.gz` plus `marketplace.json`. Every HTML file becomes a route.
 - **`type: "iframe"`** — no artifact; a single route renders a full-viewport `<iframe>` for an external URL. Explicit stopgap (issue #10).
-- **`type: "single-page"`** — one release artifact holding *many* docs, published by `actions/publish-single-page-docs` from plain markdown. The entry carries **no per-doc metadata** (`{ "repo": …, "type": "single-page", "version": "latest" }`); the build reads the artifact's `bundle.json` and **expands** the entry into one app per doc, extracting each into `apps/{slug}/`. The expansion is recorded in `apps/.single-page.json` and spliced back into the registry by `loadRegistry()` so Astro sees the same registry the build did. Slugs must be globally unique — `resolveRegistry()` fails the build otherwise. Rendering: masthead, no sidebar, content in a centred `main.mp-single-page` reading column. See issue #35 and `contract/SINGLE_PAGE.md`.
+- **`type: "single-page"`** — one release artifact holding *many* docs, published by `actions/publish-single-page-docs` from plain markdown. The entry carries **no per-doc metadata** (`{ "repo": …, "type": "single-page", "version": "latest" }`); the build reads the artifact's `bundle.json` and **expands** the entry into one app per doc, extracting each into `apps/{slug}/`. The expansion is recorded in `apps/.single-page.json` and spliced back into the registry by `loadRegistry()` so Astro sees the same registry the build did. Slugs must be globally unique — `resolveRegistry()` fails the build otherwise. Rendering: masthead, no sidebar, content in a centred `main.kb-single-page` reading column. See issue #35 and `contract/SINGLE_PAGE.md`.
 
 ### Two Modes
 
 Both modes render the same document: the masthead (`Masthead.astro`) — branding plus the Library / current-app sub-navigation — on every page, and nothing else chrome-like. There is no fixed top bar and no app switcher; the masthead is the navigation.
 
-**Non-headless** (standalone): Plain marketplace pages. Navigation is Astro's `<ClientRouter />` (view transitions).
+**Non-headless** (standalone): Plain knowledge base pages. Navigation is Astro's `<ClientRouter />` (view transitions).
 
-**Headless** (web-fragment): Marks `data-mp-headless="true"` on `<html>`, for embedding in a web-fragments gateway. That attribute is the only difference in the output — the shadow-DOM compat styles are emitted in both modes.
+**Headless** (web-fragment): Marks `data-kb-headless="true"` on `<html>`, for embedding in a web-fragments gateway. That attribute is the only difference in the output — the shadow-DOM compat styles are emitted in both modes.
 
 Resolution order: a per-app `"headless"` in `apps.json` wins; otherwise `isHeadlessBuild()`.
 
 ### Light Only
 
-The marketplace has no dark mode: no theme toggle, no persisted theme, no `dark` class, no dark palette. A sub-app's own theme bootstrap is removed twice over — `hoist-inline-scripts.js` deletes it while it is still inline, and `transformSubAppHtml()` strips any that reaches Astro, along with a `dark` body class — so an embedding host's theme cannot bleed into the fragment.
+The knowledge base has no dark mode: no theme toggle, no persisted theme, no `dark` class, no dark palette. A sub-app's own theme bootstrap is removed twice over — `hoist-inline-scripts.js` deletes it while it is still inline, and `transformSubAppHtml()` strips any that reaches Astro, along with a `dark` body class — so an embedding host's theme cannot bleed into the fragment.
 
 Known gap: inline `on*` handlers in sub-app HTML are not stripped (#67). They are inert under the CSP but not under `astro dev`.
 
@@ -118,8 +118,8 @@ Root-relative `url()` inside a sub-app's **copied CSS files** is a separate rewr
 
 Apps registered in `apps.json` must comply with:
 - `contract/schema.json` — JSON Schema for `marketplace.json` manifest (packaged apps)
-- `contract/HEADLESS_RULES.md` — Structural requirements (headless HTML, relative paths, `data-mp-headless` attribute)
-- `contract/STYLE_GUIDE.md` — Design tokens and typography (light only — the marketplace has no dark mode)
+- `contract/HEADLESS_RULES.md` — Structural requirements (headless HTML, relative paths, `data-kb-headless` attribute)
+- `contract/STYLE_GUIDE.md` — Design tokens and typography (light only — the knowledge base has no dark mode)
 - `contract/SINGLE_PAGE.md` — `bundle.json` format + the copy-paste onboarding workflow for single-page docs
 
 ## Testing
@@ -133,7 +133,7 @@ Self-contained Playwright E2E — `npm test` auto-starts everything (no external
    `tests/fragment-server.mjs` serves `dist/` mirroring the production **nginx** rewrites
    (`/__wf/knowledge-base/*` → `/knowledge-base/*`). NB: `astro preview` is NOT used — its
    Vite `configurePreviewServer` rewrite hook does not run for static output, so the
-   marketplace CSS 404s; the nginx-mirror server is the faithful fragment endpoint.
+   knowledge base CSS 404s; the nginx-mirror server is the faithful fragment endpoint.
 2. **:4201 host** — `tests/host/server.mjs`, a minimal Express "wrapping web-fragment
    application" (`FragmentGateway` + `getNodeMiddleware`) that proxies/embeds the :3000
    fragment on a single origin via `<web-fragment fragment-id="knowledge-base">`.
@@ -141,7 +141,7 @@ Self-contained Playwright E2E — `npm test` auto-starts everything (no external
 Tests drive the host origin (`http://localhost:4201`). Suites (`tests/`), all four
 commands listed in `AGENTS.md`:
 - `build-integrity.spec.js` — `dist/` output: both apps enumerated, absolute URL rewriting,
-  headless markup and the per-app `"headless"` override, the content-hashed marketplace
+  headless markup and the per-app `"headless"` override, the content-hashed knowledge base
   stylesheet plus its stable `dist/style.css` alias, no inline script anywhere, and
   single-page bundle expansion (`tests/fixtures/single-page-bundle/` → two apps).
 - `transform.spec.js` — unit tests for `transformSubAppHtml()`: the malformed and
@@ -159,7 +159,7 @@ commands listed in `AGENTS.md`:
 
 Two build-pipeline pieces support this: `apps.json` entries may carry a `prebuilt` path
 (tarball or dist dir) consumed by `scripts/build-vite.js` (`preparePrebuilt`) for hermetic
-offline builds; and the build copies the marketplace stylesheet — identified as the local
+offline builds; and the build copies the knowledge base stylesheet — identified as the local
 stylesheet the landing page loads — to a stable `dist/style.css` alias. Pages themselves
 reference the content-hashed bundle Astro injects, so nothing depends on that filename.
 
@@ -172,7 +172,7 @@ in the committed `apps.json` without breaking CI, which only has this repo.
 ## Environment Variables
 
 - `GITHUB_TOKEN` — GitHub API auth for fetching Release artifacts
-- `MP_HEADLESS` — `true` produces web-fragment output; **anything else, including unset, means standalone**. `scripts/build-vite.js` always exports an explicit value, so the default only applies when `astro build`/`astro dev` runs directly. Read it through `isHeadlessBuild()`, never inline. A per-app `"headless"` in `apps.json` overrides it in either direction.
+- `KB_HEADLESS` — `true` produces web-fragment output; **anything else, including unset, means standalone**. `scripts/build-vite.js` always exports an explicit value, so the default only applies when `astro build`/`astro dev` runs directly. Read it through `isHeadlessBuild()`, never inline. A per-app `"headless"` in `apps.json` overrides it in either direction.
 - `AWS_REGION`, `ECR_REPOSITORY`, `ECS_CLUSTER`, `ECS_SERVICE` — deployment config
 - `KB_EXAMPLE_ARTIFACT` — overrides the packaged artifact `scripts/setup-test-apps.mjs` registers
 - `KB_CONTAINER_PORT`, `KB_SKIP_BUILD` — container-suite harness (`tests/container/serve.mjs`); CI sets `KB_SKIP_BUILD` because its image job already built the image

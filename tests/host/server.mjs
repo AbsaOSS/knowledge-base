@@ -43,7 +43,7 @@ gateway.registerFragment({
   // Client-rendered embed (no SSR piercing) — matches the Astro fragment recipe.
   piercing: false,
   // One pattern for pages + _astro assets + ClientRouter fetches, one for the
-  // /__wf/ marketplace CSS route the sub-app HTML references.
+  // /__wf/ knowledge base CSS route the sub-app HTML references.
   routePatterns: ['/knowledge-base/:_*', '/__wf/knowledge-base/:_*'],
   onSsrFetchError: () => ({
     response: new Response('<p>knowledge-base fragment endpoint unreachable</p>', {

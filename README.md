@@ -72,9 +72,9 @@ npm test
 | `npm run build:local` | Build each app from a local checkout (`localPath`) |
 | `npm run build:local:headless` | Local + headless |
 
-`--headless` (or `MP_HEADLESS=true`) produces fragment-ready output, marked with
-`data-mp-headless="true"` on `<html>`. Anything else — including an unset
-`MP_HEADLESS` — means standalone. An individual app can pin either mode with
+`--headless` (or `KB_HEADLESS=true`) produces fragment-ready output, marked with
+`data-kb-headless="true"` on `<html>`. Anything else — including an unset
+`KB_HEADLESS` — means standalone. An individual app can pin either mode with
 `"headless": true|false` in its `apps.json` entry, which wins over the build flag.
 
 Orchestrator: `scripts/build-vite.js` (flags: `--local`, `--headless`).
@@ -119,7 +119,7 @@ never quietly produce an empty deployment.
 Teams that already host their docs elsewhere and can't yet produce a headless
 package can be listed immediately with an **iframe** entry — no `repo`,
 `marketplace.json`, or artifact needed. It renders as a full-viewport `<iframe>`
-below the marketplace masthead and shows an **External** badge in the catalogue.
+below the knowledge base masthead and shows an **External** badge in the catalogue.
 
 ```jsonc
 {
@@ -135,7 +135,7 @@ below the marketplace masthead and shows an **External** badge in the catalogue.
 ```
 
 The external site must permit embedding (its CSP `frame-ancestors` /
-`X-Frame-Options` must not block the marketplace origin). See issue #10.
+`X-Frame-Options` must not block the knowledge base origin). See issue #10.
 
 ### single-page onboarding (markdown, zero config)
 
@@ -275,13 +275,13 @@ app.use(getNodeMiddleware(gateway));           // before host static/catch-all r
 
 ## Contract for doc apps
 
-Apps must comply with the marketplace contract before they can be registered:
+Apps must comply with the knowledge base contract before they can be registered:
 
 | Document | Description |
 |---|---|
 | [`contract/schema.json`](contract/schema.json) | JSON Schema for `marketplace.json` |
-| [`contract/HEADLESS_RULES.md`](contract/HEADLESS_RULES.md) | Headless HTML, relative paths, `data-mp-headless` |
-| [`contract/STYLE_GUIDE.md`](contract/STYLE_GUIDE.md) | Design tokens (`--color-kb-*`) and typography — light only; the marketplace has no dark mode |
+| [`contract/HEADLESS_RULES.md`](contract/HEADLESS_RULES.md) | Headless HTML, relative paths, `data-kb-headless` |
+| [`contract/STYLE_GUIDE.md`](contract/STYLE_GUIDE.md) | Design tokens (`--color-kb-*`) and typography — light only; the knowledge base has no dark mode |
 | [`contract/SINGLE_PAGE.md`](contract/SINGLE_PAGE.md) | `bundle.json` format + zero-config markdown onboarding |
 
 > The checklist and workflows below apply to **packaged** doc apps. Single-page
@@ -290,7 +290,7 @@ Apps must comply with the marketplace contract before they can be registered:
 ### Checklist
 - [ ] `marketplace.json` in repo root, valid against `contract/schema.json`
 - [ ] `npm run build -- --headless` produces a headless `dist/`
-- [ ] `data-mp-headless="true"` on `<html>` in headless output
+- [ ] `data-kb-headless="true"` on `<html>` in headless output
 - [ ] No fixed site-level header in headless output
 - [ ] All asset paths relative (no leading `/`)
 - [ ] GitHub Release tagged `v*` with a `dist.tar.gz` asset
@@ -369,7 +369,7 @@ knowledge-base/
 │   ├── layouts/Base.astro
 │   ├── components/            ← AppCard, AppIcon, Masthead
 │   ├── templates/shadow-compat.js ← Shadow-DOM design-token styles
-│   ├── styles/marketplace.css ← Design tokens + Tailwind
+│   ├── styles/knowledge-base.css ← Design tokens + Tailwind
 │   └── utils/
 │       ├── apps.js            ← loadRegistry() + getAppPages() page enumeration
 │       ├── config.js          ← PATH_PREFIX / BASE_PATH + isHeadlessBuild()

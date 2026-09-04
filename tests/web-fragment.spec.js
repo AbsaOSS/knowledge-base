@@ -10,7 +10,7 @@
  *   1. Shadow-DOM isolation (fragment reframed; host chrome must not leak in)
  *   2. Routing + smooth SPA transitions (fetch + swap, no host reload, history)
  *   3. Cross-app navigation between registered apps
- *   4. Asset loading on the host origin (no 404s; marketplace CSS resolves)
+ *   4. Asset loading on the host origin (no 404s; knowledge base CSS resolves)
  */
 
 import { test, expect } from '@playwright/test';
@@ -60,8 +60,8 @@ test.describe('Shadow-DOM isolation', () => {
   });
 
   test('fragment document is in headless mode', async ({ page }) => {
-    const el = await queryInShadow(page, '[data-mp-headless]');
-    expect(el, 'data-mp-headless not found inside fragment').not.toBeNull();
+    const el = await queryInShadow(page, '[data-kb-headless]');
+    expect(el, 'data-kb-headless not found inside fragment').not.toBeNull();
   });
 
   test('fragment is light only (no dark class)', async ({ page }) => {
@@ -71,8 +71,8 @@ test.describe('Shadow-DOM isolation', () => {
   test('no chrome bar exists; the masthead is the fragment navigation', async ({ page }) => {
     // A fixed chrome bar escaped the shadow boundary and overlapped the host, so
     // it was removed outright — the masthead carries the navigation instead.
-    expect(await queryInShadow(page, '#mp-chrome'), '#mp-chrome must not appear in fragment').toBeNull();
-    expect(await queryInShadow(page, '#mp-masthead'), 'masthead missing from fragment').not.toBeNull();
+    expect(await queryInShadow(page, '#kb-chrome'), '#kb-chrome must not appear in fragment').toBeNull();
+    expect(await queryInShadow(page, '#kb-masthead'), 'masthead missing from fragment').not.toBeNull();
   });
 });
 
@@ -87,7 +87,7 @@ test.describe('Landing catalog', () => {
   });
 
   test('app card links are absolute /knowledge-base/ paths', async ({ page }) => {
-    const hrefs = await shadowHrefs(page, '.mp-card');
+    const hrefs = await shadowHrefs(page, '.kb-card');
     const internal = hrefs.filter(h => h && !h.startsWith('http') && !h.startsWith('#'));
     expect(internal.length).toBeGreaterThan(0);
     for (const h of internal) expect(h).toMatch(/^\/knowledge-base\//);
@@ -161,7 +161,7 @@ test.describe('In-app SPA navigation (smooth, no reload)', () => {
 test.describe('Cross-app navigation', () => {
   test('clicking the User Guide card navigates into that app', async ({ page }) => {
     await gotoFragment(page, '/knowledge-base/');
-    await clickFragmentLink(page, '.mp-card[href="/knowledge-base/user-guide/"]');
+    await clickFragmentLink(page, '.kb-card[href="/knowledge-base/user-guide/"]');
 
     // Showcase/landing of the docs app.
     await waitForFragmentText(page, /Docs Example|MkDocs|Publish/i);
@@ -170,7 +170,7 @@ test.describe('Cross-app navigation', () => {
 
   test('clicking the Guide Mirror card navigates into the second app', async ({ page }) => {
     await gotoFragment(page, '/knowledge-base/');
-    await clickFragmentLink(page, '.mp-card[href="/knowledge-base/guide-mirror/"]');
+    await clickFragmentLink(page, '.kb-card[href="/knowledge-base/guide-mirror/"]');
 
     // The mirror's internal links prove we are inside the guide-mirror slug.
     await page.waitForFunction(() => {
@@ -190,7 +190,7 @@ test.describe('Cross-app navigation', () => {
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Single-page docs (issue #35): one bundle in apps.json, one card and one route
-// per doc, rendered in the marketplace's own reading column.
+// per doc, rendered in the knowledge base's own reading column.
 test.describe('Single-page docs', () => {
   test('expanded docs appear as ordinary catalog cards', async ({ page }) => {
     await gotoFragment(page, '/knowledge-base/');
@@ -198,14 +198,14 @@ test.describe('Single-page docs', () => {
     expect(text).toContain('Platform Overview');
     expect(text).toContain('Release Process');
 
-    const hrefs = await shadowHrefs(page, '.mp-card');
+    const hrefs = await shadowHrefs(page, '.kb-card');
     expect(hrefs).toContain('/knowledge-base/platform-overview/');
     expect(hrefs).toContain('/knowledge-base/release-process/');
   });
 
   test('clicking a doc card navigates into it without reloading the host', async ({ page }) => {
     await gotoFragment(page, '/knowledge-base/');
-    await clickFragmentLink(page, '.mp-card[href="/knowledge-base/platform-overview/"]');
+    await clickFragmentLink(page, '.kb-card[href="/knowledge-base/platform-overview/"]');
 
     await waitForFragmentText(page, /Platform Overview/i);
     expect(await hostStillAlive(page)).toBe(true);
@@ -214,13 +214,13 @@ test.describe('Single-page docs', () => {
   test('renders in the centred column with the masthead and no sidebar', async ({ page }) => {
     await gotoFragment(page, '/knowledge-base/platform-overview/');
 
-    const column = await queryInShadow(page, 'main.mp-single-page');
+    const column = await queryInShadow(page, 'main.kb-single-page');
     expect(column, 'centred reading column missing from fragment').not.toBeNull();
     expect(column.text).toMatch(/Platform Overview/i);
 
     // Nothing but the masthead: a single-page doc ships no navigation of its own.
     expect(await queryInShadow(page, 'nav#sidebar'), 'single-page doc must not render a sidebar').toBeNull();
-    expect(await queryInShadow(page, '#mp-masthead'), 'masthead missing').not.toBeNull();
+    expect(await queryInShadow(page, '#kb-masthead'), 'masthead missing').not.toBeNull();
   });
 });
 
@@ -240,7 +240,7 @@ test.describe('Asset loading on the host origin', () => {
     expect(bad, `host-origin requests returned errors:\n${bad.join('\n')}`).toEqual([]);
   });
 
-  test('marketplace stylesheet resolves through the gateway', async ({ page }) => {
+  test('knowledge base stylesheet resolves through the gateway', async ({ page }) => {
     // /__wf/knowledge-base/style.css → /knowledge-base/style.css → dist/style.css
     const res = await page.request.get('/knowledge-base/style.css');
     expect(res.status(), '/knowledge-base/style.css should resolve (200)').toBe(200);

@@ -121,13 +121,13 @@ add a registry entry that requires network or a sibling checkout without it.
 ### Two build modes, one document
 
 Every page renders through `src/layouts/Base.astro`. Headless (web-fragment) and
-standalone differ only by `data-mp-headless` and the shadow-DOM compat styles —
+standalone differ only by `data-kb-headless` and the shadow-DOM compat styles —
 not by a different layout. Changes that add a mode-specific code path need a
 strong reason.
 
 ### Light only
 
-The marketplace has no dark mode: no theme toggle, no persisted theme, no `dark`
+The knowledge base has no dark mode: no theme toggle, no persisted theme, no `dark`
 class, no dark palette. A sub-app's own theme bootstrap is removed twice:
 `scripts/hoist-inline-scripts.js` deletes it while it is still inline, and
 `src/utils/transform.js` strips any that survives, along with a `dark` body

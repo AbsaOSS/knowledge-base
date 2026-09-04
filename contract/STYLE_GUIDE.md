@@ -1,6 +1,6 @@
 # Style Guide
 
-All doc apps in the marketplace must produce pages that are visually consistent with the
+All doc apps in the knowledge base must produce pages that are visually consistent with the
 the knowledge-base design system. This guide defines the required visual standards.
 
 ---
@@ -52,7 +52,7 @@ Ensure Inter is loaded from Google Fonts or bundled:
 
 ## Dark mode
 
-**There is none.** The marketplace is light-only: no theme toggle, no persisted
+**There is none.** The knowledge base is light-only: no theme toggle, no persisted
 preference, no dark palette.
 
 Do not ship a dark-mode bootstrap. When an app is integrated, the build strips any
@@ -61,7 +61,7 @@ dark theme would be dropped at integration time anyway — and inside a web frag
 it would clash with the host application's own theme.
 
 An app may still define `.dark` styles for its **standalone** deployment; they will
-simply never activate inside the marketplace.
+simply never activate inside the knowledge base.
 
 ---
 
@@ -70,8 +70,8 @@ simply never activate inside the marketplace.
 - Fixed left sidebar, **64px wide** (`w-64`)
 - Background: `var(--bg-card)`
 - Border right: `1px solid var(--border)`
-- `id="sidebar"` required so the marketplace can position it
-- `top: 0` — the marketplace renders no fixed top bar, so nothing needs offsetting
+- `id="sidebar"` required so the knowledge base can position it
+- `top: 0` — the knowledge base renders no fixed top bar, so nothing needs offsetting
 
 ---
 
@@ -143,7 +143,7 @@ padding: 0.75rem 1rem;
 
 - [ ] Only brand color tokens used (no raw hex brand colors)
 - [ ] Inter font loaded
-- [ ] Light CSS variable set defined (no dark set — the marketplace is light-only)
+- [ ] Light CSS variable set defined (no dark set — the knowledge base is light-only)
 - [ ] `id="sidebar"` present on the left navigation
 - [ ] `id="content"` or `<main>` wraps the prose area
 - [ ] No inline styles that override design tokens with hardcoded values

@@ -44,6 +44,32 @@ const REPO_RE = /^[A-Za-z0-9._-]+\/[A-Za-z0-9._-]+$/;
 /** Git tag characters we are willing to put in a URL path. */
 const VERSION_RE = /^[A-Za-z0-9._/-]+$/;
 
+/** The marker a headless artifact must carry on `<html>`. */
+const HEADLESS_MARKER = 'data-kb-headless="true"';
+/** Its pre-rename spelling — see issue #77. */
+const LEGACY_HEADLESS_MARKER = 'data-mp-headless';
+
+/**
+ * Warns when an artifact's entry point is not marked headless.
+ *
+ * A bundle published before the rename carries `data-mp-headless` instead, which
+ * is indistinguishable from "not headless at all" to every downstream consumer.
+ * Saying so explicitly is the difference between a publisher re-reading the
+ * contract and a publisher re-reading their build script.
+ */
+function checkHeadlessMarker(html, label, hint) {
+  if (html.includes(HEADLESS_MARKER)) return;
+  if (html.includes(LEGACY_HEADLESS_MARKER)) {
+    warn(
+      `${label} carries ${LEGACY_HEADLESS_MARKER}, which this knowledge base no longer reads.\n` +
+      `     The artifact was produced against the pre-rename contract — republish it with a\n` +
+      `     current AbsaOSS/knowledge-base action so it emits ${HEADLESS_MARKER}.`
+    );
+    return;
+  }
+  warn(`${label} is missing ${HEADLESS_MARKER} on <html>.\n     ${hint}`);
+}
+
 /**
  * Rejects registry values that must never reach a URL or a subprocess argument.
  *
@@ -197,9 +223,11 @@ async function fetchBundle(app) {
     copyDir(doc.docDir, appsSlugDir);
 
     const html = readFileSync(join(appsSlugDir, doc.entryPoint), 'utf8');
-    if (!html.includes('data-mp-headless="true"')) {
-      warn(`${doc.slug}: ${doc.entryPoint} is missing data-mp-headless="true" — see contract/HEADLESS_RULES.md.`);
-    }
+    checkHeadlessMarker(
+      html,
+      `${doc.slug}: ${doc.entryPoint}`,
+      'See contract/HEADLESS_RULES.md.',
+    );
     ok(`${doc.slug} ready (single-page doc, ${release.tag_name})`);
   }
 
@@ -299,12 +327,11 @@ export async function fetchApps(apps) {
     const indexHtml = join(distDir, app.entryPoint || 'index.html');
     if (existsSync(indexHtml)) {
       const html = readFileSync(indexHtml, 'utf8');
-      if (!html.includes('data-mp-headless="true"')) {
-        warn(
-          `${slug}/index.html is missing data-mp-headless="true" on <html>.\n` +
-          `     See contract/HEADLESS_RULES.md — ensure the app is built with --headless.`
-        );
-      }
+      checkHeadlessMarker(
+        html,
+        `${slug}/index.html`,
+        'See contract/HEADLESS_RULES.md — ensure the app is built with --headless.',
+      );
     } else {
       warn(`${slug}: entryPoint '${app.entryPoint || 'index.html'}' not found in artifact.`);
     }

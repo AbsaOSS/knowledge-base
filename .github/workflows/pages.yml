@@ -43,7 +43,7 @@ jobs:
         run: npm run build
 
       # Static Pages has no gateway/nginx to rewrite the fragment asset prefix,
-      # and /__wf/* is outside the project-site mount. Point the marketplace
+      # and /__wf/* is outside the project-site mount. Point the knowledge base
       # stylesheet at its real served path (/knowledge-base/style.css → dist/style.css).
       - name: Rewrite fragment asset paths for static hosting
         run: find dist -name '*.html' -exec sed -i 's#/__wf/knowledge-base/#/knowledge-base/#g' {} +

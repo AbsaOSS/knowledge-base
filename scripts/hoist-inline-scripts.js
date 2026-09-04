@@ -3,7 +3,7 @@
  *
  * WHY
  *
- * The marketplace serves a Content-Security-Policy with `script-src 'self'`. An
+ * The knowledge base serves a Content-Security-Policy with `script-src 'self'`. An
  * inline <script> anywhere in a page defeats that: allowing it means adding
  * 'unsafe-inline', which allows an injected script too, and hashing every one is
  * not possible because the HTML comes from other repositories' release artifacts.
@@ -14,7 +14,7 @@
  * Enforcing the CSP without this step would silently break every already-published
  * doc's diagrams — verified against the sibling example repo's real artifact.
  *
- * So the marketplace hoists them itself, at build time, before anything else
+ * So the knowledge base hoists them itself, at build time, before anything else
  * reads apps/. Old bundles and new ones end up equally CSP-clean.
  *
  * ORDER IS PRESERVED
@@ -31,7 +31,7 @@
  * WHAT IS DELETED
  *
  * A sub-app's dark-mode bootstrap is dropped rather than hoisted. The
- * marketplace is light-only and src/utils/transform.js strips that script — but
+ * knowledge base is light-only and src/utils/transform.js strips that script — but
  * only while it is still inline, and this step runs first. Hoisting it would
  * turn it into an external file the strip can no longer recognise, and it would
  * then run in the browser and re-add `dark` (#48).

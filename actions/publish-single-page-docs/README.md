@@ -45,5 +45,5 @@ npm run selftest
 
 The self-test is deliberately **not** part of the knowledge base's Playwright
 suite: that suite must stay hermetic and must not depend on this action's
-`node_modules`. The marketplace side of the feature is covered there instead, via
+`node_modules`. The knowledge base side of the feature is covered there instead, via
 the `tests/fixtures/single-page-bundle/` fixture.

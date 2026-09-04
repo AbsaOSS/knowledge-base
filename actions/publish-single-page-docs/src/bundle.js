@@ -8,10 +8,10 @@
  *   {slug}/assets/doc.css
  *   {slug}/assets/mermaid.min.js   (only when that doc uses mermaid)
  *   {slug}/assets/mermaid-init.js  (ditto — kept out of the HTML so the
- *                                   marketplace can run script-src 'self')
+ *                                   knowledge base can run script-src 'self')
  *
  * One release asset carries every doc from the repo; the knowledge base expands
- * the manifest into one marketplace app per doc (see contract/SINGLE_PAGE.md).
+ * the manifest into one knowledge base app per doc (see contract/SINGLE_PAGE.md).
  */
 
 import { execFileSync } from 'node:child_process';
@@ -62,7 +62,7 @@ export function buildBundle(docs, stageDir) {
 
     if (usesMermaid) {
       copyFileSync(resolveMermaidBundle(), join(docDir, MERMAID_PATH));
-      // The init runs from a file, not an inline <script>, so the marketplace
+      // The init runs from a file, not an inline <script>, so the knowledge base
       // can serve these pages under script-src 'self'.
       writeFileSync(join(docDir, MERMAID_INIT_PATH), MERMAID_INIT_JS);
     }
@@ -91,7 +91,7 @@ export function buildBundle(docs, stageDir) {
  * Locates the vendored mermaid bundle.
  *
  * The UMD build is used deliberately: it is fully self-contained (no dynamic
- * chunk imports), so a doc directory copied into the marketplace keeps working
+ * chunk imports), so a doc directory copied into the knowledge base keeps working
  * behind the fragment CSP without any CDN.
  */
 function resolveMermaidBundle() {

@@ -1,6 +1,6 @@
 // src/templates/shadow-compat.js
 //
-// Inline <style> block injected into every marketplace page by Base.astro.
+// Inline <style> block injected into every knowledge base page by Base.astro.
 //
 // @tailwindcss/vite strips custom element selectors (wf-html, wf-document) during
 // its CSS optimisation pass, making it impossible to target shadow DOM elements
@@ -10,10 +10,10 @@
 //
 // wf-html / wf-document get explicit declarations of every design token, so
 // shadow-root elements have them directly. Belt-and-suspenders — :root and :host
-// in marketplace.css already cover inheritance, but direct assignment avoids any
+// in knowledge-base.css already cover inheritance, but direct assignment avoids any
 // edge-case inheritance break inside a reframed fragment.
 //
-// The marketplace is light-only: there is no dark-mode override here or anywhere
+// The knowledge base is light-only: there is no dark-mode override here or anywhere
 // else, so an embedding host's own dark theme can never bleed into the fragment.
 
 export const shadowCompatStyle = `

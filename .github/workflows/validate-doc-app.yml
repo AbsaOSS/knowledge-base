@@ -1,6 +1,6 @@
 # Reusable workflow — validate a doc app against the knowledge-base contract.
 #
-# Called by doc-app repos in their own CI to verify the app meets the marketplace
+# Called by doc-app repos in their own CI to verify the app meets the knowledge base
 # contract before raising a PR or publishing a release.
 #
 # Usage in a doc repo (.github/workflows/validate.yml):
@@ -28,7 +28,7 @@ permissions:
 
 jobs:
   validate:
-    name: Validate marketplace contract
+    name: Validate knowledge base contract
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -106,15 +106,15 @@ jobs:
           echo "✓ dist/${ENTRY} found"
 
       # ── Validate headless HTML structure ───────────────────────────────────
-      - name: Check data-mp-headless attribute
+      - name: Check data-kb-headless attribute
         run: |
           ENTRY=$(node -e "const m=require('./marketplace.json'); console.log(m.entryPoint || 'index.html')")
-          if ! grep -q 'data-mp-headless="true"' "dist/${ENTRY}"; then
-            echo "::error file=dist/${ENTRY}::Missing data-mp-headless=\"true\" on <html> element."
-            echo "Add data-mp-headless=\"true\" to the <html> tag when building with --headless."
+          if ! grep -q 'data-kb-headless="true"' "dist/${ENTRY}"; then
+            echo "::error file=dist/${ENTRY}::Missing data-kb-headless=\"true\" on <html> element."
+            echo "Add data-kb-headless=\"true\" to the <html> tag when building with --headless."
             exit 1
           fi
-          echo "✓ data-mp-headless=\"true\" found"
+          echo "✓ data-kb-headless=\"true\" found"
 
       - name: Check no fixed site header in headless output
         run: |

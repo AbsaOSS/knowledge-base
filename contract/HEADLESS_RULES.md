@@ -1,8 +1,8 @@
 # Headless Build Rules
 
-Doc apps included in the marketplace must produce **headless HTML output** — pages that
+Doc apps included in the knowledge base must produce **headless HTML output** — pages that
 contain content (sidebar + prose) but **do not** include a site-level top navigation bar.
-The marketplace injects its own persistent 56 px chrome at the top of every page.
+The knowledge base injects its own persistent 56 px chrome at the top of every page.
 
 > **Simpler alternative — single-page docs.** If what you have is a markdown file or
 > two rather than a documentation *site*, none of this applies to you. Add the
@@ -14,10 +14,10 @@ The marketplace injects its own persistent 56 px chrome at the top of every page
 > elsewhere and cannot yet produce a headless package can be listed immediately with an
 > `apps.json` entry of `"type": "iframe"` + a `"url"` (no `marketplace.json`, no release
 > artifact, no headless build). The page is rendered as a full-viewport `<iframe>` inside
-> the marketplace chrome. This is an **explicit stopgap** — such entries should carry
+> the knowledge base chrome. This is an **explicit stopgap** — such entries should carry
 > `"temporary": true` and be migrated to a proper headless package when possible. The
 > external site must allow embedding (its CSP `frame-ancestors` / `X-Frame-Options` must
-> not block the marketplace origin). See issue #10.
+> not block the knowledge base origin). See issue #10.
 
 ---
 
@@ -26,7 +26,7 @@ The marketplace injects its own persistent 56 px chrome at the top of every page
 Your build script must support a `--headless` CLI flag that produces headless output.
 
 ```bash
-# Headless build (used by marketplace and release workflow)
+# Headless build (used by knowledge base and release workflow)
 npm run build -- --headless
 
 # Standalone build (for local dev / preview)
@@ -38,10 +38,10 @@ When `--headless` is active:
 | Requirement | Detail |
 |---|---|
 | **No global `<header>`** | Do not render the site-level fixed top bar that contains the app logo and main navigation links. |
-| **Sidebar offset** | Set sidebar's `top` to `0` (marketplace resets it to `var(--mp-chrome-h)` via injected CSS). |
-| **`data-mp-headless` attribute** | Add `data-mp-headless="true"` to the `<html>` element so the marketplace can identify and verify headless pages. |
-| **Theme toggle** | Omit the theme toggle button from the site header. The marketplace chrome provides its own. |
-| **Relative asset paths** | All `href`, `src`, `action` attribute values must be **relative** (no leading `/`). The marketplace mounts apps at `/apps/{slug}/`, so absolute paths will 404. |
+| **Sidebar offset** | Set sidebar's `top` to `0`. The knowledge base no longer injects a fixed bar, so nothing is reserved above your content. |
+| **`data-kb-headless` attribute** | Add `data-kb-headless="true"` to the `<html>` element so the knowledge base can identify and verify headless pages. |
+| **Theme toggle** | Omit the theme toggle button from the site header. The knowledge base is light only and strips any theme bootstrap your page ships. |
+| **Relative asset paths** | All `href`, `src`, `action` attribute values must be **relative** (no leading `/`). The knowledge base mounts apps at `/apps/{slug}/`, so absolute paths will 404. |
 
 ---
 
@@ -69,7 +69,7 @@ It must validate against the [JSON Schema](./schema.json).
 
 ### Recommended: `pages` navigation manifest
 
-The optional `pages` array tells the marketplace the **exact set of routes** your app exposes, along with human-readable titles and ordering. When present it replaces the default filesystem crawl used to discover HTML files.
+The optional `pages` array tells the knowledge base the **exact set of routes** your app exposes, along with human-readable titles and ordering. When present it replaces the default filesystem crawl used to discover HTML files.
 
 | Field | Required | Description |
 |-------|----------|-------------|
@@ -80,7 +80,7 @@ The optional `pages` array tells the marketplace the **exact set of routes** you
 
 > **Note:** `pages` should be written into `dist/marketplace.json` (not the root `marketplace.json`) by your build script at build time. See the example app for a reference implementation that generates this from MkDocs navigation config.
 >
-> If `pages` is absent the marketplace falls back to crawling all `.html` files in `dist/` — existing apps require no changes.
+> If `pages` is absent the knowledge base falls back to crawling all `.html` files in `dist/` — existing apps require no changes.
 
 ### Slug rules
 - Lowercase letters, numbers, and hyphens only: `^[a-z0-9-]+$`
@@ -95,7 +95,7 @@ The `<body>` of each doc page must follow this structure:
 
 ```html
 <body>
-  <!-- ✅ Sidebar — marketplace repositions top offset -->
+  <!-- ✅ Sidebar — knowledge base repositions top offset -->
   <nav id="sidebar" class="fixed top-0 ...">
     ...
   </nav>
@@ -135,8 +135,8 @@ At minimum the following CSS custom properties must be present:
 ```
 
 Copy the `@theme` block and `:root` variable declarations from  
-[`src/styles/marketplace.css`](../src/styles/marketplace.css) in this repository.  
-There is deliberately no `.dark` set — the marketplace is light-only.
+[`src/styles/knowledge-base.css`](../src/styles/knowledge-base.css) in this repository.  
+There is deliberately no `.dark` set — the knowledge base is light-only.
 
 ---
 
@@ -171,7 +171,7 @@ Before opening a PR to add your app to `apps.json`:
 - [ ] `npm run build -- --headless` succeeds and produces `dist/`
 - [ ] `dist/` contains `index.html` (or your configured `entryPoint`)
 - [ ] No `<header class="fixed top-0...">` present in any headless HTML page
-- [ ] `data-mp-headless="true"` is on the `<html>` element
+- [ ] `data-kb-headless="true"` is on the `<html>` element
 - [ ] All asset paths are relative (no leading `/`)
 - [ ] Design tokens are defined in your CSS
 - [ ] A GitHub Release with `dist.tar.gz` exists on your repo

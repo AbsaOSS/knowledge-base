@@ -93,14 +93,14 @@ test.describe('extractTarball', () => {
     const tar = join(workDir, 'dist.tar.gz');
     writeTarball(tar, [
       { name: 'bundle.json', content: '{"marketplaceVersion":"1"}' },
-      { name: 'my-doc/index.html', content: '<html data-mp-headless="true"></html>' },
+      { name: 'my-doc/index.html', content: '<html data-kb-headless="true"></html>' },
     ]);
 
     const dest = join(workDir, 'out');
     extractTarball(tar, dest, 'good-bundle');
 
     expect(readFileSync(join(dest, 'bundle.json'), 'utf8')).toContain('marketplaceVersion');
-    expect(readFileSync(join(dest, 'my-doc', 'index.html'), 'utf8')).toContain('data-mp-headless');
+    expect(readFileSync(join(dest, 'my-doc', 'index.html'), 'utf8')).toContain('data-kb-headless');
   });
 
   test('refuses a member that escapes the root via ".."', () => {

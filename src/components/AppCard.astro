@@ -20,14 +20,14 @@ const href = `${base}/${app.slug}/`;
 const delayClass = delay > 0 && delay <= 4 ? ` delay-${delay}` : '';
 ---
 
-<a href={href} class={`mp-card animate-fade-up${delayClass}`} aria-label={app.name}>
-  <div class="mp-card-icon" style="color:var(--color-kb-500)">
+<a href={href} class={`kb-card animate-fade-up${delayClass}`} aria-label={app.name}>
+  <div class="kb-card-icon" style="color:var(--color-kb-500)">
     <AppIcon icon={app.icon || 'book-open'} size={20} />
   </div>
   <h2 class="text-[15px] font-semibold mb-1.5 leading-snug" style="color:var(--text-heading)">{app.name}</h2>
   <p class="text-[13px] leading-relaxed flex-1 mb-4" style="color:var(--text-body)">{app.description}</p>
   <div class="flex flex-wrap gap-1.5 mt-auto">
-    {app.type === 'iframe' && <span class="mp-tag mp-tag-external" title="Embedded via iframe (external site)">External</span>}
-    {(app.tags || []).map(tag => <span class="mp-tag">{tag}</span>)}
+    {app.type === 'iframe' && <span class="kb-tag kb-tag-external" title="Embedded via iframe (external site)">External</span>}
+    {(app.tags || []).map(tag => <span class="kb-tag">{tag}</span>)}
   </div>
 </a>

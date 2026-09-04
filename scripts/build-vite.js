@@ -36,7 +36,7 @@ const ROOT = join(__dirname, '..');
 const APPS_DIR = join(ROOT, 'apps');
 
 const LOCAL_MODE = process.argv.includes('--local');
-const HEADLESS   = process.argv.includes('--headless') || process.env.MP_HEADLESS === 'true';
+const HEADLESS   = process.argv.includes('--headless') || process.env.KB_HEADLESS === 'true';
 
 const log  = (msg) => console.log('\x1b[36m→\x1b[0m ' + msg);
 const ok   = (msg) => console.log('\x1b[32m✓\x1b[0m ' + msg);
@@ -251,7 +251,7 @@ async function build() {
   const packagedResolved = resolvedApps.filter(a => a.type !== 'iframe');
 
   // 1b. Hoist inline <script> bodies out of sub-app HTML into files.
-  //     The marketplace serves script-src 'self'; an inline script anywhere would
+  //     The knowledge base serves script-src 'self'; an inline script anywhere would
   //     force 'unsafe-inline' on every page. Bundles published before the action
   //     stopped emitting one still contain it, and this repo does not control
   //     when those repos re-publish — so it is fixed here rather than assumed.
@@ -339,13 +339,13 @@ async function build() {
 
   // 3. Run Astro build
   step('3/4  Running astro build');
-  // Always explicit: src/utils/config.js treats an unset MP_HEADLESS as
+  // Always explicit: src/utils/config.js treats an unset KB_HEADLESS as
   // standalone, and a build that says "--headless" must not depend on that.
-  const env = { ...process.env, MP_HEADLESS: HEADLESS ? 'true' : 'false' };
+  const env = { ...process.env, KB_HEADLESS: HEADLESS ? 'true' : 'false' };
   execSync('npx astro build', { cwd: ROOT, stdio: 'inherit', env });
   ok('Astro build complete');
 
-  // Publish dist/style.css as an alias of the marketplace stylesheet.
+  // Publish dist/style.css as an alias of the knowledge base stylesheet.
   //
   // Pages do not need it: Astro injects the <link> from Base.astro's CSS import,
   // with whatever content-hashed name the bundle got. The alias exists because
@@ -353,8 +353,8 @@ async function build() {
   // something outside this repository may still ask for it.
   //
   // The bundle is identified by *use*, not by filename: it is the local
-  // stylesheet the marketplace's own landing page loads. That is the definition
-  // of "the marketplace stylesheet", and it cannot drift from what the pages
+  // stylesheet the knowledge base's own landing page loads. That is the definition
+  // of "the knowledge base stylesheet", and it cannot drift from what the pages
   // actually reference the way a filename pattern could (#50).
   const distRoot = join(ROOT, 'dist');
   if (existsSync(distRoot)) {
@@ -367,7 +367,7 @@ async function build() {
 
     if (hrefs.length !== 1) {
       fail(
-        'Expected the landing page to load exactly one local stylesheet — the marketplace bundle — ' +
+        'Expected the landing page to load exactly one local stylesheet — the knowledge base bundle — ' +
         'but found ' + hrefs.length + (hrefs.length ? ': ' + hrefs.join(', ') : '') +
         '. dist/style.css can only alias an unambiguous one.',
       );
@@ -376,7 +376,7 @@ async function build() {
     const bundle = join(distRoot, hrefs[0].slice(('/' + PATH_PREFIX).length));
     if (!existsSync(bundle)) fail('The landing page references ' + hrefs[0] + ', which is not in dist/.');
     copyFileSync(bundle, join(distRoot, 'style.css'));
-    ok('Marketplace CSS ' + hrefs[0] + ' aliased → dist/style.css');
+    ok('Knowledge base CSS ' + hrefs[0] + ' aliased → dist/style.css');
   }
 
   // 4. Summary

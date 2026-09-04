@@ -135,7 +135,7 @@ GitHub-flavoured markdown, rendered by `markdown-it`:
   [STYLE_GUIDE.md](./STYLE_GUIDE.md)
 - ` ```mermaid ` blocks, rendered client-side from a **vendored** mermaid bundle
 
-Mermaid is vendored into the artifact rather than loaded from a CDN: marketplace
+Mermaid is vendored into the artifact rather than loaded from a CDN: knowledge base
 pages are re-hosted inside a web fragment behind a strict CSP, so every asset a
 doc needs must live in its own artifact. If the script never runs, the diagram
 source stays visible rather than disappearing.
@@ -161,7 +161,7 @@ along with their `class` and `id` attributes.
 |---|---|
 | `<script>` | Would run on the knowledge base origin |
 | `on*` attributes (`onclick`, `onerror`, …) | Same |
-| `<style>` and `style="…"` | CSS can exfiltrate via `url()` and can cover the marketplace masthead |
+| `<style>` and `style="…"` | CSS can exfiltrate via `url()` and can cover the knowledge base masthead |
 | `<iframe>`, `<object>`, `<embed>` | Arbitrary embedded documents |
 | `<form>` and form controls (except task-list checkboxes) | Credential-phishing surface |
 | `javascript:` and `data:` URLs | Script execution by another name |
@@ -184,7 +184,7 @@ my-service/
   index.html
   assets/doc.css
   assets/mermaid.min.js     ← only when that doc uses mermaid
-  assets/mermaid-init.js    ← ditto; kept out of the HTML so the marketplace
+  assets/mermaid-init.js    ← ditto; kept out of the HTML so the knowledge base
                               can serve script-src 'self'
 my-service-releases/
   index.html
@@ -224,29 +224,29 @@ describing a *set* of apps rather than one app. Packaged doc sites keep using
 
 Each `index.html` satisfies [HEADLESS_RULES.md](./HEADLESS_RULES.md):
 
-- `data-mp-headless="true"` on `<html>`
+- `data-kb-headless="true"` on `<html>`
 - no `<base>` tag, every asset path relative
 - no site-level `<header>`, no sidebar, no theme toggle
 - light only — no dark palette, no `localStorage` theme bootstrap
 
-The body is a single `<article class="mp-doc">`. All prose styling lives in
-`assets/doc.css`, scoped to `.mp-doc`, so nothing leaks into the masthead or into
+The body is a single `<article class="kb-doc">`. All prose styling lives in
+`assets/doc.css`, scoped to `.kb-doc`, so nothing leaks into the masthead or into
 a host application when the page is embedded as a web fragment.
 
 ---
 
 ## How the knowledge base renders it
 
-The marketplace expands one `single-page` registry entry into one app per doc,
+The knowledge base expands one `single-page` registry entry into one app per doc,
 then renders each in its own reading column:
 
 ```html
-<main id="content" class="mp-single-page">
-  <article class="mp-doc"> … </article>
+<main id="content" class="kb-single-page">
+  <article class="kb-doc"> … </article>
 </main>
 ```
 
-`.mp-single-page` (in `src/styles/marketplace.css`) owns the measure — ~800px of
+`.kb-single-page` (in `src/styles/knowledge-base.css`) owns the measure — ~800px of
 content, centred, with generous vertical rhythm — so every single-page doc reads
 identically regardless of which repo published it. The persistent masthead is the
 only navigation; there is no sidebar and no in-app chrome.

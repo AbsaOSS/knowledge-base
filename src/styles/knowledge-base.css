@@ -53,7 +53,7 @@
 }
 
 /* ── Semantic CSS variables ─────────────────────────────────────────────── */
-/* The marketplace is light-only — there is deliberately no dark palette here,
+/* The knowledge base is light-only — there is deliberately no dark palette here,
    so an embedding host's dark theme cannot bleed into the fragment.
    Note: @tailwindcss/vite compiles :root to :root,:host automatically, so
    custom properties are available inside shadow DOMs via :host inheritance.
@@ -92,48 +92,48 @@ body, wf-body {
 }
 
 /* ── Masthead ───────────────────────────────────────────────────────────── */
-/* Rendered on every page by Base.astro — the marketplace's only navigation.
+/* Rendered on every page by Base.astro — the knowledge base's only navigation.
    Written as plain classes rather than utilities because it also sits on
    packaged sub-app pages, whose own CSS is loaded alongside it: class selectors
    beat the element selectors doc themes typically use for h1/p. */
-.mp-masthead {
+.kb-masthead {
   background: var(--bg-card);
   border-bottom: 1px solid var(--border);
 }
-.mp-masthead-inner {
+.kb-masthead-inner {
   max-width: 72rem;
   margin: 0 auto;
   padding: 3rem 1.5rem 0;
 }
 @media (min-width: 768px) {
-  .mp-masthead-inner { padding-left: 2.5rem; padding-right: 2.5rem; }
+  .kb-masthead-inner { padding-left: 2.5rem; padding-right: 2.5rem; }
 }
 
 /* Compact mode: app pages — only the nav strip is shown */
-.mp-masthead--compact {
+.kb-masthead--compact {
   display: flex;
   align-items: center;
 }
-.mp-masthead--compact .mp-masthead-inner {
+.kb-masthead--compact .kb-masthead-inner {
   flex: 1;
   min-width: 0;
   padding-top: 0;
   padding-bottom: 0;
 }
-.mp-masthead--compact .mp-masthead-eyebrow,
-.mp-masthead--compact .mp-masthead-title,
-.mp-masthead--compact .mp-masthead-desc {
+.kb-masthead--compact .kb-masthead-eyebrow,
+.kb-masthead--compact .kb-masthead-title,
+.kb-masthead--compact .kb-masthead-desc {
   display: none;
 }
-.mp-masthead--compact .mp-masthead-nav {
+.kb-masthead--compact .kb-masthead-nav {
   margin: 0;
 }
 
-/* Brand wordmark — sits in the left gutter, outside mp-masthead-inner */
-.mp-masthead-brand {
+/* Brand wordmark — sits in the left gutter, outside kb-masthead-inner */
+.kb-masthead-brand {
   display: none;
 }
-.mp-masthead--compact .mp-masthead-brand {
+.kb-masthead--compact .kb-masthead-brand {
   display: block;
   position: absolute;
   font-size: 0.9375rem;
@@ -145,20 +145,20 @@ body, wf-body {
   padding: 0 1rem 0 1.5rem;
 }
 @media (min-width: 768px) {
-  .mp-masthead--compact .mp-masthead-brand { padding-left: 2.5rem; }
+  .kb-masthead--compact .kb-masthead-brand { padding-left: 2.5rem; }
 }
 /* Below the large-display threshold, hide the brand */
 @media (max-width: 767px) {
-  .mp-masthead--compact .mp-masthead-brand { display: none; }
+  .kb-masthead--compact .kb-masthead-brand { display: none; }
 }
 
-.mp-masthead-eyebrow {
+.kb-masthead-eyebrow {
   display: flex;
   align-items: center;
   gap: 0.5rem;
   margin-bottom: 0.75rem;
 }
-.mp-masthead-badge {
+.kb-masthead-badge {
   width: 2rem;
   height: 2rem;
   border-radius: var(--radius-xl);
@@ -170,7 +170,7 @@ body, wf-body {
   color: var(--color-kb-500);
 }
 
-.mp-masthead-kicker {
+.kb-masthead-kicker {
   font-size: 0.75rem;
   font-weight: 700;
   text-transform: uppercase;
@@ -178,7 +178,7 @@ body, wf-body {
   color: var(--color-kb-500);
 }
 
-.mp-masthead-title {
+.kb-masthead-title {
   font-size: 2.25rem;
   line-height: 1.1;
   font-weight: 700;
@@ -186,7 +186,7 @@ body, wf-body {
   margin: 0 0 0.5rem;
   color: var(--text-heading);
 }
-.mp-masthead-desc {
+.kb-masthead-desc {
   font-size: 1rem;
   line-height: 1.625;
   max-width: 36rem;
@@ -195,14 +195,14 @@ body, wf-body {
 }
 
 /* Sub-navigation: Library + the app currently being viewed */
-.mp-masthead-nav {
+.kb-masthead-nav {
   display: flex;
   align-items: center;
   gap: 0.25rem;
   margin: 0;
   overflow-x: auto;
 }
-.mp-masthead-link {
+.kb-masthead-link {
   display: inline-flex;
   align-items: center;
   gap: 0.4rem;
@@ -216,8 +216,8 @@ body, wf-body {
   border-bottom: 2px solid transparent;
   transition: color var(--transition), border-color var(--transition);
 }
-a.mp-masthead-link:hover { color: var(--text-heading); }
-.mp-masthead-link.active {
+a.kb-masthead-link:hover { color: var(--text-heading); }
+.kb-masthead-link.active {
   color: var(--color-kb-500);
   border-bottom-color: var(--color-kb-500);
   font-weight: 600;
@@ -235,7 +235,7 @@ a.mp-masthead-link:hover { color: var(--text-heading); }
 .delay-4 { animation-delay: 0.4s; }
 
 /* ── Landing page card grid ──────────────────────────────────────────────── */
-.mp-card {
+.kb-card {
   display: flex;
   flex-direction: column;
   background: var(--bg-card);
@@ -246,13 +246,13 @@ a.mp-masthead-link:hover { color: var(--text-heading); }
   transition: box-shadow var(--transition), border-color var(--transition), transform var(--transition);
   box-shadow: var(--shadow-sm);
 }
-.mp-card:hover {
+.kb-card:hover {
   box-shadow: var(--shadow-md);
   border-color: var(--color-kb-100);
   transform: translateY(-2px);
 }
 
-.mp-card-icon {
+.kb-card-icon {
   width: 2.5rem;
   height: 2.5rem;
   border-radius: var(--radius-md);
@@ -266,11 +266,11 @@ a.mp-masthead-link:hover { color: var(--text-heading); }
 
 /* ── Single-page docs (issue #35) ────────────────────────────────────────── */
 /* A single-page doc is one markdown file rendered by actions/publish-single-page-docs: no
-   sidebar, no in-app navigation, nothing but prose. The marketplace owns the
+   sidebar, no in-app navigation, nothing but prose. The knowledge base owns the
    measure so every such doc reads identically regardless of which repo published
    it — ~800px of content, centred, with room to breathe underneath. The prose
-   itself is styled by the artifact's own assets/doc.css, scoped to .mp-doc. */
-.mp-single-page {
+   itself is styled by the artifact's own assets/doc.css, scoped to .kb-doc. */
+.kb-single-page {
   flex: 1 1 auto;
   width: 100%;
   max-width: 53rem;      /* 848px − 2×1.5rem padding = 800px of content */
@@ -279,11 +279,11 @@ a.mp-masthead-link:hover { color: var(--text-heading); }
   box-sizing: border-box;
 }
 @media (max-width: 640px) {
-  .mp-single-page { padding: 2rem 1.25rem 3.5rem; }
+  .kb-single-page { padding: 2rem 1.25rem 3.5rem; }
 }
 
 /* ── Tag pills ───────────────────────────────────────────────────────────── */
-.mp-tag {
+.kb-tag {
   display: inline-flex;
   align-items: center;
   padding: 2px 8px;
@@ -296,7 +296,7 @@ a.mp-masthead-link:hover { color: var(--text-heading); }
 }
 
 /* iframe-onboarding entries (issue #10) — flags an externally embedded app */
-.mp-tag-external {
+.kb-tag-external {
   background: var(--color-kb-50);
   color: var(--color-kb-600);
   border-color: var(--color-kb-100);

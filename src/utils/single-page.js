@@ -10,7 +10,7 @@
 //
 // Everything the catalog needs lives in the artifact's bundle.json manifest, so
 // onboarding a new doc never touches this repository. The build "expands" one
-// registry entry into N marketplace apps, one per doc.
+// registry entry into N knowledge base apps, one per doc.
 //
 // Imported by both scripts/fetch-apps.js (GitHub path) and scripts/build-vite.js
 // (prebuilt/local path) so the two never drift, and by src/utils/apps.js so Astro
@@ -107,7 +107,7 @@ export function readBundleManifest(bundleRoot, source) {
 }
 
 /**
- * Turns a bundle manifest into marketplace app entries — one per doc.
+ * Turns a bundle manifest into knowledge base app entries — one per doc.
  *
  * Each returned entry looks like a normal apps.json app (slug/name/description/
  * icon/tags) so every downstream consumer — catalog cards, masthead, routing —

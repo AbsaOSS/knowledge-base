@@ -4,7 +4,7 @@
  * Static checks on the built `dist/` output (no browser). Validates that the
  * build pipeline integrated both apps, enumerated every sub-app page, rewrote
  * URLs to absolute /{prefix}/{slug}/ paths, marked pages headless, and emitted
- * the marketplace stylesheet at the stable name the sub-app pages reference.
+ * the knowledge base stylesheet at the stable name the sub-app pages reference.
  *
  * dist/ is produced by the Playwright webServer (setup-test-apps + build:headless)
  * before any test runs.
@@ -31,15 +31,15 @@ function htmlFiles(dir, acc = []) {
 }
 
 /**
- * The marketplace stylesheet a page loads. Astro injects this <link> from
+ * The knowledge base stylesheet a page loads. Astro injects this <link> from
  * Base.astro's CSS import, so the name is content-hashed and changes whenever
  * the stylesheet does — assert the shape, never a literal filename.
  */
-function marketplaceCssHref(html) {
+function kbCssHref(html) {
   const href = [...html.matchAll(/<link\b[^>]*\brel="stylesheet"[^>]*>/gi)]
     .map((tag) => tag[0].match(/\bhref="([^"]+)"/)?.[1])
     .find((h) => h?.startsWith('/knowledge-base/_astro/'));
-  expect(href, 'page does not load the marketplace stylesheet').toBeTruthy();
+  expect(href, 'page does not load the knowledge base stylesheet').toBeTruthy();
   return href;
 }
 
@@ -64,13 +64,13 @@ test.describe('Build integrity', () => {
     }
   });
 
-  test('the marketplace stylesheet is published at the stable /style.css alias too', () => {
+  test('the knowledge base stylesheet is published at the stable /style.css alias too', () => {
     // Pages reference the content-hashed bundle; /knowledge-base/style.css stays
     // available as an alias of the same bytes for anything outside this
     // repository that still asks for it by that path.
     expect(existsSync(join(DIST, 'style.css')), 'dist/style.css alias missing').toBe(true);
     expect(read('style.css'), 'the alias is not a copy of the bundle the pages load')
-      .toBe(read(marketplaceCssHref(read('index.html')).slice('/knowledge-base/'.length)));
+      .toBe(read(kbCssHref(read('index.html')).slice('/knowledge-base/'.length)));
   });
 
   test('landing lists both app cards with absolute slug links', () => {
@@ -81,10 +81,10 @@ test.describe('Build integrity', () => {
     expect(html).toContain('href="/knowledge-base/guide-mirror/"');
   });
 
-  test('sub-app pages are marked headless and reference the marketplace CSS', () => {
+  test('sub-app pages are marked headless and reference the knowledge base CSS', () => {
     const html = read('user-guide/index.html');
-    expect(html).toContain('data-mp-headless="true"');
-    expect(marketplaceCssHref(html)).toMatch(/\.css$/);
+    expect(html).toContain('data-kb-headless="true"');
+    expect(kbCssHref(html)).toMatch(/\.css$/);
   });
 
   test('sub-app pages are re-hosted by the layout, keeping their own head + body', () => {
@@ -137,15 +137,15 @@ test.describe('iframe onboarding', () => {
     // The harness builds with --headless, and external-docs is pinned standalone
     // in apps.json. Base.astro used to OR the prop with the global flag, so the
     // override could only ever turn headless on (#52).
-    expect(read('external-docs/index.html')).not.toContain('data-mp-headless');
+    expect(read('external-docs/index.html')).not.toContain('data-kb-headless');
     // …while its neighbours in the same build are still headless.
-    expect(read('user-guide/index.html')).toContain('data-mp-headless="true"');
+    expect(read('user-guide/index.html')).toContain('data-kb-headless="true"');
   });
 
   test('landing shows the iframe app card with an External badge', () => {
     const html = read('index.html');
     expect(html).toContain('External Docs');
-    expect(html).toContain('mp-tag-external');
+    expect(html).toContain('kb-tag-external');
   });
 
   test('packaged apps are unaffected by the iframe entry', () => {
@@ -184,18 +184,18 @@ test.describe('single-page onboarding', () => {
 
   test('renders in the centred reading column, with no sidebar', () => {
     const html = read('platform-overview/index.html');
-    expect(html).toMatch(/<main id="content" class="mp-single-page"/);
-    expect(html).toContain('class="mp-doc"');
+    expect(html).toMatch(/<main id="content" class="kb-single-page"/);
+    expect(html).toContain('class="kb-doc"');
     // Single-page docs have no navigation of their own — the masthead is it.
     expect(html).not.toContain('id="sidebar"');
     expect(html).not.toMatch(/<nav[^>]*aria-label="Documentation"/);
-    expect(html).toContain('id="mp-masthead"');
+    expect(html).toContain('id="kb-masthead"');
   });
 
   test('is re-hosted by the layout like any packaged page', () => {
     const html = read('platform-overview/index.html');
-    expect(html).toContain('data-mp-headless="true"');
-    expect(marketplaceCssHref(html)).toMatch(/\.css$/);
+    expect(html).toContain('data-kb-headless="true"');
+    expect(kbCssHref(html)).toMatch(/\.css$/);
     expect(html.match(/<html\b/gi) ?? []).toHaveLength(1);
     expect(html.match(/<head\b/gi) ?? []).toHaveLength(1);
     expect(html.match(/<body\b/gi) ?? []).toHaveLength(1);
@@ -217,7 +217,7 @@ test.describe('single-page onboarding', () => {
     const html = read('platform-overview/index.html');
     expect(html).toContain('<table>');                        // GFM tables
     expect(html).toContain('task-list-item');                 // GFM task lists
-    expect(html).toContain('<pre class="mp-code">');          // fenced code
+    expect(html).toContain('<pre class="kb-code">');          // fenced code
     expect(html).toContain('hljs-keyword');                   // syntax highlighting
     expect(html).toMatch(/<pre class="mermaid">flowchart LR/); // mermaid source survives
   });
@@ -240,12 +240,12 @@ test.describe('single-page onboarding', () => {
 test.describe('Masthead', () => {
   const STRAPLINE = 'Browse and access all documentation sites';
 
-  const nav = (html) => html.match(/<nav class="mp-masthead-nav"[\s\S]*?<\/nav>/)?.[0] ?? '';
+  const nav = (html) => html.match(/<nav class="kb-masthead-nav"[\s\S]*?<\/nav>/)?.[0] ?? '';
 
   test('renders on the landing page, packaged pages and iframe pages', () => {
     for (const p of ['index.html', 'user-guide/index.html', 'user-guide/docs/index.html', 'external-docs/index.html']) {
       const html = read(p);
-      expect(html, `masthead missing on ${p}`).toContain('id="mp-masthead"');
+      expect(html, `masthead missing on ${p}`).toContain('id="kb-masthead"');
       expect(html, `strapline missing on ${p}`).toContain(STRAPLINE);
     }
   });
@@ -292,7 +292,7 @@ test.describe('Masthead', () => {
 // ─────────────────────────────────────────────────────────────────────────────
 // CSP preconditions
 //
-// The marketplace serves script-src 'self' with no 'unsafe-inline'. That only
+// The knowledge base serves script-src 'self' with no 'unsafe-inline'. That only
 // holds while nothing inline survives the build — so the build output is the
 // thing asserted, not the intent. If this fails, the CSP is about to start
 // breaking pages silently.
@@ -363,13 +363,13 @@ test.describe('no inline scripts in the build output', () => {
 
 // ── CSS asset handling (#49, #50) ───────────────────────────────────────────
 test.describe('stylesheet emission', () => {
-  test('the marketplace stylesheet is content-hashed, not pinned to a constant name', () => {
+  test('the knowledge base stylesheet is content-hashed, not pinned to a constant name', () => {
     // Forcing "style.css" onto every CSS asset made Rollup disambiguate the
     // collisions as style.css / style2.css / …, which the build then had to
     // guess between — and it left the one stylesheet every page loads unable to
     // be cache-busted (#50). Every page's <link> is Astro-injected, so nothing
     // needed the constant name in the first place.
-    expect(marketplaceCssHref(read('index.html')))
+    expect(kbCssHref(read('index.html')))
       .toMatch(/^\/knowledge-base\/_astro\/[^/]+\.[A-Za-z0-9_-]{8,}\.css$/);
     expect(readdirSync(DIST).filter((f) => /^style\d+\.css$/.test(f)),
       'a style2.css means two bundles collided on one name again').toEqual([]);
@@ -391,7 +391,7 @@ test.describe('stylesheet emission', () => {
 
     // …and the faces it does load are same-origin, hashed and present.
     const fonts = [...read('style.css').matchAll(/url\((\/knowledge-base\/[^)]+\.woff2)\)/g)].map((m) => m[1]);
-    expect(fonts.length, 'no self-hosted font in the marketplace stylesheet').toBeGreaterThan(0);
+    expect(fonts.length, 'no self-hosted font in the knowledge base stylesheet').toBeGreaterThan(0);
     for (const font of fonts) {
       expect(existsSync(join(DIST, font.replace('/knowledge-base/', ''))), `${font} is not in dist/`).toBe(true);
     }

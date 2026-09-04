@@ -1,14 +1,14 @@
 ---
 // src/layouts/Base.astro
 //
-// The single document shell for every marketplace page — landing catalog,
+// The single document shell for every knowledge base page — landing catalog,
 // packaged sub-app pages and iframe entries alike. It owns <head>, the fonts,
-// the marketplace stylesheet, <ClientRouter /> and the shadow-DOM compat styles,
+// the knowledge base stylesheet, <ClientRouter /> and the shadow-DOM compat styles,
 // so none of that has to be string-injected into sub-app documents any more.
 //
-// The marketplace is light-only. There is no theme toggle, no persisted theme and
+// The knowledge base is light-only. There is no theme toggle, no persisted theme and
 // no `dark` class anywhere, so an embedding host's theme can never bleed in.
-import '../styles/marketplace.css';
+import '../styles/knowledge-base.css';
 import { ClientRouter } from 'astro:transitions';
 import { shadowCompatStyle } from '../templates/shadow-compat.js';
 import { isHeadlessBuild } from '../utils/config.js';
@@ -42,11 +42,11 @@ const bodyClasses = [
 ---
 
 <!DOCTYPE html>
-<html lang="en" data-mp-headless={effectiveHeadless ? 'true' : undefined}>
+<html lang="en" data-kb-headless={effectiveHeadless ? 'true' : undefined}>
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <meta name="description" content="Documentation marketplace — browse all doc sites in one place." />
+  <meta name="description" content="Documentation knowledge base — browse all doc sites in one place." />
   <title>{title}</title>
   {/*
     CSS layer ordering fix — must appear before sub-app stylesheets.
@@ -71,7 +71,7 @@ const bodyClasses = [
   */}
   <style is:inline>@layer base;</style>
   <slot name="head" />
-  {/* Inter is self-hosted: its @font-face lives in marketplace.css, which the
+  {/* Inter is self-hosted: its @font-face lives in knowledge-base.css, which the
       layout already imports, so there is nothing to link here (#54). */}
   <ClientRouter />
 </head>

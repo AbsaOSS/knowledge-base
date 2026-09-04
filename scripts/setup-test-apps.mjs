@@ -53,17 +53,17 @@ if (!existsSync(artifactAbs)) {
 // The document shell comes from the real action (actions/publish-single-page-docs/src/
 // template.js — deliberately dependency-free) so the fixture cannot drift from
 // what a published bundle looks like. Only the *body* HTML is hand-written here,
-// standing in for the markdown-it output, which keeps the marketplace test suite
+// standing in for the markdown-it output, which keeps the knowledge base test suite
 // free of the action's node_modules.
 
 const BUNDLE_DIR = 'tests/fixtures/single-page-bundle';
 
 /** Body of doc 1 — headings, prose, table, code fence, task list, mermaid. */
-const PLATFORM_OVERVIEW_BODY = `<h1 id="platform-overview" tabindex="-1">Platform Overview <a class="mp-anchor" href="#platform-overview">#</a></h1>
+const PLATFORM_OVERVIEW_BODY = `<h1 id="platform-overview" tabindex="-1">Platform Overview <a class="kb-anchor" href="#platform-overview">#</a></h1>
 <p>The platform runs every service behind a single gateway. See
 <a href="https://example.com/handbook" target="_blank" rel="noopener noreferrer">the handbook</a> for the long version.</p>
-<h2 id="endpoints" tabindex="-1">Endpoints <a class="mp-anchor" href="#endpoints">#</a></h2>
-<div class="mp-table-wrap">
+<h2 id="endpoints" tabindex="-1">Endpoints <a class="kb-anchor" href="#endpoints">#</a></h2>
+<div class="kb-table-wrap">
 <table>
 <thead>
 <tr><th>Endpoint</th><th>Method</th><th>Notes</th></tr>
@@ -74,24 +74,24 @@ const PLATFORM_OVERVIEW_BODY = `<h1 id="platform-overview" tabindex="-1">Platfor
 </tbody>
 </table>
 </div>
-<h2 id="configuration" tabindex="-1">Configuration <a class="mp-anchor" href="#configuration">#</a></h2>
-<pre class="mp-code"><code class="hljs language-js"><span class="hljs-keyword">export</span> <span class="hljs-keyword">const</span> port = <span class="hljs-title class_">Number</span>(process.<span class="hljs-property">env</span>.<span class="hljs-property">PORT</span> ?? <span class="hljs-number">8080</span>);</code></pre>
-<h2 id="rollout-status" tabindex="-1">Rollout status <a class="mp-anchor" href="#rollout-status">#</a></h2>
+<h2 id="configuration" tabindex="-1">Configuration <a class="kb-anchor" href="#configuration">#</a></h2>
+<pre class="kb-code"><code class="hljs language-js"><span class="hljs-keyword">export</span> <span class="hljs-keyword">const</span> port = <span class="hljs-title class_">Number</span>(process.<span class="hljs-property">env</span>.<span class="hljs-property">PORT</span> ?? <span class="hljs-number">8080</span>);</code></pre>
+<h2 id="rollout-status" tabindex="-1">Rollout status <a class="kb-anchor" href="#rollout-status">#</a></h2>
 <ul class="contains-task-list">
 <li class="task-list-item"><input class="task-list-item-checkbox" checked disabled type="checkbox"> Contract published</li>
 <li class="task-list-item"><input class="task-list-item-checkbox" disabled type="checkbox"> Load-tested</li>
 </ul>
-<h2 id="request-flow" tabindex="-1">Request flow <a class="mp-anchor" href="#request-flow">#</a></h2>
+<h2 id="request-flow" tabindex="-1">Request flow <a class="kb-anchor" href="#request-flow">#</a></h2>
 <pre class="mermaid">flowchart LR
   client --&gt; gateway --&gt; service</pre>`;
 
 /** Body of doc 2 — a second doc in the same bundle, proving expansion. */
-const RELEASE_PROCESS_BODY = `<h1 id="release-process" tabindex="-1">Release Process <a class="mp-anchor" href="#release-process">#</a></h1>
+const RELEASE_PROCESS_BODY = `<h1 id="release-process" tabindex="-1">Release Process <a class="kb-anchor" href="#release-process">#</a></h1>
 <p>Releases are cut from <code>master</code> on demand.</p>
 <blockquote>
 <p>A release is only complete once the docs bundle is attached to it.</p>
 </blockquote>
-<h2 id="steps" tabindex="-1">Steps <a class="mp-anchor" href="#steps">#</a></h2>
+<h2 id="steps" tabindex="-1">Steps <a class="kb-anchor" href="#steps">#</a></h2>
 <ol>
 <li>Tag the commit.</li>
 <li>Publish the GitHub Release.</li>
@@ -171,7 +171,7 @@ function writeSinglePageBundle() {
     if (doc.usesMermaid) {
       writeFileSync(join(docDir, MERMAID_PATH), MERMAID_STUB);
       // Real init script, not a stub: it is the thing that must stay out of the
-      // HTML for the marketplace's script-src 'self' to hold, so the fixture
+      // HTML for the knowledge base's script-src 'self' to hold, so the fixture
       // ships it exactly as the action does.
       writeFileSync(join(docDir, MERMAID_INIT_PATH), MERMAID_INIT_JS);
     }
@@ -223,7 +223,7 @@ const apps = [
     temporary: true,
     // Pinned standalone so the suite covers the per-app override in the
     // direction that used to be impossible: the harness builds headless, and
-    // this app must still come out without data-mp-headless (#52). This entry
+    // this app must still come out without data-kb-headless (#52). This entry
     // is the one with no headless assertions of its own, so it can carry the
     // pin without weakening another test.
     headless: false,
