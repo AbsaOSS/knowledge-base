@@ -121,6 +121,7 @@ Root-relative `url()` inside a sub-app's **copied CSS files** is a separate rewr
 Apps registered in `apps.json` must comply with:
 - `contract/ARTIFACT.md` — Normative: the `kb-docs.tar.gz` layout, the `kb-docs.json` manifest, archive and size rules
 - `contract/kb-docs.schema.json` — JSON Schema for `kb-docs.json`
+- `contract/DEPLOYMENT.md` — What a private deployment repo owns, and the reusable workflow it calls
 - `contract/HEADLESS_RULES.md` — Structural requirements (headless HTML, relative paths, `data-kb-headless` attribute)
 - `contract/STYLE_GUIDE.md` — Design tokens and typography (light only — the knowledge base has no dark mode)
 - `contract/SINGLE_PAGE.md` — The copy-paste onboarding workflow for single-page docs
@@ -175,7 +176,8 @@ in the committed `apps.json` without breaking CI, which only has this repo.
 ## Environment Variables
 
 - `GITHUB_TOKEN` — GitHub API auth for fetching Release artifacts
-- `KB_REGISTRY` — registry file to build from, relative to the project root. Default `apps.json`. Read through `REGISTRY_FILE` in `src/utils/config.js`, never inline.
+- `KB_REGISTRY` — registry file to build from. Relative to the project root, or absolute (a deployment repo's registry is checked out beside this one). Default `apps.json`. Read through `REGISTRY_FILE` in `src/utils/config.js`, never inline.
+- `KB_STRICT` — `true` rejects `prebuilt`/`localPath`/`optional` entries, an empty registry, and any entry that yields no apps. Production builds only; this repo's own registry is a fixture and fails it by design.
 - `KB_HEADLESS` — `true` produces web-fragment output; **anything else, including unset, means standalone**. `scripts/build-vite.js` always exports an explicit value, so the default only applies when `astro build`/`astro dev` runs directly. Read it through `isHeadlessBuild()`, never inline. A per-app `"headless"` in `apps.json` overrides it in either direction.
 - `AWS_REGION`, `ECR_REPOSITORY`, `ECS_CLUSTER`, `ECS_SERVICE` — deployment config
 - `KB_EXAMPLE_ARTIFACT` — overrides the packaged artifact `scripts/setup-test-apps.mjs` registers

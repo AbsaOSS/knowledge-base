@@ -1,0 +1,61 @@
+# Builds and pushes the knowledge base image for this deployment.
+#
+# The build itself lives in AbsaOSS/knowledge-base; this repository owns the
+# registry, the schedule and the credentials. See contract/DEPLOYMENT.md.
+name: Build
+
+on:
+  # The registry changed — someone added, removed or re-pinned a docs repo.
+  push:
+    branches: [main]
+    paths: ['apps.json']
+  # A docs repo published a release and told us about it (the publishing actions'
+  # notify-repo / notify-token inputs).
+  repository_dispatch:
+    types: [kb-docs-published]
+  # Safety net: catches a publish whose notify failed, or a repo that never
+  # configured one. `latest` entries move without anyone telling us.
+  schedule:
+    - cron: '0 3 * * *'
+  workflow_dispatch:
+
+# A burst of publishes should produce one deployment, not five.
+concurrency:
+  group: kb-build
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  token:
+    name: Mint a docs-read token
+    runs-on: ubuntu-latest
+    outputs:
+      token: ${{ steps.app.outputs.token }}
+    steps:
+      # A GitHub App installation token: scoped to the repos the app is installed
+      # on, expires within the hour, and belongs to the org rather than a person.
+      - id: app
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ vars.KB_BUILDER_APP_ID }}
+          private-key: ${{ secrets.KB_BUILDER_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+
+  build:
+    name: Build and push
+    needs: token
+    uses: AbsaOSS/knowledge-base/.github/workflows/build-image.yml@v1
+    with:
+      # Pin the build, not just the contract: an unpinned ref means a change to
+      # the knowledge base reaches production without anyone deciding it should.
+      kb-ref: v1.0.0
+      registry: apps.json
+      image-name: ghcr.io/absaoss/knowledge-base
+      image-tags: |
+        ${{ github.sha }}
+        latest
+    secrets:
+      docs-token: ${{ needs.token.outputs.token }}

@@ -16,7 +16,7 @@
  *       Sub-app pages are rendered by src/pages/[...path].astro via getStaticPaths.
  */
 
-import { existsSync, readFileSync, writeFileSync, mkdirSync, rmSync, copyFileSync, linkSync, readdirSync, statSync } from 'node:fs';
+import { appendFileSync, existsSync, readFileSync, writeFileSync, mkdirSync, rmSync, copyFileSync, linkSync, readdirSync, statSync } from 'node:fs';
 import { join, dirname, resolve, isAbsolute } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { homedir } from 'node:os';
@@ -38,6 +38,19 @@ const APPS_DIR = join(ROOT, 'apps');
 
 const LOCAL_MODE = process.argv.includes('--local');
 const HEADLESS   = process.argv.includes('--headless') || process.env.KB_HEADLESS === 'true';
+
+/**
+ * Production mode: every convenience that makes a local build forgiving is an
+ * error instead.
+ *
+ * The registry this repo ships is a *development* registry — a vendored fixture
+ * and an optional sibling checkout — and the flags that make it work (`prebuilt`,
+ * `localPath`, `optional`) are exactly the ones that would let a deployment ship
+ * a half-empty knowledge base without failing. A real deployment builds from
+ * released artifacts only, and an entry that yields nothing is a broken deploy,
+ * not a warning nobody reads. See contract/DEPLOYMENT.md.
+ */
+const STRICT = process.argv.includes('--strict') || process.env.KB_STRICT === 'true';
 
 const log  = (msg) => console.log('\x1b[36m→\x1b[0m ' + msg);
 const ok   = (msg) => console.log('\x1b[32m✓\x1b[0m ' + msg);
@@ -223,10 +236,12 @@ function linkOrCopy(src, dest) {
 
 async function build() {
   const startMs = Date.now();
-  const modeLabel = [LOCAL_MODE && 'local', HEADLESS && 'headless'].filter(Boolean).join(', ');
+  const modeLabel = [LOCAL_MODE && 'local', HEADLESS && 'headless', STRICT && 'strict'].filter(Boolean).join(', ');
   console.log('\n\x1b[1m\x1b[35m▶ knowledge-base build' + (modeLabel ? ' (' + modeLabel + ')' : '') + '\x1b[0m\n');
 
-  const registryPath = join(ROOT, REGISTRY_FILE);
+  // resolve, not join: KB_REGISTRY may be absolute — a deployment repo owns its
+  // registry and it is checked out beside this repo, not inside it.
+  const registryPath = resolve(ROOT, REGISTRY_FILE);
   if (!existsSync(registryPath)) fail(`registry not found: ${registryPath} (set KB_REGISTRY to point elsewhere)`);
   const allEntries = JSON.parse(readFileSync(registryPath, 'utf8'));
   if (!Array.isArray(allEntries)) fail(`${REGISTRY_FILE}: expected an array of entries.`);
@@ -245,6 +260,31 @@ async function build() {
     const key = sourceKey(app);
     if (seenSources.has(key)) fail(`${REGISTRY_FILE}: two entries both point at ${key}.`);
     seenSources.add(key);
+
+    if (STRICT) {
+      // A deployment must be reproducible from released artifacts alone. A
+      // local path is a developer's working copy, and `optional` is permission
+      // to ship without an app nobody noticed was missing.
+      for (const field of ['prebuilt', 'localPath']) {
+        if (app[field]) {
+          fail(
+            `${key}: "${field}" is not allowed in a strict build.\n` +
+            `     A deployment registry lists released artifacts — use "repo" (with an optional\n` +
+            `     "version") so the build is reproducible from what is published. See contract/DEPLOYMENT.md.`,
+          );
+        }
+      }
+      if (app.optional) {
+        fail(
+          `${key}: "optional" is not allowed in a strict build — a registered app that cannot be\n` +
+          `     fetched is a broken deployment, not something to skip with a warning.`,
+        );
+      }
+    }
+  }
+
+  if (STRICT && allEntries.length === 0) {
+    fail(`${REGISTRY_FILE} is empty — a strict build will not publish an empty knowledge base.`);
   }
 
   // Entries flagged `"optional": true` are local-development conveniences whose
@@ -274,6 +314,9 @@ async function build() {
   // apps/.registry.json so Astro resolves the same registry the build did.
   const expansions = {};
 
+  /** source → version → slugs, for the deployment's audit trail. */
+  const provenance = [];
+
   for (const app of artifactApps) {
     const key = sourceKey(app);
 
@@ -288,6 +331,14 @@ async function build() {
     console.log('\n\x1b[1m[' + key + ']\x1b[0m');
     const { stageDir, label } = await stageEntry(app);
     expansions[key] = installArtifact(app, stageDir, label);
+
+    // An entry that produced nothing means a registered app is silently absent
+    // from the deployment. Locally that is a warning; in production it is the
+    // difference between "the docs moved" and "the docs are gone".
+    if (STRICT && expansions[key].length === 0) {
+      fail(`${key}: produced no apps — a registered artifact must publish at least one.`);
+    }
+    provenance.push({ key, label, slugs: expansions[key].map((a) => a.slug) });
   }
 
   // Persist the expansion and resolve the registry the rest of the build works
@@ -434,6 +485,40 @@ async function build() {
     .map(e => e.name);
   const appList = slugs.map(s => '    \u2022 \x1b[36m' + s + '\x1b[0m → dist/' + s + '/').join('\n');
   console.log('\n\x1b[32m✓\x1b[0m \x1b[1m' + (slugs.length + iframeApps.length) + ' app(s) integrated\x1b[0m in ' + elapsed + 's\n\n  Apps:\n' + appList + '\n  Prefix: \x1b[33m' + PATH_PREFIX + '\x1b[0m\n');
+
+  writeProvenance(provenance, iframeApps);
+}
+
+/**
+ * Records what this build was actually assembled from.
+ *
+ * A deployment image is opaque once it is pushed: "the docs are wrong" needs an
+ * answer to "which release of which repo produced this page", and the registry
+ * alone cannot answer it because `latest` means something different every day.
+ * Written next to dist/ and rendered into the workflow's job summary.
+ */
+function writeProvenance(entries, iframeApps) {
+  const manifest = {
+    builtAt: new Date().toISOString(),
+    registry: REGISTRY_FILE,
+    strict: STRICT,
+    headless: HEADLESS,
+    sources: entries.map(({ key, label, slugs }) => ({ source: key, version: label, slugs })),
+    iframes: iframeApps.map((a) => ({ slug: a.slug, url: a.url })),
+  };
+  writeFileSync(join(ROOT, 'dist', 'kb-build.json'), JSON.stringify(manifest, null, 2) + '\n');
+
+  const summaryFile = process.env.GITHUB_STEP_SUMMARY;
+  if (!summaryFile) return;
+
+  const rows = entries.flatMap(({ key, label, slugs }) =>
+    slugs.map((slug) => `| \`${slug}\` | \`${key}\` | \`${label}\` |`));
+  for (const app of iframeApps) rows.push(`| \`${app.slug}\` | iframe | ${app.url} |`);
+
+  appendFileSync(summaryFile,
+    `### Knowledge base build\n\n` +
+    `Registry \`${REGISTRY_FILE}\`${STRICT ? ' (strict)' : ''}\n\n` +
+    `| App | Source | Version |\n|---|---|---|\n${rows.join('\n')}\n`);
 }
 
 build().catch(err => {

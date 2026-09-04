@@ -163,6 +163,25 @@ jobs:
       - run: npm run selftest
         working-directory: actions
 
+  # ── 5. Deployment workflow dry run ─────────────────────────────────────────
+  #
+  # build-image.yml is consumed by a private deployment repo, so a break in it
+  # would surface there rather than here — after the change had already merged.
+  # This calls it the way that repo does, with no image-name, so it builds from
+  # a registry and pushes nothing.
+  #
+  # Not strict: this repo's registry is the vendored fixture, which strict mode
+  # rejects by design. tests/deployment.spec.js covers what strict refuses.
+  deployment-workflow:
+    name: Deployment workflow dry run
+    uses: ./.github/workflows/build-image.yml
+    with:
+      # This commit, not the default branch. The workflow checks the knowledge
+      # base out by ref, and without this the dry run would build master and
+      # pass while the change under review was broken.
+      kb-ref: ${{ github.sha }}
+      registry: apps.json
+      strict: false
   # ── 5. Container image ─────────────────────────────────────────────────────
   #
   # Builds the runtime image from the dist/ the build job produced, then scans

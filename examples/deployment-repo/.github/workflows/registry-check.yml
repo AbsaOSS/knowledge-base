@@ -1,0 +1,38 @@
+# Dry run on any PR that touches the registry.
+#
+# `image-name` is left empty, so the workflow builds the whole knowledge base
+# from the proposed registry, uploads dist/ as an artifact and pushes nothing.
+# A registry entry that does not resolve — a repo with no kb-docs.tar.gz, a
+# pinned tag that does not exist, a slug that collides with another app — fails
+# here rather than on the next deploy.
+name: Registry check
+
+on:
+  pull_request:
+    paths: ['apps.json']
+
+permissions:
+  contents: read
+
+jobs:
+  token:
+    runs-on: ubuntu-latest
+    outputs:
+      token: ${{ steps.app.outputs.token }}
+    steps:
+      - id: app
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ vars.KB_BUILDER_APP_ID }}
+          private-key: ${{ secrets.KB_BUILDER_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+
+  dry-run:
+    needs: token
+    uses: AbsaOSS/knowledge-base/.github/workflows/build-image.yml@v1
+    with:
+      kb-ref: v1.0.0
+      registry: apps.json
+      # No image-name: build and verify, push nothing.
+    secrets:
+      docs-token: ${{ needs.token.outputs.token }}

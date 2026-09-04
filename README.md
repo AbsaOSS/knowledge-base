@@ -284,6 +284,7 @@ Apps must comply with the knowledge base contract before they can be registered:
 |---|---|
 | [`contract/ARTIFACT.md`](contract/ARTIFACT.md) | Normative: artifact layout, manifest, archive and size rules |
 | [`contract/kb-docs.schema.json`](contract/kb-docs.schema.json) | JSON Schema for `kb-docs.json` |
+| [`contract/DEPLOYMENT.md`](contract/DEPLOYMENT.md) | Deployment repo layout, credentials, triggers, rollback |
 | [`contract/HEADLESS_RULES.md`](contract/HEADLESS_RULES.md) | Headless HTML, relative paths, `data-kb-headless` |
 | [`contract/STYLE_GUIDE.md`](contract/STYLE_GUIDE.md) | Design tokens (`--color-kb-*`) and typography — light only; the knowledge base has no dark mode |
 | [`contract/SINGLE_PAGE.md`](contract/SINGLE_PAGE.md) | Zero-config markdown onboarding |
@@ -336,6 +337,31 @@ The archive layout and the manifest are specified in
 ---
 
 ## Deployment
+
+Deployment is **not** part of this repository. A private deployment repo owns the
+production registry, the cloud account and the schedule; this repo is the build
+tool it calls, through the reusable workflow in
+[`.github/workflows/build-image.yml`](.github/workflows/build-image.yml):
+
+```yaml
+jobs:
+  build:
+    uses: AbsaOSS/knowledge-base/.github/workflows/build-image.yml@v1
+    with:
+      kb-ref: v1.0.0
+      registry: apps.json
+      image-name: ghcr.io/absaoss/knowledge-base
+    secrets:
+      docs-token: ${{ needs.token.outputs.token }}
+```
+
+Leave `image-name` empty for a dry run: it builds, uploads `dist/` and pushes
+nothing. See [`contract/DEPLOYMENT.md`](contract/DEPLOYMENT.md) for the repo
+layout, the GitHub App the token comes from, the triggers and rollback, and
+[`examples/deployment-repo/`](examples/deployment-repo) for a skeleton to copy.
+
+The committed `apps.json` here is the CI and preview registry, never a production
+one — a strict build (`KB_STRICT=true`) rejects it outright.
 
 Built as a Docker image (nginx serving static files).
 

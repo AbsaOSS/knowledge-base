@@ -3,7 +3,7 @@
 // Importable from both getStaticPaths and server-side scripts.
 
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
-import { join, relative, dirname } from 'node:path';
+import { join, relative, dirname, resolve } from 'node:path';
 import { EXPANSION_FILE, isIframe, readExpansionMap, resolveRegistry } from './registry.js';
 import { REGISTRY_FILE } from './config.js';
 
@@ -21,7 +21,7 @@ let registryCache = null;
 /** Modification stamp of the two files the registry is built from. */
 function registryStamp(cwd) {
   const mtime = (p) => (existsSync(p) ? statSync(p).mtimeMs : 0);
-  return `${mtime(join(cwd, REGISTRY_FILE))}:${mtime(join(cwd, EXPANSION_FILE))}`;
+  return `${mtime(resolve(cwd, REGISTRY_FILE))}:${mtime(join(cwd, EXPANSION_FILE))}`;
 }
 
 /**
@@ -39,7 +39,8 @@ export function loadRegistry(cwd) {
     return registryCache.apps;
   }
 
-  const registryPath = join(cwd, REGISTRY_FILE);
+  // resolve, not join: KB_REGISTRY may be an absolute path (see build-vite.js).
+  const registryPath = resolve(cwd, REGISTRY_FILE);
   const registry = existsSync(registryPath)
     ? JSON.parse(readFileSync(registryPath, 'utf-8'))
     : [];
