@@ -7,7 +7,7 @@
  *
  * Coverage:
  *   ─ HTTP header safety   X-Frame-Options must not block the gateway's hidden iframe
- *   ─ Headless contract    data-mp-headless present; no chrome bar, no dark mode
+ *   ─ Headless contract    data-kb-headless present; no chrome bar, no dark mode
  *   ─ CSS stability        data-astro-transition-persist on every <link rel=stylesheet>
  *                          (prevents web-fragments issue #297: head style accumulation)
  *   ─ Asset routing        /__wf/knowledge-base/* rewrite returns 200
@@ -115,27 +115,31 @@ test.describe('Headless contract', () => {
     await page.waitForLoadState('networkidle');
   });
 
-  // MP_HEADLESS=true must set data-mp-headless="true" on <html>.
+  // KB_HEADLESS=true must set data-kb-headless="true" on <html>.
   // The gateway reads this to confirm the fragment was built for embedding.
-  test('html element has data-mp-headless="true"', async ({ page }) => {
-    await expect(page.locator('html')).toHaveAttribute('data-mp-headless', 'true');
+  test('html element has data-kb-headless="true"', async ({ page }) => {
+    await expect(page.locator('html')).toHaveAttribute('data-kb-headless', 'true');
   });
 
   // There is no chrome nav bar in either mode any more — the masthead is the
   // whole navigation. A fixed bar escaped the shadow boundary when reframed
   // pierced the DOM, duplicating a nav over the host app.
   test('no chrome nav bar is rendered; the masthead is the navigation', async ({ page }) => {
-    await expect(page.locator('#mp-chrome')).toHaveCount(0);
-    await expect(page.locator('#mp-masthead')).toHaveCount(1);
+    await expect(page.locator('#kb-chrome')).toHaveCount(0);
+    await expect(page.locator('#kb-masthead')).toHaveCount(1);
   });
 
   // Light-only: no theme bootstrap, no toggle, no dark class.
   test('no dark mode is shipped', async ({ page }) => {
     await expect(page.locator('html.dark, .dark')).toHaveCount(0);
+    // Both spellings of the persisted-theme key: `mp-theme` predates the rename
+    // in #77, and a sub-app bundle published before it still writes that one.
     const themeApi = await page.evaluate(
-      () => typeof window.toggleTheme + '|' + (localStorage.getItem('mp-theme') ?? 'unset'),
+      () => typeof window.toggleTheme
+        + '|' + (localStorage.getItem('kb-theme') ?? 'unset')
+        + '|' + (localStorage.getItem('mp-theme') ?? 'unset'),
     );
-    expect(themeApi).toBe('undefined|unset');
+    expect(themeApi).toBe('undefined|unset|unset');
   });
 
   test('page title is set', async ({ page }) => {
@@ -171,7 +175,7 @@ test.describe('CSS link stability (#297)', () => {
 
     for (let i = 0; i < count; i++) {
       const href = await links.nth(i).getAttribute('href');
-      // Astro auto-injects the bundled marketplace stylesheet (/knowledge-base/styleN.css)
+      // Astro auto-injects the bundled knowledge base stylesheet (/knowledge-base/styleN.css)
       // from a CSS `import`; that link is framework-managed and cannot carry the attribute.
       // Astro keeps it across navigation by href-match, and the behavioural
       // "CSS link count does not grow" test below is the authoritative #297 guard.
@@ -192,7 +196,7 @@ test.describe('CSS link stability (#297)', () => {
     await page.goto('/knowledge-base/user-guide/');
     // Don't fail if example isn't built — skip gracefully
     const status = await page.evaluate(() => document.readyState);
-    if (await page.locator('html').getAttribute('data-mp-headless') === null) {
+    if (await page.locator('html').getAttribute('data-kb-headless') === null) {
       test.skip(); // page did not load as a fragment page
       return;
     }
@@ -203,7 +207,7 @@ test.describe('CSS link stability (#297)', () => {
 
     for (let i = 0; i < count; i++) {
       const href = await links.nth(i).getAttribute('href');
-      // Same exemption as the landing page: the bundled marketplace stylesheet is
+      // Same exemption as the landing page: the bundled knowledge base stylesheet is
       // injected by Astro from the layout's CSS import and cannot carry the attribute.
       if (/^\/knowledge-base\/_astro\/.+\.css$/.test(href ?? '')) continue;
       const persist = await links.nth(i).getAttribute('data-astro-transition-persist');
@@ -237,7 +241,7 @@ test.describe('CSS link stability (#297)', () => {
     // counting there would still see the sub-app's stylesheets. Wait for landing-only
     // content (the catalog cards) to prove the swap landed.
     await page.goBack();
-    await page.locator('.mp-card').first().waitFor({ state: 'visible', timeout: 10_000 });
+    await page.locator('.kb-card').first().waitFor({ state: 'visible', timeout: 10_000 });
     await page.waitForLoadState('networkidle');
 
     const afterCount = await page.locator('link[rel="stylesheet"]').count();

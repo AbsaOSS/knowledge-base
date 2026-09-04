@@ -1,7 +1,7 @@
 name: Publish docs to the knowledge base
 description: >-
   Render plain markdown files into headless single-page docs and publish them as
-  a dist.tar.gz bundle on this repository's latest GitHub Release, ready for the
+  a kb-docs.tar.gz bundle on this repository's latest GitHub Release, ready for the
   AbsaOSS knowledge base to pick up.
 author: AbsaOSS
 
@@ -36,7 +36,7 @@ outputs:
     description: Number of docs in the published bundle.
     value: ${{ steps.build.outputs.count }}
   artifact:
-    description: Absolute path of the packed dist.tar.gz.
+    description: Absolute path of the packed kb-docs.tar.gz.
     value: ${{ steps.build.outputs.artifact }}
   release-tag:
     description: Tag of the release the bundle was uploaded to.
@@ -45,8 +45,8 @@ outputs:
 runs:
   using: composite
   steps:
-    # The action ships its own pinned dependency tree so onboarding repos need no
-    # toolchain, no package.json and no lockfile of their own.
+    # The actions share one pinned dependency tree in actions/, so an onboarding
+    # repo needs no toolchain, no package.json and no lockfile of its own.
     - name: Set up Node.js
       uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
       with:
@@ -54,7 +54,7 @@ runs:
 
     - name: Install publisher dependencies
       shell: bash
-      working-directory: ${{ github.action_path }}
+      working-directory: ${{ github.action_path }}/..
       run: npm ci --omit=dev --no-audit --no-fund
 
     - name: Render markdown and pack the bundle
@@ -65,9 +65,9 @@ runs:
         KB_DOCS: ${{ inputs.docs }}
         KB_WORKSPACE: ${{ github.workspace }}
         KB_STAGE: ${{ runner.temp }}/kb-single-page/stage
-        KB_ARTIFACT: ${{ runner.temp }}/kb-single-page/dist.tar.gz
+        KB_ARTIFACT: ${{ runner.temp }}/kb-single-page/kb-docs.tar.gz
 
-    - name: Upload dist.tar.gz to the release
+    - name: Upload kb-docs.tar.gz to the release
       id: upload
       shell: bash
       env:

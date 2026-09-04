@@ -1,0 +1,24 @@
+{
+  "name": "@absaoss/knowledge-base-actions",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Shared dependency tree and library for the knowledge base publishing actions",
+  "type": "module",
+  "license": "Apache-2.0",
+  "scripts": {
+    "selftest": "node publish-single-page-docs/src/selftest.js && node publish-docs/src/selftest.js",
+    "selftest:single-page": "node publish-single-page-docs/src/selftest.js",
+    "selftest:docs": "node publish-docs/src/selftest.js"
+  },
+  "dependencies": {
+    "ajv": "8.17.1",
+    "highlight.js": "11.11.1",
+    "markdown-it": "14.1.0",
+    "markdown-it-anchor": "9.2.0",
+    "markdown-it-footnote": "4.0.0",
+    "markdown-it-task-lists": "2.1.1",
+    "mermaid": "11.4.1",
+    "sanitize-html": "2.17.0",
+    "yaml": "2.7.1"
+  }
+}

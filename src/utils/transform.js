@@ -4,7 +4,7 @@
 //
 // Packaged sub-app pages arrive as complete pre-built documents. Rather than
 // emitting them verbatim, the catchall route renders them through Base.astro so
-// the layout owns the masthead, fonts, marketplace CSS and <ClientRouter /> for
+// the layout owns the masthead, fonts, knowledge base CSS and <ClientRouter /> for
 // every page. This module rewrites the sub-app URLs and splits the document into
 // the parts the layout needs.
 //
@@ -14,7 +14,7 @@
 // every "surely no document does that" assumption a regex makes eventually meets
 // a document that does. Pattern matching got this wrong four ways (#48):
 // a `</body>` inside a script truncated the page, a `<` inside the theme
-// bootstrap defeated the strip that keeps the marketplace light-only, several
+// bootstrap defeated the strip that keeps the knowledge base light-only, several
 // URL-bearing attributes were never rewritten, and `href="/x"` inside a code
 // sample in the prose was rewritten as if it were a link. parse5 is the same
 // tokenizer a browser uses, it is build-time only, and it knows the difference
@@ -213,7 +213,7 @@ export function transformSubAppHtml(html, slug, fileRelDir, prefix) {
       }
     }
 
-    // 6a. Light-only marketplace: the sub-app's theme bootstrap never runs.
+    // 6a. Light-only knowledge base: the sub-app's theme bootstrap never runs.
     if (el.tagName === 'script' && !attrOf(el, 'src') && isThemeBootstrap(textOf(el))) {
       doomed.push(el);
       continue;

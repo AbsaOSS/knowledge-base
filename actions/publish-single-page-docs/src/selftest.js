@@ -1,21 +1,22 @@
 /**
- * selftest.js — `npm run selftest` inside actions/publish-single-page-docs.
+ * selftest.js — `npm run selftest:single-page` inside actions/.
  *
  * Exercises the action without a runner: renders a sample markdown file through
  * the real pipeline and asserts the markdown features the contract promises, the
- * headless rules, and the shape of bundle.json. Also pins the validation error
+ * headless rules, and the shape of kb-docs.json. Also pins the validation error
  * messages, since those are the action's user interface for onboarding repos.
  *
- * Kept out of the marketplace's Playwright suite on purpose: that suite must stay
+ * Kept out of the knowledge base's Playwright suite on purpose: that suite must stay
  * hermetic and must not depend on this action's node_modules.
  */
 
 import assert from 'node:assert/strict';
+import { execFileSync } from 'node:child_process';
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync, mkdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { buildBundle, packBundle, BUNDLE_MANIFEST } from './bundle.js';
+import { buildBundle, packBundle, ASSET_NAME, MANIFEST } from './bundle.js';
 import { InputError, parseDocsInput, validateDocs } from './inputs.js';
 import { renderMarkdown } from './markdown.js';
 
@@ -139,26 +140,28 @@ try {
   const { manifest } = buildBundle(docs, stage);
   const html = readFileSync(join(stage, 'my-service', 'index.html'), 'utf8');
 
-  check('manifest declares the single-page type and every doc', () => {
-    assert.equal(manifest.marketplaceVersion, '1');
-    assert.equal(manifest.type, 'single-page');
-    assert.deepEqual(manifest.docs, [{
+  check('manifest is a contract kb-docs.json listing every doc as an app', () => {
+    assert.equal(manifest.kbVersion, '1');
+    // No `type`, no `docs`: a markdown bundle and a packaged site publish the
+    // same manifest, and buildManifest validates it against the contract schema
+    // before this ever returns.
+    assert.deepEqual(manifest.apps, [{
       slug: 'my-service',
-      title: 'Service Overview',
+      name: 'Service Overview',
       description: 'What the service does and how to use it.',
       icon: 'cube',
       tags: ['platform', 'api'],
       entryPoint: 'index.html',
     }]);
-    assert.ok(existsSync(join(stage, BUNDLE_MANIFEST)));
+    assert.ok(existsSync(join(stage, MANIFEST)));
   });
 
   check('document complies with contract/HEADLESS_RULES.md', () => {
-    assert.match(html, /<html lang="en" data-mp-headless="true">/);
+    assert.match(html, /<html lang="en" data-kb-headless="true">/);
     assert.doesNotMatch(html, /<base\b/i);
     assert.doesNotMatch(html, /localStorage/);
     assert.doesNotMatch(html, /\bclass="dark"/);
-    // No site-level header and no sidebar — the marketplace masthead is the chrome.
+    // No site-level header and no sidebar — the knowledge base masthead is the chrome.
     assert.doesNotMatch(html, /<header class="fixed/);
     assert.doesNotMatch(html, /id="sidebar"/);
     // All asset references are relative (no leading slash).
@@ -175,7 +178,7 @@ try {
   });
 
   check('highlights code fences', () => {
-    assert.match(html, /<pre class="mp-code"><code class="hljs language-js">/);
+    assert.match(html, /<pre class="kb-code"><code class="hljs language-js">/);
     assert.match(html, /hljs-keyword/);
   });
 
@@ -193,7 +196,7 @@ try {
       'mermaid init not written',
     );
     // Every <script> must carry a src. An inline one would force the
-    // marketplace's CSP to allow script-src 'unsafe-inline', which would allow
+    // knowledge base's CSP to allow script-src 'unsafe-inline', which would allow
     // an injected script too.
     for (const [tag] of html.matchAll(/<script\b[^>]*>/g)) {
       assert.match(tag, /\bsrc=/, `inline <script> in the document: ${tag}`);
@@ -204,12 +207,26 @@ try {
     assert.match(html, /<link rel="stylesheet" href="assets\/doc\.css">/);
     const css = readFileSync(join(stage, 'my-service', 'assets', 'doc.css'), 'utf8');
     assert.match(css, /--color-kb-500: #af144b;/);
-    assert.match(css, /\.mp-doc\b/);
+    assert.match(css, /\.kb-doc\b/);
   });
 
-  check('packs a tarball with bundle.json at the root', () => {
-    const tar = packBundle(stage, join(root, 'out', 'dist.tar.gz'));
+  check('packs a tarball with kb-docs.json at the root', () => {
+    const tar = packBundle(stage, join(root, 'out', ASSET_NAME), manifest);
     assert.ok(existsSync(tar));
+    const members = execFileSync('tar', ['--force-local', '-tzf', tar], { encoding: 'utf8' })
+      .split('\n').filter(Boolean);
+    assert.ok(members.includes(MANIFEST), `expected ${MANIFEST} at the archive root`);
+    assert.ok(members.some((m) => m.startsWith('my-service/')), 'expected the doc directory');
+    // No wrapper directory, and nothing the manifest does not declare.
+    assert.ok(!members.some((m) => m.startsWith('./') || m.startsWith('dist/')), members.join(' '));
+  });
+
+  check('packing is deterministic — identical input, identical bytes', () => {
+    // Republishing an unchanged doc set must not produce a different asset, or
+    // nobody can tell a real change from a rebuild.
+    const a = packBundle(stage, join(root, 'out', 'a.tar.gz'), manifest);
+    const b = packBundle(stage, join(root, 'out', 'b.tar.gz'), manifest);
+    assert.deepEqual(readFileSync(a), readFileSync(b));
   });
 
   // ── Sanitisation ───────────────────────────────────────────────────────────
@@ -246,7 +263,7 @@ try {
 
   check('strips inline <style> and style attributes', () => {
     // CSS is not inert: it can exfiltrate through url(), and absolute positioning
-    // lets a doc cover the marketplace masthead.
+    // lets a doc cover the knowledge base masthead.
     const html = rendered('<style>body{background:url("https://evil.example/beacon")}</style>\n\n<p style="position:fixed;inset:0">covered</p>\n');
     assert.doesNotMatch(html, /<style/i);
     assert.doesNotMatch(html, /evil\.example/);
@@ -285,7 +302,7 @@ try {
     ].join('\n'));
 
     assert.match(html, /<h1[^>]*id="heading"/, 'heading anchors');
-    assert.match(html, /class="mp-anchor"/, 'anchor permalinks');
+    assert.match(html, /class="kb-anchor"/, 'anchor permalinks');
     assert.match(html, /task-list-item/, 'task lists');
     // Attribute order is not stable through the sanitiser, so assert each
     // independently rather than pinning a sequence.

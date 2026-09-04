@@ -1,0 +1,202 @@
+# Reusable workflow — build a knowledge base deployment from someone else's registry.
+#
+# Deployment is deliberately not part of this repository. A private deployment
+# repo owns the production registry (which docs repos, which versions), the cloud
+# account and the schedule; this repo is the build tool it calls.
+#
+#   jobs:
+#     build:
+#       uses: AbsaOSS/knowledge-base/.github/workflows/build-image.yml@v1
+#       with:
+#         registry: apps.json          # in the CALLING repo
+#         image-name: ghcr.io/org/knowledge-base
+#       secrets:
+#         docs-token: ${{ steps.app-token.outputs.token }}
+#
+# See contract/DEPLOYMENT.md for the repository layout, the GitHub App the token
+# comes from, and the triggers a deployment repo should use.
+name: Build knowledge base image
+
+on:
+  workflow_call:
+    inputs:
+      kb-ref:
+        description: >-
+          Ref of AbsaOSS/knowledge-base to build with. Pin this to a tag so a
+          deployment is reproducible; defaults to the ref this workflow was
+          called at.
+        type: string
+        required: false
+        default: ''
+      registry:
+        description: 'Registry file in the CALLING repository (KB_REGISTRY).'
+        type: string
+        required: false
+        default: apps.json
+      headless:
+        description: 'Produce web-fragment output. Standalone when false.'
+        type: boolean
+        required: false
+        default: true
+      strict:
+        description: >-
+          Reject prebuilt/localPath/optional entries and any entry that produces
+          no apps. Leave on for a real deployment.
+        type: boolean
+        required: false
+        default: true
+      image-name:
+        description: >-
+          Image to build and push, e.g. ghcr.io/org/knowledge-base. When empty,
+          dist/ is uploaded as a workflow artifact and nothing is pushed — which
+          is what a dry run wants.
+        type: string
+        required: false
+        default: ''
+      image-tags:
+        description: 'Newline- or comma-separated tags to push. Defaults to the calling run''s SHA.'
+        type: string
+        required: false
+        default: ''
+      registry-host:
+        description: 'Container registry to log in to. Defaults to ghcr.io.'
+        type: string
+        required: false
+        default: ghcr.io
+    secrets:
+      docs-token:
+        description: >-
+          Token with `contents: read` on every registered docs repo. Mint it from
+          a GitHub App installation rather than using a personal token — see
+          contract/DEPLOYMENT.md.
+        required: false
+      registry-username:
+        required: false
+      registry-password:
+        required: false
+    outputs:
+      image:
+        description: 'The first pushed image reference, when one was pushed.'
+        value: ${{ jobs.build.outputs.image }}
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    outputs:
+      image: ${{ steps.push.outputs.image }}
+    steps:
+      # The caller's repo holds the registry; this repo holds the build. They are
+      # checked out side by side, and the build runs from this one.
+      - name: Check out the deployment repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          path: deployment
+
+      - name: Check out the knowledge base
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: AbsaOSS/knowledge-base
+          ref: ${{ inputs.kb-ref }}
+          path: knowledge-base
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: knowledge-base/package-lock.json
+
+      - name: Install
+        working-directory: knowledge-base
+        run: npm ci
+
+      - name: Resolve the registry
+        id: registry
+        env:
+          KB_REGISTRY_INPUT: ${{ inputs.registry }}
+        run: |
+          set -euo pipefail
+          src="$GITHUB_WORKSPACE/deployment/$KB_REGISTRY_INPUT"
+          if [ ! -f "$src" ]; then
+            echo "::error::Registry not found in the calling repository: $KB_REGISTRY_INPUT"
+            exit 1
+          fi
+          # An absolute path: the registry belongs to the calling repository and
+          # is checked out beside this one, not inside it. Both the orchestrator
+          # and Astro resolve KB_REGISTRY the same way, so they read one file.
+          echo "path=$src" >> "$GITHUB_OUTPUT"
+          echo "Registry: $KB_REGISTRY_INPUT"
+          cat "$src"
+
+      - name: Build
+        working-directory: knowledge-base
+        env:
+          KB_REGISTRY: ${{ steps.registry.outputs.path }}
+          KB_HEADLESS: ${{ inputs.headless }}
+          KB_STRICT: ${{ inputs.strict }}
+          GITHUB_TOKEN: ${{ secrets.docs-token }}
+        run: node scripts/build-vite.js ${{ inputs.headless && '--headless' || '' }}
+
+      # Without an image name this is a dry run: prove the registry builds, keep
+      # the output, push nothing.
+      - name: Upload dist
+        if: ${{ inputs.image-name == '' }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: dist
+          path: knowledge-base/dist/
+          retention-days: 7
+
+      - name: Log in to the container registry
+        if: ${{ inputs.image-name != '' }}
+        uses: docker/login-action@74a5d142397b4f367a81961eba4e8cd7edddf772 # v3.4.0
+        with:
+          registry: ${{ inputs.registry-host }}
+          username: ${{ secrets.registry-username || github.actor }}
+          password: ${{ secrets.registry-password || github.token }}
+
+      - name: Build and push the image
+        id: push
+        if: ${{ inputs.image-name != '' }}
+        working-directory: knowledge-base
+        env:
+          KB_IMAGE: ${{ inputs.image-name }}
+          KB_TAGS: ${{ inputs.image-tags }}
+          KB_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+
+          tags="${KB_TAGS:-$KB_SHA}"
+          # Accept either separator; normalise to one tag per line.
+          tags="$(printf '%s' "$tags" | tr ',' '\n' | sed '/^[[:space:]]*$/d')"
+
+          args=()
+          first=''
+          while IFS= read -r tag; do
+            ref="$KB_IMAGE:$tag"
+            args+=(-t "$ref")
+            [ -z "$first" ] && first="$ref"
+          done <<< "$tags"
+
+          docker build "${args[@]}" .
+          while IFS= read -r tag; do
+            docker push "$KB_IMAGE:$tag"
+          done <<< "$tags"
+
+          echo "image=$first" >> "$GITHUB_OUTPUT"
+          echo "Pushed \`$first\`." >> "$GITHUB_STEP_SUMMARY"
+
+      # kb-build.json records which release of which repo produced each app. An
+      # image is opaque once pushed; this is how "the docs are wrong" becomes an
+      # answerable question.
+      - name: Upload the build provenance
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: kb-build-provenance
+          path: knowledge-base/dist/kb-build.json
+          if-no-files-found: warn
+          retention-days: 90

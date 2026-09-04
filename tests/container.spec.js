@@ -46,7 +46,7 @@ test.describe('routing', () => {
   test('a packaged sub-app page is served', async ({ request }) => {
     const res = await request.get('/knowledge-base/user-guide/');
     expect(res.status()).toBe(200);
-    expect(await res.text()).toContain('data-mp-headless');
+    expect(await res.text()).toContain('data-kb-headless');
   });
 
   // The production-only rule. nginx.conf uses an INTERNAL rewrite here, not a
@@ -72,13 +72,13 @@ test.describe('routing', () => {
 
   // Sub-app pages hardcode this path; the gateway/nginx rewrite is what makes it
   // resolve to dist/style.css. If it 404s, every sub-app page loses its styling.
-  test('the fragment-prefixed marketplace stylesheet resolves', async ({ request }) => {
+  test('the fragment-prefixed knowledge base stylesheet resolves', async ({ request }) => {
     const res = await request.get('/__wf/knowledge-base/style.css');
     expect(res.status()).toBe(200);
     expect(res.headers()['content-type']).toContain('text/css');
   });
 
-  test('the marketplace stylesheet also resolves under the normal prefix', async ({ request }) => {
+  test('the knowledge base stylesheet also resolves under the normal prefix', async ({ request }) => {
     const res = await request.get('/knowledge-base/style.css');
     expect(res.status()).toBe(200);
     expect(res.headers()['content-type']).toContain('text/css');

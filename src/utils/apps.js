@@ -3,8 +3,9 @@
 // Importable from both getStaticPaths and server-side scripts.
 
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
-import { join, relative, dirname } from 'node:path';
-import { isSinglePage, readExpansionMap, resolveRegistry } from './single-page.js';
+import { join, relative, dirname, resolve } from 'node:path';
+import { EXPANSION_FILE, isIframe, readExpansionMap, resolveRegistry } from './registry.js';
+import { REGISTRY_FILE } from './config.js';
 
 /**
  * Cached result of loadRegistry, keyed by cwd and invalidated by mtime.
@@ -20,15 +21,15 @@ let registryCache = null;
 /** Modification stamp of the two files the registry is built from. */
 function registryStamp(cwd) {
   const mtime = (p) => (existsSync(p) ? statSync(p).mtimeMs : 0);
-  return `${mtime(join(cwd, 'apps.json'))}:${mtime(join(cwd, 'apps', '.single-page.json'))}`;
+  return `${mtime(resolve(cwd, REGISTRY_FILE))}:${mtime(join(cwd, EXPANSION_FILE))}`;
 }
 
 /**
  * Reads the effective app registry.
  *
- * apps.json is the source of truth, except for `type: "single-page"` entries:
- * those point at a bundle whose docs are only known after the build fetched it,
- * so each one is replaced by the apps it expanded into (see single-page.js).
+ * The registry says where each artifact comes from; the artifact's own manifest
+ * says what it contains. Every non-iframe entry is therefore replaced by the
+ * apps it expanded into during the build (see registry.js).
  *
  * @param {string} cwd - project root (process.cwd())
  */
@@ -38,9 +39,10 @@ export function loadRegistry(cwd) {
     return registryCache.apps;
   }
 
-  const appsJson = join(cwd, 'apps.json');
-  const registry = existsSync(appsJson)
-    ? JSON.parse(readFileSync(appsJson, 'utf-8'))
+  // resolve, not join: KB_REGISTRY may be an absolute path (see build-vite.js).
+  const registryPath = resolve(cwd, REGISTRY_FILE);
+  const registry = existsSync(registryPath)
+    ? JSON.parse(readFileSync(registryPath, 'utf-8'))
     : [];
 
   const apps = resolveRegistry(registry, readExpansionMap(cwd), (msg) => {
@@ -94,7 +96,7 @@ export function getAppPages(cwd, headless) {
     /** The only registry data a sub-app page needs. */
     const card        = { slug: app.slug, name: app.name ?? app.slug, icon: app.icon };
 
-    if (app.type === 'iframe') {
+    if (isIframe(app)) {
       // iFrame onboarding mode: no artifact on disk — emit a single route that
       // renders a full-viewport <iframe> for the external URL. See issue #10.
       pages.push({
@@ -112,10 +114,14 @@ export function getAppPages(cwd, headless) {
       continue;
     }
 
-    if (isSinglePage(app)) {
-      // Single-page onboarding (issue #35): the artifact holds exactly one
-      // document per app, so there is nothing to crawl — emit its single route
-      // and let the catchall render it in the centred reading column.
+    const crawled = collectHtmlFiles(appDir);
+
+    // A whole app in one document reads better as a centred column than as a
+    // docs site with an empty sidebar — that is what the single-page onboarding
+    // type produced, and it is now inferred from the artifact rather than
+    // declared in the registry. A manifest that supplies `pages` has opted into
+    // site navigation and is never treated this way, even at one page.
+    if (!app.pages && crawled.length === 1) {
       pages.push({
         routePath:   app.slug,
         file:        join(appDir, app.entryPoint ?? 'index.html'),
@@ -131,7 +137,9 @@ export function getAppPages(cwd, headless) {
     }
 
     if (Array.isArray(app.pages) && app.pages.length > 0) {
-      // Manifest-driven routing: use the pages array from marketplace.json
+      // Manifest-driven routing: the artifact's `pages` list is authoritative,
+      // so the directory is not crawled and nothing it happens to contain
+      // becomes a route the publisher did not ask for.
       for (const page of app.pages) {
         const file        = join(appDir, page.path);
         const fileRelDir  = dirname(page.path).replace(/\\/g, '/').replace(/^\.$/, '');
@@ -150,8 +158,8 @@ export function getAppPages(cwd, headless) {
         });
       }
     } else {
-      // Fallback: crawl the filesystem for all HTML files
-      for (const file of collectHtmlFiles(appDir)) {
+      // Fallback: every HTML file in the artifact becomes a route.
+      for (const file of crawled) {
         const fileRelDir = relative(appDir, dirname(file)).replace(/\\/g, '/');
         const routeParts = [app.slug];
         if (fileRelDir) routeParts.push(fileRelDir);

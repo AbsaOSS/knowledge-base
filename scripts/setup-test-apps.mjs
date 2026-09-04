@@ -6,17 +6,23 @@
  *
  * The committed apps.json is this script's output; the Playwright webServer runs
  * it before every build so the registry stays in sync. It registers:
- *   • the vendored docs-example fixture twice (two slugs) so the suite can
- *     exercise both the landing catalog and cross-app navigation,
+ *   • the vendored docs-example fixture, whose manifest declares two apps —
+ *     `user-guide` (crawled) and `guide-mirror` (a `pages` manifest) — so the
+ *     suite can exercise the landing catalog, cross-app navigation and both
+ *     routing paths from one artifact,
  *   • an iframe entry (issue #10),
- *   • a single-page bundle holding two docs (issue #35).
+ *   • a markdown bundle holding two docs (issue #35).
  * No network, no GITHUB_TOKEN, no sibling repo or per-app build toolchain.
  *
- * The `prebuilt` field is consumed by scripts/build-vite.js (preparePrebuilt).
+ * Note what the entries do *not* carry: no slug, name, description, icon or
+ * tags. Those live in each artifact's kb-docs.json — the registry only records
+ * where an artifact comes from. See contract/ARTIFACT.md.
+ *
+ * The `prebuilt` field is consumed by scripts/build-vite.js (stageEntry).
  *
  * Override the packaged artifact with KB_EXAMPLE_ARTIFACT (absolute path or path
  * relative to the repo root) — e.g. to point at a different doc app's
- * dist.tar.gz / dist.
+ * kb-docs.tar.gz / an unpacked artifact directory.
  */
 
 import { mkdirSync, rmSync, writeFileSync, existsSync } from 'node:fs';
@@ -30,15 +36,15 @@ const ROOT = join(__dirname, '..');
 
 // Vendored fixture (committed under tests/fixtures/) keeps the build + tests fully
 // hermetic — no sibling repo, no network, no GITHUB_TOKEN.
-const DEFAULT_ARTIFACT = 'tests/fixtures/docs-example.dist.tar.gz';
+const DEFAULT_ARTIFACT = 'tests/fixtures/docs-example.kb-docs.tar.gz';
 const artifact = process.env.KB_EXAMPLE_ARTIFACT || DEFAULT_ARTIFACT;
 const artifactAbs = isAbsolute(artifact) ? artifact : resolve(ROOT, artifact);
 
 if (!existsSync(artifactAbs)) {
   console.error(
     `\x1b[31m✗ Example artifact not found:\x1b[0m ${artifactAbs}\n` +
-    `  Expected the vendored fixture at tests/fixtures/docs-example.dist.tar.gz\n` +
-    `  or set KB_EXAMPLE_ARTIFACT to a dist.tar.gz / dist directory.`,
+    `  Expected the vendored fixture at tests/fixtures/docs-example.kb-docs.tar.gz\n` +
+    `  or set KB_EXAMPLE_ARTIFACT to a kb-docs.tar.gz or an unpacked artifact directory.`,
   );
   process.exit(1);
 }
@@ -53,17 +59,17 @@ if (!existsSync(artifactAbs)) {
 // The document shell comes from the real action (actions/publish-single-page-docs/src/
 // template.js — deliberately dependency-free) so the fixture cannot drift from
 // what a published bundle looks like. Only the *body* HTML is hand-written here,
-// standing in for the markdown-it output, which keeps the marketplace test suite
+// standing in for the markdown-it output, which keeps the knowledge base test suite
 // free of the action's node_modules.
 
 const BUNDLE_DIR = 'tests/fixtures/single-page-bundle';
 
 /** Body of doc 1 — headings, prose, table, code fence, task list, mermaid. */
-const PLATFORM_OVERVIEW_BODY = `<h1 id="platform-overview" tabindex="-1">Platform Overview <a class="mp-anchor" href="#platform-overview">#</a></h1>
+const PLATFORM_OVERVIEW_BODY = `<h1 id="platform-overview" tabindex="-1">Platform Overview <a class="kb-anchor" href="#platform-overview">#</a></h1>
 <p>The platform runs every service behind a single gateway. See
 <a href="https://example.com/handbook" target="_blank" rel="noopener noreferrer">the handbook</a> for the long version.</p>
-<h2 id="endpoints" tabindex="-1">Endpoints <a class="mp-anchor" href="#endpoints">#</a></h2>
-<div class="mp-table-wrap">
+<h2 id="endpoints" tabindex="-1">Endpoints <a class="kb-anchor" href="#endpoints">#</a></h2>
+<div class="kb-table-wrap">
 <table>
 <thead>
 <tr><th>Endpoint</th><th>Method</th><th>Notes</th></tr>
@@ -74,28 +80,28 @@ const PLATFORM_OVERVIEW_BODY = `<h1 id="platform-overview" tabindex="-1">Platfor
 </tbody>
 </table>
 </div>
-<h2 id="configuration" tabindex="-1">Configuration <a class="mp-anchor" href="#configuration">#</a></h2>
-<pre class="mp-code"><code class="hljs language-js"><span class="hljs-keyword">export</span> <span class="hljs-keyword">const</span> port = <span class="hljs-title class_">Number</span>(process.<span class="hljs-property">env</span>.<span class="hljs-property">PORT</span> ?? <span class="hljs-number">8080</span>);</code></pre>
-<h2 id="rollout-status" tabindex="-1">Rollout status <a class="mp-anchor" href="#rollout-status">#</a></h2>
+<h2 id="configuration" tabindex="-1">Configuration <a class="kb-anchor" href="#configuration">#</a></h2>
+<pre class="kb-code"><code class="hljs language-js"><span class="hljs-keyword">export</span> <span class="hljs-keyword">const</span> port = <span class="hljs-title class_">Number</span>(process.<span class="hljs-property">env</span>.<span class="hljs-property">PORT</span> ?? <span class="hljs-number">8080</span>);</code></pre>
+<h2 id="rollout-status" tabindex="-1">Rollout status <a class="kb-anchor" href="#rollout-status">#</a></h2>
 <ul class="contains-task-list">
 <li class="task-list-item"><input class="task-list-item-checkbox" checked disabled type="checkbox"> Contract published</li>
 <li class="task-list-item"><input class="task-list-item-checkbox" disabled type="checkbox"> Load-tested</li>
 </ul>
-<h2 id="request-flow" tabindex="-1">Request flow <a class="mp-anchor" href="#request-flow">#</a></h2>
+<h2 id="request-flow" tabindex="-1">Request flow <a class="kb-anchor" href="#request-flow">#</a></h2>
 <pre class="mermaid">flowchart LR
   client --&gt; gateway --&gt; service</pre>`;
 
 /** Body of doc 2 — a second doc in the same bundle, proving expansion. */
-const RELEASE_PROCESS_BODY = `<h1 id="release-process" tabindex="-1">Release Process <a class="mp-anchor" href="#release-process">#</a></h1>
+const RELEASE_PROCESS_BODY = `<h1 id="release-process" tabindex="-1">Release Process <a class="kb-anchor" href="#release-process">#</a></h1>
 <p>Releases are cut from <code>master</code> on demand.</p>
 <blockquote>
 <p>A release is only complete once the docs bundle is attached to it.</p>
 </blockquote>
-<h2 id="steps" tabindex="-1">Steps <a class="mp-anchor" href="#steps">#</a></h2>
+<h2 id="steps" tabindex="-1">Steps <a class="kb-anchor" href="#steps">#</a></h2>
 <ol>
 <li>Tag the commit.</li>
 <li>Publish the GitHub Release.</li>
-<li>The publish-single-page-docs action attaches <code>dist.tar.gz</code>.</li>
+<li>The publish-single-page-docs action attaches <code>kb-docs.tar.gz</code>.</li>
 </ol>`;
 
 /**
@@ -171,17 +177,16 @@ function writeSinglePageBundle() {
     if (doc.usesMermaid) {
       writeFileSync(join(docDir, MERMAID_PATH), MERMAID_STUB);
       // Real init script, not a stub: it is the thing that must stay out of the
-      // HTML for the marketplace's script-src 'self' to hold, so the fixture
+      // HTML for the knowledge base's script-src 'self' to hold, so the fixture
       // ships it exactly as the action does.
       writeFileSync(join(docDir, MERMAID_INIT_PATH), MERMAID_INIT_JS);
     }
   }
 
-  writeFileSync(join(root, 'bundle.json'), JSON.stringify({
-    marketplaceVersion: '1',
-    type: 'single-page',
-    docs: bundleDocs.map(({ slug, title, description, icon, tags }) => ({
-      slug, title, description, icon, tags, entryPoint: 'index.html',
+  writeFileSync(join(root, 'kb-docs.json'), JSON.stringify({
+    kbVersion: '1',
+    apps: bundleDocs.map(({ slug, title, description, icon, tags }) => ({
+      slug, name: title, description, icon, tags, entryPoint: 'index.html',
     })),
   }, null, 2) + '\n');
 
@@ -196,19 +201,10 @@ const bundleRoot = writeSinglePageBundle();
 // navigation (clicking from one app's card to another) is testable.
 const apps = [
   {
-    slug: 'user-guide',
-    name: 'User Guide',
-    description: 'Primary docs app — the vendored docs-example fixture used as the integration guinea pig.',
-    icon: 'book-open',
-    tags: ['guide', 'getting-started'],
-    prebuilt: artifact,
-  },
-  {
-    slug: 'guide-mirror',
-    name: 'Guide Mirror',
-    description: 'Second registered app (same artifact, different slug) for cross-app navigation tests.',
-    icon: 'book-open',
-    tags: ['mirror', 'cross-app'],
+    // One artifact, two apps: `user-guide` (crawled) and `guide-mirror` (which
+    // carries a `pages` manifest). Their names, descriptions and slugs live in
+    // the artifact's kb-docs.json, not here — the registry only says where the
+    // artifact comes from.
     prebuilt: artifact,
   },
   {
@@ -223,29 +219,28 @@ const apps = [
     temporary: true,
     // Pinned standalone so the suite covers the per-app override in the
     // direction that used to be impossible: the harness builds headless, and
-    // this app must still come out without data-mp-headless (#52). This entry
+    // this app must still come out without data-kb-headless (#52). This entry
     // is the one with no headless assertions of its own, so it can carry the
     // pin without weakening another test.
     headless: false,
   },
   {
-    // single-page onboarding mode (issue #35): one bundle, no per-doc metadata
-    // here — the build expands it into one app per doc from bundle.json.
-    type: 'single-page',
+    // A markdown bundle: one artifact, one app per doc, all of it described by
+    // the artifact's own kb-docs.json. Structurally identical to the packaged
+    // entry above — that sameness is the point.
     prebuilt: BUNDLE_DIR,
   },
   {
     // The sibling example repo (knowledge-base-example-single-page), for looking
     // at real action output in a browser: `npm run build:local && npm run preview`.
-    // Its dist.tar.gz is produced by the real action, so it is the closest thing
-    // to a published bundle without a network round-trip.
+    // Its artifact is produced by the real action, so it is the closest thing to
+    // a published bundle without a network round-trip.
     //
     // `optional` because that repo is not part of this one: when it is not
     // checked out next door — CI, a fresh clone — the build skips this entry with
     // a warning instead of failing. Keep it last so the hermetic fixture above
-    // stays the first single-page entry the suites look at.
-    type: 'single-page',
-    prebuilt: '../knowledge-base-example-single-page/dist.tar.gz',
+    // stays the first bundle the suites look at.
+    prebuilt: '../knowledge-base-example-single-page/kb-docs.tar.gz',
     optional: true,
   },
 ];

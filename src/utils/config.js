@@ -8,7 +8,7 @@
  * The URL prefix everything is served under.
  *
  * **Not configurable, deliberately.** The build used to advertise a
- * `--path-prefix=` flag and an `MP_PREFIX` variable that nothing in the Astro
+ * `--path-prefix=` flag and an environment variable that nothing in the Astro
  * build ever read, so `--path-prefix=docs` produced a `dist/` that still said
  * `knowledge-base` everywhere and only the closing build summary agreed with the
  * flag (#46). Making it real means templating `nginx.conf`, the `/__wf/` rewrite
@@ -38,5 +38,19 @@ export const BASE_PATH = `/${PATH_PREFIX}`;
  * override is resolved in src/utils/apps.js and passed down as a prop.
  */
 export function isHeadlessBuild(env = process.env) {
-  return env.MP_HEADLESS === 'true';
+  return env.KB_HEADLESS === 'true';
 }
+
+/**
+ * The registry file this build reads, relative to the project root.
+ *
+ * `apps.json` here is the CI and preview registry: the vendored fixture plus the
+ * optional sibling example. A real deployment owns its own registry in its own
+ * repository and points this at it, so that this repo is a build tool rather
+ * than a list of somebody's documentation.
+ *
+ * Read at module load: both the orchestrator and Astro's getStaticPaths need the
+ * same answer within one build, and an environment variable that changed
+ * halfway would silently produce a dist/ assembled from two registries.
+ */
+export const REGISTRY_FILE = process.env.KB_REGISTRY?.trim() || 'apps.json';

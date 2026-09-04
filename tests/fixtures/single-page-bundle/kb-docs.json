@@ -1,10 +1,9 @@
 {
-  "marketplaceVersion": "1",
-  "type": "single-page",
-  "docs": [
+  "kbVersion": "1",
+  "apps": [
     {
       "slug": "platform-overview",
-      "title": "Platform Overview",
+      "name": "Platform Overview",
       "description": "How the platform is wired together, endpoint by endpoint.",
       "icon": "layers",
       "tags": [
@@ -15,7 +14,7 @@
     },
     {
       "slug": "release-process",
-      "title": "Release Process",
+      "name": "Release Process",
       "description": "How a release is cut and how the docs bundle gets attached.",
       "icon": "cog",
       "tags": [

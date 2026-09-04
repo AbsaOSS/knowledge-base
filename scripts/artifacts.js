@@ -1,7 +1,7 @@
 /**
  * artifacts.js — safe extraction and copying of sub-app artifacts.
  *
- * Every artifact this build consumes is a `dist.tar.gz` produced by *another*
+ * Every artifact this build consumes is a `kb-docs.tar.gz` produced by *another*
  * repository's release pipeline, so its contents are untrusted input: a
  * compromised (or merely careless) doc repo must not be able to write outside
  * the staging directory, and must not be able to smuggle a symlink into the

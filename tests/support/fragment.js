@@ -29,9 +29,9 @@ export async function gotoFragment(page, fragmentRoute = '/knowledge-base/') {
  * Resolves once the fragment's reframed BODY has rendered content.
  *
  * The reframed document is <wf-document><wf-html><wf-head/><wf-body/></wf-document>
- * inside web-fragment-host.shadowRoot. <wf-html> (with data-mp-headless) appears
+ * inside web-fragment-host.shadowRoot. <wf-html> (with data-kb-headless) appears
  * before <wf-body> fills, so we must wait on wf-body having children — waiting on
- * data-mp-headless alone races the content in. (wf-body only exists in the reframed
+ * data-kb-headless alone races the content in. (wf-body only exists in the reframed
  * shadow tree, never in the host document, so this can't match the host's <body>.)
  */
 export async function waitForFragmentReady(page, { timeout = 20_000 } = {}) {

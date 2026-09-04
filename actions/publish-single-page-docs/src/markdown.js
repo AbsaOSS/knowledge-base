@@ -3,7 +3,7 @@
  *
  * Rendering happens inside the action so an onboarding repo needs no toolchain
  * of its own: no mkdocs, no theme, no config file. What the repo commits is the
- * markdown; everything below turns it into a page the marketplace can re-host.
+ * markdown; everything below turns it into a page the knowledge base can re-host.
  *
  * Covered by design: tables, task lists, autolinks, footnotes, strikethrough,
  * highlighted code fences and ```mermaid diagrams.
@@ -51,7 +51,7 @@ function createRenderer(state) {
     level: [1, 2, 3, 4],
     permalink: anchor.permalink.linkInsideHeader({
       symbol: '#',
-      class: 'mp-anchor',
+      class: 'kb-anchor',
       placement: 'after',
     }),
   });
@@ -76,11 +76,11 @@ function createRenderer(state) {
       body = escapeHtml(token.content);
     }
     const langClass = lang ? ` language-${escapeHtml(lang)}` : '';
-    return `<pre class="mp-code"><code class="hljs${langClass}">${body}</code></pre>\n`;
+    return `<pre class="kb-code"><code class="hljs${langClass}">${body}</code></pre>\n`;
   };
 
   // ── Tables scroll inside their own box rather than widening the page ───────
-  md.renderer.rules.table_open  = () => '<div class="mp-table-wrap">\n<table>\n';
+  md.renderer.rules.table_open  = () => '<div class="kb-table-wrap">\n<table>\n';
   md.renderer.rules.table_close = () => '</table>\n</div>\n';
 
   // ── External links open in a new tab, and never leak the referrer ──────────

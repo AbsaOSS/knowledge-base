@@ -8,7 +8,7 @@
 //
 // Packaged pages are not emitted verbatim: transformSubAppHtml() rewrites their
 // URLs and splits the document, and Base.astro re-hosts the parts. That keeps the
-// masthead, fonts, marketplace CSS and ClientRouter in one place for all page
+// masthead, fonts, knowledge base CSS and ClientRouter in one place for all page
 // types (issue #24).
 
 import { readFileSync } from 'node:fs';
@@ -61,8 +61,8 @@ const atAppRoot = !props.fileRelDir;
     </main>
   ) : props.singlePage ? (
     /* Single-page docs bring no navigation of their own — no sidebar, no in-app
-       chrome — so the marketplace supplies the reading column instead. */
-    <main id="content" class="mp-single-page" set:html={parts!.bodyHtml} />
+       chrome — so the knowledge base supplies the reading column instead. */
+    <main id="content" class="kb-single-page" set:html={parts!.bodyHtml} />
   ) : (
     <Fragment set:html={parts!.bodyHtml} />
   )}

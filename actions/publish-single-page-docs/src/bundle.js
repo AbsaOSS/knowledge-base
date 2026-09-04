@@ -1,24 +1,25 @@
 /**
- * bundle.js — assembles the single-page bundle and packs it as dist.tar.gz.
+ * bundle.js — assembles the markdown bundle and packs it as kb-docs.tar.gz.
  *
  * Layout of the staging directory (and therefore of the tarball):
  *
- *   bundle.json                 ← manifest listing every doc in this bundle
+ *   kb-docs.json                ← manifest listing every doc in this bundle
  *   {slug}/index.html           ← headless document
  *   {slug}/assets/doc.css
  *   {slug}/assets/mermaid.min.js   (only when that doc uses mermaid)
  *   {slug}/assets/mermaid-init.js  (ditto — kept out of the HTML so the
- *                                   marketplace can run script-src 'self')
+ *                                   knowledge base can run script-src 'self')
  *
  * One release asset carries every doc from the repo; the knowledge base expands
- * the manifest into one marketplace app per doc (see contract/SINGLE_PAGE.md).
+ * the manifest into one knowledge base app per doc (see contract/ARTIFACT.md).
  */
 
-import { execFileSync } from 'node:child_process';
 import { copyFileSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
-import { basename, dirname, join } from 'node:path';
+import { dirname, join } from 'node:path';
 
+import { buildManifest, writeManifest } from '../../lib/manifest.js';
+import { packArtifact } from '../../lib/pack.js';
 import { renderMarkdown } from './markdown.js';
 import {
   CSS_PATH, DOC_CSS, MERMAID_INIT_JS, MERMAID_INIT_PATH, MERMAID_PATH, renderDocument,
@@ -26,10 +27,10 @@ import {
 
 const require = createRequire(import.meta.url);
 
-/** Manifest file name — must match src/utils/single-page.js in the knowledge base. */
-export const BUNDLE_MANIFEST = 'bundle.json';
-/** Release asset name — must match what scripts/fetch-apps.js looks for. */
-export const ASSET_NAME = 'dist.tar.gz';
+// The manifest name, the asset name and the manifest's shape are the contract,
+// so they come from the shared library rather than being spelled again here —
+// that is what stopped this action and the packaged-site one from drifting.
+export { ASSET_NAME, MANIFEST } from '../../lib/manifest.js';
 
 /**
  * Renders every validated doc into `stageDir` and writes the bundle manifest.
@@ -62,7 +63,7 @@ export function buildBundle(docs, stageDir) {
 
     if (usesMermaid) {
       copyFileSync(resolveMermaidBundle(), join(docDir, MERMAID_PATH));
-      // The init runs from a file, not an inline <script>, so the marketplace
+      // The init runs from a file, not an inline <script>, so the knowledge base
       // can serve these pages under script-src 'self'.
       writeFileSync(join(docDir, MERMAID_INIT_PATH), MERMAID_INIT_JS);
     }
@@ -70,19 +71,17 @@ export function buildBundle(docs, stageDir) {
     rendered.push({ ...doc, usesMermaid });
   }
 
-  const manifest = {
-    marketplaceVersion: '1',
-    type: 'single-page',
-    docs: docs.map((doc) => ({
-      slug:        doc.slug,
-      title:       doc.title,
-      description: doc.description,
-      icon:        doc.icon,
-      tags:        doc.tags,
-      entryPoint:  'index.html',
-    })),
-  };
-  writeFileSync(join(stageDir, BUNDLE_MANIFEST), JSON.stringify(manifest, null, 2) + '\n');
+  // A doc's `title` is the app's `name`: the contract has one word for the
+  // thing shown on a catalog card, whoever published it.
+  const manifest = buildManifest(docs.map((doc) => ({
+    slug:        doc.slug,
+    name:        doc.title,
+    description: doc.description,
+    icon:        doc.icon,
+    tags:        doc.tags,
+    entryPoint:  'index.html',
+  })));
+  writeManifest(stageDir, manifest);
 
   return { manifest, rendered };
 }
@@ -91,7 +90,7 @@ export function buildBundle(docs, stageDir) {
  * Locates the vendored mermaid bundle.
  *
  * The UMD build is used deliberately: it is fully self-contained (no dynamic
- * chunk imports), so a doc directory copied into the marketplace keeps working
+ * chunk imports), so a doc directory copied into the knowledge base keeps working
  * behind the fragment CSP without any CDN.
  */
 function resolveMermaidBundle() {
@@ -107,20 +106,15 @@ function resolveMermaidBundle() {
 }
 
 /**
- * Packs the staging directory as a gzipped tarball.
+ * Packs the staging directory as the release asset.
  *
- * The archive has no top-level wrapper directory — bundle.json sits at the root —
- * matching what the knowledge base expects when it extracts the release asset.
+ * Deferred to the shared packer so both actions produce byte-identical archives
+ * for identical input, and both enforce the same size budget.
  *
  * @param {string} stageDir - the directory built by buildBundle()
  * @param {string} outPath  - destination .tar.gz path
+ * @param {object} manifest - the manifest buildBundle wrote, naming the members
  */
-export function packBundle(stageDir, outPath) {
-  mkdirSync(dirname(outPath), { recursive: true });
-  rmSync(outPath, { force: true });
-  execFileSync('tar', ['-czf', basename(outPath), '-C', stageDir, '.'], {
-    cwd: dirname(outPath),
-    stdio: 'pipe',
-  });
-  return outPath;
+export function packBundle(stageDir, outPath, manifest) {
+  return packArtifact(stageDir, outPath, manifest.apps.map((app) => app.slug));
 }

@@ -16,34 +16,51 @@
  *       Sub-app pages are rendered by src/pages/[...path].astro via getStaticPaths.
  */
 
-import { existsSync, readFileSync, writeFileSync, mkdirSync, rmSync, copyFileSync, linkSync, readdirSync } from 'node:fs';
+import { appendFileSync, existsSync, readFileSync, writeFileSync, mkdirSync, rmSync, copyFileSync, linkSync, readdirSync, statSync } from 'node:fs';
 import { join, dirname, resolve, isAbsolute } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { homedir } from 'node:os';
 import { execSync } from 'node:child_process';
-import { copyDir, stageArtifact } from './artifacts.js';
-import { fetchApps } from './fetch-apps.js';
+import { copyDir, extractTarball, stageArtifact } from './artifacts.js';
+import { downloadArtifact } from './fetch-apps.js';
 import { HOIST_DIR, hoistAppInlineScripts } from './hoist-inline-scripts.js';
 import { collectHtmlFiles } from '../src/utils/apps.js';
-import { PATH_PREFIX } from '../src/utils/config.js';
+import { PATH_PREFIX, REGISTRY_FILE } from '../src/utils/config.js';
 import {
-  BUNDLE_MANIFEST, bundleDirName, bundleKey, expandBundle, findBundleRoot,
-  isSinglePage, readBundleManifest, resolveRegistry, toRegistryEntry, writeExpansionMap,
-} from '../src/utils/single-page.js';
+  ARTIFACT_NAME, MANIFEST, expandManifest, findManifestRoot, isIframe,
+  readManifest, resolveRegistry, sourceKey, stagingName, toRegistryEntry,
+  validateEntry, writeExpansionMap,
+} from '../src/utils/registry.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(__dirname, '..');
 const APPS_DIR = join(ROOT, 'apps');
 
 const LOCAL_MODE = process.argv.includes('--local');
-const HEADLESS   = process.argv.includes('--headless') || process.env.MP_HEADLESS === 'true';
+const HEADLESS   = process.argv.includes('--headless') || process.env.KB_HEADLESS === 'true';
+
+/**
+ * Production mode: every convenience that makes a local build forgiving is an
+ * error instead.
+ *
+ * The registry this repo ships is a *development* registry — a vendored fixture
+ * and an optional sibling checkout — and the flags that make it work (`prebuilt`,
+ * `localPath`, `optional`) are exactly the ones that would let a deployment ship
+ * a half-empty knowledge base without failing. A real deployment builds from
+ * released artifacts only, and an entry that yields nothing is a broken deploy,
+ * not a warning nobody reads. See contract/DEPLOYMENT.md.
+ */
+const STRICT = process.argv.includes('--strict') || process.env.KB_STRICT === 'true';
 
 const log  = (msg) => console.log('\x1b[36m→\x1b[0m ' + msg);
 const ok   = (msg) => console.log('\x1b[32m✓\x1b[0m ' + msg);
 const warn = (msg) => console.warn('\x1b[33m⚠\x1b[0m  ' + msg);
 const step = (msg) => console.log('\n\x1b[1m' + msg + '\x1b[0m');
 
-/** Where `prebuilt` tarballs are unpacked before being copied into apps/. */
+/** Default command a `localPath` entry runs to produce its artifact. */
+const DEFAULT_PACK = 'npm run pack:kb';
+
+/** Where artifacts are unpacked before their apps are copied into apps/. */
 const STAGE_ROOT = join(ROOT, 'tmp', 'prebuilt');
 
 /** Expands a registry path (`~` and repo-relative forms allowed) to an absolute one. */
@@ -55,72 +72,146 @@ function artifactPath(raw) {
 /** As artifactPath, but fails the build when the artifact is not there. */
 function resolveArtifactPath(app, raw, label) {
   const srcPath = artifactPath(raw);
-  if (!existsSync(srcPath)) fail((app.slug ?? bundleKey(app)) + ': ' + label + ' path not found: ' + srcPath);
+  if (!existsSync(srcPath)) fail(sourceKey(app) + ': ' + label + ' path not found: ' + srcPath);
   return srcPath;
 }
 
 /**
- * Prepares a sub-app from a prebuilt artifact instead of fetching from GitHub
- * or building from source.
+ * Puts an entry's artifact on disk as a directory, whatever its source.
  *
- * Used for hermetic E2E tests (no network, no per-app toolchain) and for any
- * registry entry that ships a `prebuilt` path. Mirrors fetch-apps.js: the dist
- * contents land in apps/{slug}/ with marketplace.json copied alongside. For a
- * `single-page` entry the artifact is a bundle instead, so it is expanded — see
- * installBundle.
+ * This is the only place the three sources differ. Everything after it —
+ * reading the manifest, validating it, copying apps into apps/{slug}/ — is
+ * installArtifact, run identically for all of them. The GitHub path and the
+ * prebuilt path used to be separate implementations of the same idea and drifted
+ * apart repeatedly; there is now nothing left to drift.
  *
- * @returns {Array|null} expanded app entries for a single-page bundle, else null
+ * @returns {Promise<{stageDir: string, label: string, releaseTag?: string}>}
  */
-function preparePrebuilt(app) {
-  const label    = app.slug ?? bundleKey(app);
-  const srcPath  = resolveArtifactPath(app, app.prebuilt, 'prebuilt');
-  const stageDir = stageArtifact(srcPath, bundleDirName(label), STAGE_ROOT, label);
+async function stageEntry(app) {
+  const key = sourceKey(app);
 
-  if (isSinglePage(app)) return installBundle(app, stageDir, 'prebuilt');
-
-  const destDir = join(APPS_DIR, app.slug);
-  if (existsSync(destDir)) rmSync(destDir, { recursive: true });
-
-  // The built output is dist/ when present, otherwise the staging dir itself.
-  const distDir = existsSync(join(stageDir, 'dist')) ? join(stageDir, 'dist') : stageDir;
-  copyDir(distDir, destDir);
-
-  // Copy marketplace.json (tarball root preferred, then dist/) so manifest-driven
-  // routing/metadata works the same as the GitHub fetch path.
-  for (const cand of [join(stageDir, 'marketplace.json'), join(distDir, 'marketplace.json')]) {
-    if (existsSync(cand)) { copyFileSync(cand, join(destDir, 'marketplace.json')); break; }
+  if (app.prebuilt) {
+    const srcPath = resolveArtifactPath(app, app.prebuilt, 'prebuilt');
+    return { stageDir: stageArtifact(srcPath, stagingName(key), STAGE_ROOT, key), label: 'prebuilt' };
   }
-  ok(app.slug + ' ready (prebuilt)');
-  return null;
+
+  if (app.localPath) {
+    const checkout = resolveArtifactPath(app, app.localPath, 'localPath');
+
+    // A local checkout is source, not output. Run whatever the repo uses to
+    // produce its artifact and then treat the result exactly like a prebuilt
+    // one. The command is per-entry because doc repos are not all Node: the
+    // example repo is Python and mkdocs, and the old hard-coded
+    // `npm run build:headless` simply could not run there.
+    if (app.pack !== false) {
+      const command = typeof app.pack === 'string' ? app.pack : DEFAULT_PACK;
+      log(`Packing ${key} with \`${command}\`…`);
+      execSync(command, { cwd: checkout, stdio: 'inherit' });
+    }
+
+    const artifact = join(checkout, ARTIFACT_NAME);
+    if (!existsSync(artifact)) {
+      fail(
+        `${key}: no ${ARTIFACT_NAME} in the checkout after packing.\n` +
+        `     A "localPath" entry runs its pack command (\`${app.pack ?? DEFAULT_PACK}\`) and then reads\n` +
+        `     ${ARTIFACT_NAME} from the checkout root, the same file the repo publishes to a release.\n` +
+        `     Set "pack" to the right command, or "pack": false if the artifact is already built.`,
+      );
+    }
+    return { stageDir: stageArtifact(artifact, stagingName(key), STAGE_ROOT, key), label: 'local' };
+  }
+
+  const { tarPath, releaseTag } = await downloadArtifact(app);
+  const stageDir = join(STAGE_ROOT, stagingName(key));
+  if (existsSync(stageDir)) rmSync(stageDir, { recursive: true });
+  mkdirSync(stageDir, { recursive: true });
+  extractTarball(tarPath, stageDir, `${key}@${releaseTag}`);
+  return { stageDir, label: releaseTag, releaseTag };
 }
 
 /**
- * Expands a locally staged single-page bundle into one sub-app per doc.
- *
- * The GitHub path (scripts/fetch-apps.js → fetchBundle) does the same thing after
- * downloading the release asset; both share the manifest reading/validation in
- * src/utils/single-page.js so the two can't drift.
+ * Installs every app an artifact declares into apps/{slug}/.
  *
  * @returns {Array} expanded app entries, ready for the expansion map
  */
-function installBundle(app, stageDir, sourceLabel) {
-  const key = bundleKey(app);
-  const bundleRoot = findBundleRoot(stageDir);
-  if (!bundleRoot) {
+function installArtifact(app, stageDir, label) {
+  const key  = sourceKey(app);
+  const root = findManifestRoot(stageDir);
+  if (!root) {
     fail(
-      key + ': single-page artifact has no ' + BUNDLE_MANIFEST + ' at its root. ' +
-      'Publish it with AbsaOSS/knowledge-base/actions/publish-single-page-docs — see contract/SINGLE_PAGE.md.',
+      `${key}: the artifact has no ${MANIFEST} at its root.\n` +
+      `     A release must carry ${ARTIFACT_NAME} packed by an AbsaOSS/knowledge-base publishing\n` +
+      `     action — see contract/ARTIFACT.md.`,
     );
   }
 
-  const docs = expandBundle(app, readBundleManifest(bundleRoot, key), bundleRoot);
-  for (const doc of docs) {
-    const destDir = join(APPS_DIR, doc.slug);
+  const manifest = readManifest(root, key);
+  const apps     = expandManifest(app, manifest, root);
+
+  // Anything in the archive that no app claims is not served. Saying so is the
+  // difference between a doc that is missing and a doc nobody realises was
+  // never registered.
+  warnOnUnclaimedMembers(root, apps, key);
+
+  for (const entry of apps) {
+    const destDir = join(APPS_DIR, entry.slug);
     if (existsSync(destDir)) rmSync(destDir, { recursive: true });
-    copyDir(doc.docDir, destDir);
-    ok(doc.slug + ' ready (single-page doc, ' + sourceLabel + ')');
+    copyDir(entry.appDir, destDir);
+
+    const html = readFileSync(join(destDir, entry.entryPoint), 'utf8');
+    checkHeadlessMarker(html, `${entry.slug}: ${entry.entryPoint}`);
+
+    ok(`${entry.slug} ready (${label})`);
   }
-  return docs.map(toRegistryEntry);
+  return apps.map(toRegistryEntry);
+}
+
+/** The marker a headless artifact must carry on `<html>`. */
+const HEADLESS_MARKER = 'data-kb-headless="true"';
+/** Its pre-rename spelling — see issue #77. */
+const LEGACY_HEADLESS_MARKER = 'data-mp-headless';
+
+/**
+ * Warns when an artifact's entry point is not marked headless.
+ *
+ * A bundle published before the rename carries `data-mp-headless`, which is
+ * indistinguishable from "not headless at all" to every downstream consumer.
+ * Saying so explicitly is the difference between a publisher re-reading the
+ * contract and a publisher re-reading their build script.
+ *
+ * This used to run only on the GitHub fetch path, so the sources CI actually
+ * uses were never checked.
+ */
+function checkHeadlessMarker(html, label) {
+  if (html.includes(HEADLESS_MARKER)) return;
+  if (html.includes(LEGACY_HEADLESS_MARKER)) {
+    warn(
+      `${label} carries ${LEGACY_HEADLESS_MARKER}, which this knowledge base no longer reads. ` +
+      `The artifact was produced against the pre-rename contract — republish it with a current ` +
+      `AbsaOSS/knowledge-base action so it emits ${HEADLESS_MARKER}.`,
+    );
+    return;
+  }
+  warn(`${label} is missing ${HEADLESS_MARKER} on <html> — see contract/HEADLESS_RULES.md.`);
+}
+
+/**
+ * Reports archive members that belong to no declared app.
+ *
+ * contract/ARTIFACT.md allows only the manifest and the declared `<slug>/`
+ * directories. A stray top-level file is not served, and a stray *directory*
+ * usually means a doc was dropped from the manifest but not from the build.
+ */
+function warnOnUnclaimedMembers(root, apps, key) {
+  const claimed = new Set(apps.map((a) => a.slug));
+  for (const entry of readdirSync(root, { withFileTypes: true })) {
+    if (entry.name === MANIFEST) continue;
+    if (entry.isDirectory() && claimed.has(entry.name)) continue;
+    warn(
+      `${key}: ${entry.isDirectory() ? 'directory' : 'file'} "${entry.name}" is in the artifact but ` +
+      `no app in ${MANIFEST} claims it — it will not be served.`,
+    );
+  }
 }
 
 function fail(msg) { throw new Error(msg); }
@@ -145,10 +236,56 @@ function linkOrCopy(src, dest) {
 
 async function build() {
   const startMs = Date.now();
-  const modeLabel = [LOCAL_MODE && 'local', HEADLESS && 'headless'].filter(Boolean).join(', ');
+  const modeLabel = [LOCAL_MODE && 'local', HEADLESS && 'headless', STRICT && 'strict'].filter(Boolean).join(', ');
   console.log('\n\x1b[1m\x1b[35m▶ knowledge-base build' + (modeLabel ? ' (' + modeLabel + ')' : '') + '\x1b[0m\n');
 
-  const allEntries = JSON.parse(readFileSync(join(ROOT, 'apps.json'), 'utf8'));
+  // resolve, not join: KB_REGISTRY may be absolute — a deployment repo owns its
+  // registry and it is checked out beside this repo, not inside it.
+  const registryPath = resolve(ROOT, REGISTRY_FILE);
+  if (!existsSync(registryPath)) fail(`registry not found: ${registryPath} (set KB_REGISTRY to point elsewhere)`);
+  const allEntries = JSON.parse(readFileSync(registryPath, 'utf8'));
+  if (!Array.isArray(allEntries)) fail(`${REGISTRY_FILE}: expected an array of entries.`);
+
+  // Validate every entry before touching the network or the filesystem, so a
+  // malformed registry fails on the registry rather than halfway through a
+  // download. See src/utils/registry.js for the rules.
+  allEntries.forEach(validateEntry);
+
+  const seenSources = new Set();
+  for (const app of allEntries) {
+    if (isIframe(app)) {
+      if (app.temporary) warn(`${app.slug}: temporary iframe entry — migrate to a packaged artifact when ready`);
+      continue;
+    }
+    const key = sourceKey(app);
+    if (seenSources.has(key)) fail(`${REGISTRY_FILE}: two entries both point at ${key}.`);
+    seenSources.add(key);
+
+    if (STRICT) {
+      // A deployment must be reproducible from released artifacts alone. A
+      // local path is a developer's working copy, and `optional` is permission
+      // to ship without an app nobody noticed was missing.
+      for (const field of ['prebuilt', 'localPath']) {
+        if (app[field]) {
+          fail(
+            `${key}: "${field}" is not allowed in a strict build.\n` +
+            `     A deployment registry lists released artifacts — use "repo" (with an optional\n` +
+            `     "version") so the build is reproducible from what is published. See contract/DEPLOYMENT.md.`,
+          );
+        }
+      }
+      if (app.optional) {
+        fail(
+          `${key}: "optional" is not allowed in a strict build — a registered app that cannot be\n` +
+          `     fetched is a broken deployment, not something to skip with a warning.`,
+        );
+      }
+    }
+  }
+
+  if (STRICT && allEntries.length === 0) {
+    fail(`${REGISTRY_FILE} is empty — a strict build will not publish an empty knowledge base.`);
+  }
 
   // Entries flagged `"optional": true` are local-development conveniences whose
   // artifact lives outside this repo — the sibling example repo, say. When it is
@@ -158,34 +295,14 @@ async function build() {
   const registeredApps = allEntries.filter(app => {
     const artifact = app.prebuilt ?? app.localPath;
     if (!app.optional || !artifact || existsSync(artifactPath(artifact))) return true;
-    warn((app.slug ?? artifact) + ': optional entry skipped — artifact not found at ' + artifactPath(artifact));
+    warn(`${sourceKey(app)}: optional entry skipped — artifact not found at ${artifactPath(artifact)}`);
     return false;
   });
 
-  // Validate registry entries up front (fail fast with a clear message).
-  const bundleKeys = new Set();
-  for (const app of registeredApps) {
-    if (isSinglePage(app)) {
-      // A single-page entry carries no slug or per-doc metadata — the docs (and
-      // their slugs) are discovered from the artifact's bundle.json.
-      const key = bundleKey(app);
-      if (bundleKeys.has(key)) fail('apps.json: two "single-page" entries both point at ' + key);
-      bundleKeys.add(key);
-      continue;
-    }
-    if (!app.slug) fail('apps.json: an entry is missing "slug"');
-    if (app.type === 'iframe') {
-      if (!app.url) fail(app.slug + ': iframe entry requires a "url"');
-      if (app.temporary) warn(app.slug + ': temporary iframe entry — migrate to a headless package when ready');
-    } else if (!app.prebuilt && !app.localPath && !app.repo) {
-      fail(app.slug + ': packaged entry needs one of "repo", "localPath", or "prebuilt"');
-    }
-  }
-
-  // iframe entries have no artifact to fetch/build — they render a single route
-  // (see src/pages/[...path].astro). Only packaged apps go through the pipeline.
-  const iframeApps   = registeredApps.filter(a => a.type === 'iframe');
-  const packagedApps = registeredApps.filter(a => a.type !== 'iframe');
+  // iframe entries have no artifact to fetch or build — they render a single
+  // route (see src/pages/[...path].astro).
+  const iframeApps   = registeredApps.filter(isIframe);
+  const artifactApps = registeredApps.filter(a => !isIframe(a));
 
   // 1. Prepare apps/ directory
   step('1/4  Preparing sub-app artifacts → apps/');
@@ -193,72 +310,53 @@ async function build() {
 
   for (const app of iframeApps) ok(app.slug + ' registered (iframe → ' + app.url + ')');
 
-  // What each single-page bundle expanded into, keyed by bundleKey. Written to
-  // apps/.single-page.json so Astro resolves the same registry the build did.
+  // What each artifact expanded into, keyed by its source. Written to
+  // apps/.registry.json so Astro resolves the same registry the build did.
   const expansions = {};
-  const record = (key, docs) => { (expansions[key] ??= []).push(...docs); };
 
-  // Apps shipping a `prebuilt` artifact are prepared locally regardless of mode
-  // (hermetic — no network, no per-app build). The rest go through fetch/local.
-  const prebuiltApps  = packagedApps.filter(a => a.prebuilt);
-  const remainingApps = packagedApps.filter(a => !a.prebuilt);
+  /** source → version → slugs, for the deployment's audit trail. */
+  const provenance = [];
 
-  for (const app of prebuiltApps) {
-    const docs = preparePrebuilt(app);
-    if (docs) record(bundleKey(app), docs);
-  }
+  for (const app of artifactApps) {
+    const key = sourceKey(app);
 
-  if (remainingApps.length > 0) {
-    if (LOCAL_MODE) {
-      for (const app of remainingApps) {
-        if (!app.localPath) { warn((app.slug ?? bundleKey(app)) + ': no localPath, skipping'); continue; }
-        const srcDir = app.localPath.replace(/^~/, homedir());
-
-        // A local single-page bundle is already built output — expand it in place
-        // rather than running a per-app build script it does not have.
-        if (isSinglePage(app)) {
-          record(bundleKey(app), installBundle(app, resolveArtifactPath(app, app.localPath, 'localPath'), 'local'));
-          continue;
-        }
-
-        const buildScript = HEADLESS ? 'build:headless' : 'build';
-        log('Building ' + app.slug + ' from ' + app.localPath + '…');
-        execSync('npm run ' + buildScript, { cwd: srcDir, stdio: 'inherit' });
-
-        const srcDist = join(srcDir, 'dist');
-        const destDir = join(APPS_DIR, app.slug);
-        if (existsSync(destDir)) rmSync(destDir, { recursive: true });
-        copyDir(srcDist, destDir);
-        const manifest = join(srcDir, 'marketplace.json');
-        if (existsSync(manifest)) copyFileSync(manifest, join(destDir, 'marketplace.json'));
-        ok(app.slug + ' ready (local)');
-      }
-    } else {
-      for (const entry of await fetchApps(remainingApps)) {
-        // Only single-page entries carry a bundleKey; packaged apps are already
-        // fully described by their apps.json entry.
-        const { bundleKey: key, ...rest } = entry;
-        if (key) record(key, [toRegistryEntry(rest)]);
-      }
+    // `prebuilt` artifacts are staged locally regardless of mode — that is what
+    // makes CI hermetic. `--local` only changes what a `repo` entry means: build
+    // it from the checkout beside this one rather than downloading a release.
+    if (LOCAL_MODE && app.repo && !app.localPath) {
+      warn(`${key}: --local was requested but the entry names no localPath — skipping.`);
+      continue;
     }
+
+    console.log('\n\x1b[1m[' + key + ']\x1b[0m');
+    const { stageDir, label } = await stageEntry(app);
+    expansions[key] = installArtifact(app, stageDir, label);
+
+    // An entry that produced nothing means a registered app is silently absent
+    // from the deployment. Locally that is a warning; in production it is the
+    // difference between "the docs moved" and "the docs are gone".
+    if (STRICT && expansions[key].length === 0) {
+      fail(`${key}: produced no apps — a registered artifact must publish at least one.`);
+    }
+    provenance.push({ key, label, slugs: expansions[key].map((a) => a.slug) });
   }
 
   // Persist the expansion and resolve the registry the rest of the build works
-  // from. resolveRegistry also enforces globally unique slugs, so a doc bundle
+  // from. resolveRegistry also enforces globally unique slugs, so one artifact
   // can never quietly take over another app's URL prefix.
   writeExpansionMap(ROOT, expansions);
   const resolvedApps = resolveRegistry(registeredApps, expansions, warn);
-  const packagedResolved = resolvedApps.filter(a => a.type !== 'iframe');
+  const packagedResolved = resolvedApps.filter(a => !isIframe(a));
 
   // 1b. Hoist inline <script> bodies out of sub-app HTML into files.
-  //     The marketplace serves script-src 'self'; an inline script anywhere would
+  //     The knowledge base serves script-src 'self'; an inline script anywhere would
   //     force 'unsafe-inline' on every page. Bundles published before the action
   //     stopped emitting one still contain it, and this repo does not control
   //     when those repos re-publish — so it is fixed here rather than assumed.
   step('1b/4  Hoisting inline scripts → files');
   let hoisted = 0;
   let droppedBootstraps = 0;
-  for (const app of resolvedApps.filter(a => a.type !== 'iframe')) {
+  for (const app of resolvedApps.filter(a => !isIframe(a))) {
     const appDir = join(APPS_DIR, app.slug);
     if (!existsSync(appDir)) continue;
     const { hoisted: count, dropped } = hoistAppInlineScripts(appDir, collectHtmlFiles(appDir));
@@ -339,13 +437,13 @@ async function build() {
 
   // 3. Run Astro build
   step('3/4  Running astro build');
-  // Always explicit: src/utils/config.js treats an unset MP_HEADLESS as
+  // Always explicit: src/utils/config.js treats an unset KB_HEADLESS as
   // standalone, and a build that says "--headless" must not depend on that.
-  const env = { ...process.env, MP_HEADLESS: HEADLESS ? 'true' : 'false' };
+  const env = { ...process.env, KB_HEADLESS: HEADLESS ? 'true' : 'false' };
   execSync('npx astro build', { cwd: ROOT, stdio: 'inherit', env });
   ok('Astro build complete');
 
-  // Publish dist/style.css as an alias of the marketplace stylesheet.
+  // Publish dist/style.css as an alias of the knowledge base stylesheet.
   //
   // Pages do not need it: Astro injects the <link> from Base.astro's CSS import,
   // with whatever content-hashed name the bundle got. The alias exists because
@@ -353,8 +451,8 @@ async function build() {
   // something outside this repository may still ask for it.
   //
   // The bundle is identified by *use*, not by filename: it is the local
-  // stylesheet the marketplace's own landing page loads. That is the definition
-  // of "the marketplace stylesheet", and it cannot drift from what the pages
+  // stylesheet the knowledge base's own landing page loads. That is the definition
+  // of "the knowledge base stylesheet", and it cannot drift from what the pages
   // actually reference the way a filename pattern could (#50).
   const distRoot = join(ROOT, 'dist');
   if (existsSync(distRoot)) {
@@ -367,7 +465,7 @@ async function build() {
 
     if (hrefs.length !== 1) {
       fail(
-        'Expected the landing page to load exactly one local stylesheet — the marketplace bundle — ' +
+        'Expected the landing page to load exactly one local stylesheet — the knowledge base bundle — ' +
         'but found ' + hrefs.length + (hrefs.length ? ': ' + hrefs.join(', ') : '') +
         '. dist/style.css can only alias an unambiguous one.',
       );
@@ -376,7 +474,7 @@ async function build() {
     const bundle = join(distRoot, hrefs[0].slice(('/' + PATH_PREFIX).length));
     if (!existsSync(bundle)) fail('The landing page references ' + hrefs[0] + ', which is not in dist/.');
     copyFileSync(bundle, join(distRoot, 'style.css'));
-    ok('Marketplace CSS ' + hrefs[0] + ' aliased → dist/style.css');
+    ok('Knowledge base CSS ' + hrefs[0] + ' aliased → dist/style.css');
   }
 
   // 4. Summary
@@ -387,6 +485,40 @@ async function build() {
     .map(e => e.name);
   const appList = slugs.map(s => '    \u2022 \x1b[36m' + s + '\x1b[0m → dist/' + s + '/').join('\n');
   console.log('\n\x1b[32m✓\x1b[0m \x1b[1m' + (slugs.length + iframeApps.length) + ' app(s) integrated\x1b[0m in ' + elapsed + 's\n\n  Apps:\n' + appList + '\n  Prefix: \x1b[33m' + PATH_PREFIX + '\x1b[0m\n');
+
+  writeProvenance(provenance, iframeApps);
+}
+
+/**
+ * Records what this build was actually assembled from.
+ *
+ * A deployment image is opaque once it is pushed: "the docs are wrong" needs an
+ * answer to "which release of which repo produced this page", and the registry
+ * alone cannot answer it because `latest` means something different every day.
+ * Written next to dist/ and rendered into the workflow's job summary.
+ */
+function writeProvenance(entries, iframeApps) {
+  const manifest = {
+    builtAt: new Date().toISOString(),
+    registry: REGISTRY_FILE,
+    strict: STRICT,
+    headless: HEADLESS,
+    sources: entries.map(({ key, label, slugs }) => ({ source: key, version: label, slugs })),
+    iframes: iframeApps.map((a) => ({ slug: a.slug, url: a.url })),
+  };
+  writeFileSync(join(ROOT, 'dist', 'kb-build.json'), JSON.stringify(manifest, null, 2) + '\n');
+
+  const summaryFile = process.env.GITHUB_STEP_SUMMARY;
+  if (!summaryFile) return;
+
+  const rows = entries.flatMap(({ key, label, slugs }) =>
+    slugs.map((slug) => `| \`${slug}\` | \`${key}\` | \`${label}\` |`));
+  for (const app of iframeApps) rows.push(`| \`${app.slug}\` | iframe | ${app.url} |`);
+
+  appendFileSync(summaryFile,
+    `### Knowledge base build\n\n` +
+    `Registry \`${REGISTRY_FILE}\`${STRICT ? ' (strict)' : ''}\n\n` +
+    `| App | Source | Version |\n|---|---|---|\n${rows.join('\n')}\n`);
 }
 
 build().catch(err => {

@@ -24,7 +24,7 @@
  * (tables, task lists, footnotes, anchors, highlighted code, mermaid), plus the
  * common structural and inline HTML an author might hand-write. Class and id
  * attributes are kept because the rendering pipeline depends on them —
- * `mp-code`, `mp-anchor`, `hljs-*`, `task-list-item`, `footnotes`, heading ids.
+ * `kb-code`, `kb-anchor`, `hljs-*`, `task-list-item`, `footnotes`, heading ids.
  */
 
 import sanitizeHtml from 'sanitize-html';

@@ -7,7 +7,7 @@
  * Why not `astro preview`? For static output Astro uses its own preview server,
  * so the Vite `configurePreviewServer` hook in astro.config.mjs (the
  * /__wf/knowledge-base/* → /knowledge-base/* rewrite) never runs and the
- * marketplace stylesheet 404s. In production nginx performs that rewrite, so this
+ * knowledge base stylesheet 404s. In production nginx performs that rewrite, so this
  * server replicates nginx's two location rules to test the real contract:
  *
  *   /__wf/knowledge-base/<f>  → serve dist/<f>            (fragment assets)
