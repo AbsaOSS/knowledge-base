@@ -78,7 +78,7 @@ async function ghApi(path) {
 
   // Fallback: gh CLI. spawnSync takes an argv array, so nothing is shell-parsed.
   // This is a local-development convenience; CI should always set GITHUB_TOKEN
-  // (the reusable workflow does), since a runner need not have gh at all (#85).
+  // (the reusable workflow does), since a runner need not have gh at all.
   const result = spawnSync('gh', ['api', path], { encoding: 'utf8' });
   if (result.error) {
     fail(

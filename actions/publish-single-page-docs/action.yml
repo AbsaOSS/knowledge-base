@@ -69,7 +69,7 @@ runs:
 
     # Through the REST API, not the gh CLI: gh is preinstalled on GitHub-hosted
     # runners but is not part of the runner, and a self-hosted runner need not
-    # have it (#85). github-script brings its own Node and an authenticated
+    # have it. github-script brings its own Node and an authenticated
     # Octokit client, so this step assumes nothing about the machine it runs on.
     - name: Upload kb-docs.tar.gz to the release
       id: upload
@@ -80,7 +80,7 @@ runs:
         # Read through the environment, never interpolated into the script body:
         # a ${{ }} expression is substituted into the script text before it is
         # parsed, so any metacharacter in the value would execute rather than
-        # quote (#55). These come from the consuming repo's `docs` input.
+        # quote. These come from the consuming repo's `docs` input.
         KB_COUNT: ${{ steps.build.outputs.count }}
         KB_SLUGS: ${{ steps.build.outputs.slugs }}
         KB_RELEASE_LIB: ${{ github.action_path }}/../lib/release.cjs

@@ -5,7 +5,7 @@
  * run through actions/github-script — against a recording fake of the Octokit
  * client and of `core`. No network, no runner: the point is to pin which API
  * calls are made, in which order, and what a consumer sees when a release is
- * missing, so that dropping the gh CLI (#85) did not change the behaviour a
+ * missing, so that dropping the gh CLI did not change the behaviour a
  * docs repo already relies on.
  */
 

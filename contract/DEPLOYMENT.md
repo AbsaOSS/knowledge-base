@@ -146,7 +146,7 @@ anyway once a private repo is registered.
 
 Neither the reusable workflow nor the publishing actions need the `gh` CLI on
 the runner — every GitHub call goes through the REST API with a token from the
-environment (#85) — so both run unchanged on self-hosted runners.
+environment — so both run unchanged on self-hosted runners.
 
 ---
 

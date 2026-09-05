@@ -6,7 +6,7 @@
  * brings its own Node runtime and an authenticated Octokit client. That is the
  * whole point: the runner needs no `gh` CLI, no preinstalled toolchain and no
  * network access beyond the GitHub API, so the actions run on self-hosted
- * runners exactly as they do on GitHub-hosted ones (#85).
+ * runners exactly as they do on GitHub-hosted ones.
  *
  * CommonJS in an ESM package on purpose. github-script hands the script a
  * `require`, and a `.cjs` file is what that loads without leaning on Node's
@@ -14,7 +14,7 @@
  * runs under github-script's Node, not under the tree `npm ci` installed.
  *
  * Everything consumer-controlled arrives through `env`, never interpolated into
- * the script body — the same rule the shell steps follow (#55).
+ * the script body — the same rule the shell steps follow.
  */
 'use strict';
 

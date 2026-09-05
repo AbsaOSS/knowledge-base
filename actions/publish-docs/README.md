@@ -82,7 +82,7 @@ GitHub-hosted and self-hosted runners:
 - **Node** comes from `actions/setup-node`; nothing needs to be preinstalled.
 - **The release upload and the notify** go through `actions/github-script`,
   which ships its own runtime and an authenticated Octokit client. The `gh` CLI
-  is **not** required (#85). Uploads go to the release's own `upload_url`, so
+  is **not** required. Uploads go to the release's own `upload_url`, so
   GitHub Enterprise hosts work without configuration.
 - **`bash`** is needed for the two one-line `run:` steps (`npm ci` and the
   entry point). Every GitHub-hosted image and Git for Windows provide it.

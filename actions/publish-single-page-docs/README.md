@@ -46,7 +46,7 @@ code both actions run.
 
 Nothing beyond what the runner itself provides, so self-hosted runners work
 unchanged: Node comes from `actions/setup-node`, the release upload goes through
-`actions/github-script` and its Octokit client rather than the `gh` CLI (#85),
+`actions/github-script` and its Octokit client rather than the `gh` CLI,
 and `bash` is needed only for the two one-line `run:` steps. The runner must
 support Node 24 actions (`actions/runner` ≥ 2.327.1), as `actions/setup-node@v7`
 already requires. See the [`publish-docs` README](../publish-docs/README.md#runner-requirements)
