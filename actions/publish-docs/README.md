@@ -74,6 +74,24 @@ The action attaches to an existing release — it never creates one. Trigger on
 `release: published` and it is guaranteed to be there, or pass `release-tag`
 explicitly.
 
+## Runner requirements
+
+The action assumes nothing about the runner image, so it runs the same on
+GitHub-hosted and self-hosted runners:
+
+- **Node** comes from `actions/setup-node`; nothing needs to be preinstalled.
+- **The release upload and the notify** go through `actions/github-script`,
+  which ships its own runtime and an authenticated Octokit client. The `gh` CLI
+  is **not** required. Uploads go to the release's own `upload_url`, so
+  GitHub Enterprise hosts work without configuration.
+- **`bash`** is needed for the two one-line `run:` steps (`npm ci` and the
+  entry point). Every GitHub-hosted image and Git for Windows provide it.
+- **Network**: the GitHub API of the instance the workflow runs on, and the npm
+  registry for `npm ci`. Nothing else is fetched.
+
+The runner must be new enough for Node 24 actions (`actions/runner` ≥ 2.327.1),
+which `actions/setup-node@v7` already requires.
+
 ## Notifying a deployment
 
 Set `notify-repo` and `notify-token` to fire a `kb-docs-published`
@@ -108,10 +126,12 @@ that does not say which file is wrong costs somebody a CI round trip.
 
 | Path | Role |
 |---|---|
-| `action.yml` | Composite action: setup-node → `npm ci` → verify + pack → `gh release upload` → notify |
+| `action.yml` | Composite action: setup-node → `npm ci` → verify + pack → upload (`github-script`) → notify (`github-script`) |
 | `src/index.js` | Entry point. Reads inputs from env, writes step outputs. |
 | `src/selftest.js` | The self-test described above. |
 
 Shared with the other action in [`actions/lib/`](../lib): manifest validation,
-HTML verification, deterministic packing and the runner plumbing. Dependencies
-are pinned once in [`actions/package.json`](../package.json).
+HTML verification, deterministic packing, the runner plumbing, and
+`release.cjs` — the release upload and the notify, run by `github-script`
+against its Octokit client. Dependencies are pinned once in
+[`actions/package.json`](../package.json).

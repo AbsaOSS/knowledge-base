@@ -67,39 +67,25 @@ runs:
         KB_STAGE: ${{ runner.temp }}/kb-single-page/stage
         KB_ARTIFACT: ${{ runner.temp }}/kb-single-page/kb-docs.tar.gz
 
+    # Through the REST API, not the gh CLI: gh is preinstalled on GitHub-hosted
+    # runners but is not part of the runner, and a self-hosted runner need not
+    # have it. github-script brings its own Node and an authenticated
+    # Octokit client, so this step assumes nothing about the machine it runs on.
     - name: Upload kb-docs.tar.gz to the release
       id: upload
-      shell: bash
+      uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
       env:
-        GH_TOKEN: ${{ inputs.github-token }}
         KB_RELEASE_TAG: ${{ inputs.release-tag }}
         KB_ARTIFACT: ${{ steps.build.outputs.artifact }}
         # Read through the environment, never interpolated into the script body:
-        # a ${{ }} expression is substituted into the shell text before bash sees
-        # it, so any metacharacter in the value would execute rather than quote.
-        # These come from the consuming repo's `docs` input.
+        # a ${{ }} expression is substituted into the script text before it is
+        # parsed, so any metacharacter in the value would execute rather than
+        # quote. These come from the consuming repo's `docs` input.
         KB_COUNT: ${{ steps.build.outputs.count }}
         KB_SLUGS: ${{ steps.build.outputs.slugs }}
-      run: |
-        set -euo pipefail
-
-        tag="${KB_RELEASE_TAG:-}"
-
-        # /releases/latest excludes drafts and pre-releases, so fall back to the
-        # most recently created release of any kind before giving up.
-        if [ -z "$tag" ]; then
-          tag="$(gh api "repos/$GITHUB_REPOSITORY/releases/latest" --jq '.tag_name' 2>/dev/null || true)"
-        fi
-        if [ -z "$tag" ] || [ "$tag" = "null" ]; then
-          tag="$(gh api "repos/$GITHUB_REPOSITORY/releases?per_page=1" --jq '.[0].tag_name // empty' 2>/dev/null || true)"
-        fi
-        if [ -z "$tag" ] || [ "$tag" = "null" ]; then
-          echo "::error::$GITHUB_REPOSITORY has no GitHub Release to attach the docs bundle to. Create a release (any tag) and re-run, or pass release-tag explicitly."
-          exit 1
-        fi
-
-        echo "Uploading $(basename "$KB_ARTIFACT") to release $tag (replacing any existing asset)…"
-        gh release upload "$tag" "$KB_ARTIFACT" --clobber --repo "$GITHUB_REPOSITORY"
-
-        echo "release-tag=$tag" >> "$GITHUB_OUTPUT"
-        echo "Published $KB_COUNT doc(s): $KB_SLUGS" >> "$GITHUB_STEP_SUMMARY"
+        KB_RELEASE_LIB: ${{ github.action_path }}/../lib/release.cjs
+      with:
+        github-token: ${{ inputs.github-token }}
+        script: |
+          const { publish } = require(process.env.KB_RELEASE_LIB);
+          await publish({ github, core, context, env: process.env, noun: 'doc' });
