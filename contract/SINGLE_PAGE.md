@@ -17,6 +17,13 @@ picks it up on its next build and gives every doc its own catalog card and URL.
 > | *default* (packaged) | You have a real static docs site (mkdocs, Starlight…) | headless build + `kb-docs.json` + release workflow — see [HEADLESS_RULES.md](./HEADLESS_RULES.md) |
 > | *iframe* | Your docs are already hosted elsewhere and can't be packaged yet | an `apps.json` entry — explicit stopgap, see [HEADLESS_RULES.md](./HEADLESS_RULES.md) |
 
+> **With an AI agent.** The `kb-docs-add` skill in
+> [`skills/kb-docs-add/`](../skills/kb-docs-add) walks an agent through this page:
+> it picks the type, writes the one workflow file below and nothing else, and knows
+> the fix for every message in [Troubleshooting](#troubleshooting). Install with
+> `npx skills add AbsaOSS/knowledge-base --skill kb-docs-add` (Claude Code, GitHub
+> Copilot and other `SKILL.md` readers). This page stays the normative text.
+
 ---
 
 ## 1. Add the workflow

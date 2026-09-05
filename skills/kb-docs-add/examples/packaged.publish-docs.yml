@@ -1,0 +1,24 @@
+# .github/workflows/publish-docs.yml in your doc repo
+name: Publish docs
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+permissions:
+  contents: write        # required — the action uploads a release asset
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Whatever your site generator is. The action does not build for you.
+      - run: npm ci && npm run build -- --headless
+
+      - uses: AbsaOSS/knowledge-base/actions/publish-docs@v1
+        with:
+          manifest: kb-docs.json
+          dist: dist

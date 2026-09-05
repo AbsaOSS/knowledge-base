@@ -1,0 +1,59 @@
+{
+  "skill_name": "kb-docs-add",
+  "evals": [
+    {
+      "id": 1,
+      "name": "markdown-only-single-page",
+      "prompt": "Our ledger-sync repo needs to show up in the AbsaOSS knowledge base. Get the operator docs in docs/ published there.",
+      "files": [
+        "markdown-only"
+      ],
+      "expected_output": "Exactly one new file, .github/workflows/publish-docs.yml, calling AbsaOSS/knowledge-base/actions/publish-single-page-docs@v1 with a docs list covering docs/overview.md and docs/runbook.md, slugs prefixed ledger-sync, descriptions 10-280 chars, permissions contents: write. No manifest, no scripts, no package.json. The reply tells the user to publish a release and open the apps.json PR.",
+      "assertions": [
+        "Only file created or modified is .github/workflows/publish-docs.yml",
+        "Workflow uses AbsaOSS/knowledge-base/actions/publish-single-page-docs@v1 (not @master)",
+        "Workflow triggers on release: published and has permissions: contents: write",
+        "docs list includes docs/overview.md and docs/runbook.md and excludes CHANGELOG.md",
+        "Every slug matches ^[a-z0-9]+(-[a-z0-9]+)*$ and starts with ledger-sync",
+        "Every description is 10-280 characters",
+        "No kb-docs.json, no scripts directory, no dist.tar.gz, no marketplace.json anywhere",
+        "Final message mentions publishing a GitHub Release and the apps.json registry entry { repo, version }"
+      ]
+    },
+    {
+      "id": 2,
+      "name": "mkdocs-site-packaged",
+      "prompt": "Please onboard this mkdocs site into the knowledge base (the AbsaOSS one). Keep our existing site working for GitHub Pages.",
+      "files": [
+        "mkdocs-site"
+      ],
+      "expected_output": "kb-docs.json at the root (kbVersion \"1\", one app, service-prefixed slug, pages matching mkdocs output paths or omitted), .github/workflows/publish-docs.yml calling publish-docs@v1 with a Python/mkdocs build step and dist input matching site_dir, and the smallest headless change to the existing theme: a config variant (e.g. mkdocs-headless.yml with INHERIT) plus a conditional data-kb-headless attribute and header/toggle removal in theme/main.html. No new generator, no packing script.",
+      "assertions": [
+        "kb-docs.json exists at the fixture root, is valid JSON, kbVersion is the string \"1\", apps has exactly one entry",
+        "The app slug matches ^[a-z0-9]+(-[a-z0-9]+)*$ and is service-prefixed (contains 'payments')",
+        "If pages is present, every path uses the directory-URL layout mkdocs produces (index.html, getting-started/index.html, reference/config/index.html)",
+        ".github/workflows/publish-docs.yml uses AbsaOSS/knowledge-base/actions/publish-docs@v1 and its build step runs mkdocs",
+        "The workflow's dist input equals the directory the headless build writes",
+        "Files touched are limited to: kb-docs.json, .github/workflows/publish-docs.yml, a mkdocs config variant, files under theme/",
+        "theme/main.html emits data-kb-headless=\"true\" only in the headless variant and suppresses the fixed header and theme toggle there",
+        "No scripts/, Makefile, package.json, dist.tar.gz or marketplace.json was created",
+        "Final message lists the release and apps.json steps the user must do"
+      ]
+    },
+    {
+      "id": 3,
+      "name": "hosted-elsewhere-iframe",
+      "prompt": "Add fx-rates to the knowledge base please",
+      "files": [
+        "hosted-elsewhere"
+      ],
+      "expected_output": "No files written. The reply explains that there is no packageable documentation source in the repo, describes the iframe stopgap entry the deployment repo's apps.json would carry ({type: iframe, slug, url, temporary: true}), notes the portal must allow framing, and offers the single-page path if the team wants to own markdown here.",
+      "assertions": [
+        "No file was created or modified in the fixture",
+        "The reply names the iframe type and shows an apps.json entry with type iframe, a slug, the portal url and temporary: true",
+        "The reply says the external site must allow embedding (frame-ancestors / X-Frame-Options)",
+        "The reply does not invent a kb-docs.json or a workflow for this repo"
+      ]
+    }
+  ]
+}

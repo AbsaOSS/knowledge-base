@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>{{ page.title }} - {{ config.site_name }}</title>
+  <link rel="stylesheet" href="{{ 'style.css' | url }}">
+</head>
+<body>
+  <header class="topnav fixed top-0 inset-x-0">
+    <a class="brand" href="{{ nav.homepage.url | url }}">{{ config.site_name }}</a>
+    <nav>
+      <a href="https://developer.example.com">Developer portal</a>
+      <a href="https://status.example.com">Status</a>
+    </nav>
+    <button id="theme-toggle" aria-label="Toggle theme">◐</button>
+  </header>
+  <nav id="sidebar">
+    <ul>
+    {% for nav_item in nav %}
+      <li><a href="{{ nav_item.url | url }}">{{ nav_item.title }}</a></li>
+    {% endfor %}
+    </ul>
+  </nav>
+  <main id="content">
+    {{ page.content }}
+  </main>
+  <script>
+    document.getElementById('theme-toggle').onclick = () => document.body.classList.toggle('dark');
+  </script>
+</body>
+</html>

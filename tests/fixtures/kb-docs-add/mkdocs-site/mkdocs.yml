@@ -1,0 +1,17 @@
+site_name: Payments Gateway
+site_description: Integration guide for the Payments Gateway API.
+docs_dir: docs
+site_dir: dist
+
+theme:
+  name: null
+  custom_dir: theme
+
+nav:
+  - Overview: index.md
+  - Getting started: getting-started.md
+  - Reference:
+      - Configuration: reference/config.md
+
+plugins:
+  - search

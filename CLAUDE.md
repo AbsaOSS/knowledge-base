@@ -83,6 +83,7 @@ Orchestrator: `scripts/build-vite.js`. Flags: `--local`, `--headless`.
 - `scripts/artifacts.js` — Safe tarball extraction + tree copy, shared by both fetch paths. Validates archive members (no traversal, no absolute paths, no symlinks) before anything is written, and replaces the old `cp -r`/`tar` shell-outs so the build runs on Windows
 - `scripts/hoist-inline-scripts.js` — Moves inline `<script>` bodies in sub-app HTML into files before the Astro build, so the deployment can serve `script-src 'self'`. Needed because bundles published before the action stopped emitting an inline mermaid bootstrap still contain one. A sub-app's dark-mode bootstrap is deleted here rather than hoisted — light only, and hoisting would put it beyond the reach of `transform.js`
 - `actions/publish-single-page-docs/` — Reusable GitHub Action that turns a repo's markdown into a single-page bundle
+- `skills/kb-docs-add/` — Agent skill (Claude Code, GitHub Copilot, `npx skills add`) that walks an agent through onboarding a docs repo: classify, write only the contract-required files, verify, troubleshoot. Guidance only — no scripts; `examples/` are the contract's own code blocks and `tests/skill.spec.js` fails if they drift. Eval fixtures live in `tests/fixtures/kb-docs-add/`
 
 ### Onboarding Types
 
@@ -161,6 +162,10 @@ commands listed in `AGENTS.md`:
   only that host to a configured mirror), the `npm-registry`/`npm-token`/`node-mirror` inputs
   exist on both actions and `build-image.yml`, and `actions/lib/npm-registry.sh` writes the
   project `.npmrc` without ever putting the token on disk.
+- `skill.spec.js` — `skills/kb-docs-add/`: frontmatter satisfies the Agent Skills spec
+  (name ↔ directory, portable fields only), no scripts shipped, every referenced file exists,
+  `examples/` are byte-identical to the contract's code blocks, and the docs carry the install
+  command.
 - `standalone.spec.js` — the `:3000` fragment server directly (`playwright.config.ci.js`).
 - `container.spec.js` — the real nginx image (`playwright.config.docker.js`, needs Docker).
 - `support/fragment.js` — shadow-DOM traversal + reframed-body wait/query helpers.
