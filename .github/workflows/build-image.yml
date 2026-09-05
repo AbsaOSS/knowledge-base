@@ -137,7 +137,10 @@ jobs:
           KB_REGISTRY: ${{ steps.registry.outputs.path }}
           KB_HEADLESS: ${{ inputs.headless }}
           KB_STRICT: ${{ inputs.strict }}
-          GITHUB_TOKEN: ${{ secrets.docs-token }}
+          # Always a token, so the fetch never falls back to the gh CLI, which a
+          # self-hosted runner need not have (#85). github.token covers public
+          # docs repos; private ones need docs-token.
+          GITHUB_TOKEN: ${{ secrets.docs-token || github.token }}
         run: node scripts/build-vite.js ${{ inputs.headless && '--headless' || '' }}
 
       # Without an image name this is a dry run: prove the registry builds, keep

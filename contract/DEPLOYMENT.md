@@ -140,8 +140,13 @@ private repositories work, and it passes the token as a request header rather
 than on a command line (#43). An installation token is a `Bearer` token like any
 other and needs no special handling.
 
-Public docs repos need no token at all, but an unauthenticated build shares the
-anonymous API rate limit. Pass the token anyway.
+Public docs repos need no App: when `docs-token` is omitted the workflow falls
+back to `github.token`, which reads any public release. Pass the App token
+anyway once a private repo is registered.
+
+Neither the reusable workflow nor the publishing actions need the `gh` CLI on
+the runner — every GitHub call goes through the REST API with a token from the
+environment (#85) — so both run unchanged on self-hosted runners.
 
 ---
 

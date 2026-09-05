@@ -6,9 +6,10 @@
   "type": "module",
   "license": "Apache-2.0",
   "scripts": {
-    "selftest": "node publish-single-page-docs/src/selftest.js && node publish-docs/src/selftest.js",
+    "selftest": "node publish-single-page-docs/src/selftest.js && node publish-docs/src/selftest.js && node lib/release.selftest.js",
     "selftest:single-page": "node publish-single-page-docs/src/selftest.js",
-    "selftest:docs": "node publish-docs/src/selftest.js"
+    "selftest:docs": "node publish-docs/src/selftest.js",
+    "selftest:release": "node lib/release.selftest.js"
   },
   "dependencies": {
     "ajv": "8.17.1",

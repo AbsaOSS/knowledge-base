@@ -77,7 +77,15 @@ async function ghApi(path) {
   }
 
   // Fallback: gh CLI. spawnSync takes an argv array, so nothing is shell-parsed.
+  // This is a local-development convenience; CI should always set GITHUB_TOKEN
+  // (the reusable workflow does), since a runner need not have gh at all (#85).
   const result = spawnSync('gh', ['api', path], { encoding: 'utf8' });
+  if (result.error) {
+    fail(
+      `GITHUB_TOKEN is not set and the gh CLI could not be run (${result.error.message}).\n` +
+      `     Set GITHUB_TOKEN, or install and authenticate gh for local builds.`
+    );
+  }
   if (result.status !== 0) fail(`gh api ${path} failed:\n${result.stderr}`);
   return JSON.parse(result.stdout);
 }

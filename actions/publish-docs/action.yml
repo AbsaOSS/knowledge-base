@@ -89,62 +89,42 @@ runs:
         KB_STAGE: ${{ runner.temp }}/kb-publish/stage
         KB_ARTIFACT: ${{ runner.temp }}/kb-publish/kb-docs.tar.gz
 
+    # Through the REST API, not the gh CLI: gh is preinstalled on GitHub-hosted
+    # runners but is not part of the runner, and a self-hosted runner need not
+    # have it (#85). github-script brings its own Node and an authenticated
+    # Octokit client, so this step assumes nothing about the machine it runs on.
     - name: Upload kb-docs.tar.gz to the release
       id: upload
-      shell: bash
+      uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
       env:
-        GH_TOKEN: ${{ inputs.github-token }}
         KB_RELEASE_TAG: ${{ inputs.release-tag }}
         KB_ARTIFACT: ${{ steps.build.outputs.artifact }}
         # Read through the environment, never interpolated into the script body:
-        # a ${{ }} expression is substituted into the shell text before bash sees
-        # it, so any metacharacter in the value would execute rather than quote
-        # (#55). These come from the consuming repo's inputs.
+        # a ${{ }} expression is substituted into the script text before it is
+        # parsed, so any metacharacter in the value would execute rather than
+        # quote (#55). These come from the consuming repo's inputs.
         KB_COUNT: ${{ steps.build.outputs.count }}
         KB_SLUGS: ${{ steps.build.outputs.slugs }}
-      run: |
-        set -euo pipefail
+        KB_RELEASE_LIB: ${{ github.action_path }}/../lib/release.cjs
+      with:
+        github-token: ${{ inputs.github-token }}
+        script: |
+          const { publish } = require(process.env.KB_RELEASE_LIB);
+          await publish({ github, core, context, env: process.env, noun: 'app' });
 
-        tag="${KB_RELEASE_TAG:-}"
-
-        # /releases/latest excludes drafts and pre-releases, so fall back to the
-        # most recently created release of any kind before giving up.
-        if [ -z "$tag" ]; then
-          tag="$(gh api "repos/$GITHUB_REPOSITORY/releases/latest" --jq '.tag_name' 2>/dev/null || true)"
-        fi
-        if [ -z "$tag" ] || [ "$tag" = "null" ]; then
-          tag="$(gh api "repos/$GITHUB_REPOSITORY/releases?per_page=1" --jq '.[0].tag_name // empty' 2>/dev/null || true)"
-        fi
-        if [ -z "$tag" ] || [ "$tag" = "null" ]; then
-          echo "::error::$GITHUB_REPOSITORY has no GitHub Release to attach the docs artifact to. Create a release (any tag) and re-run, or pass release-tag explicitly."
-          exit 1
-        fi
-
-        echo "Uploading $(basename "$KB_ARTIFACT") to release $tag (replacing any existing asset)…"
-        gh release upload "$tag" "$KB_ARTIFACT" --clobber --repo "$GITHUB_REPOSITORY"
-
-        echo "release-tag=$tag" >> "$GITHUB_OUTPUT"
-        echo "Published $KB_COUNT app(s): $KB_SLUGS" >> "$GITHUB_STEP_SUMMARY"
-
+    # A failed notify must not fail a successful publish: the artifact is
+    # already on the release, and the deployment's schedule will pick it up.
+    # `notify()` warns instead of throwing.
     - name: Notify the deployment repository
       if: ${{ inputs.notify-repo != '' && inputs.notify-token != '' }}
-      shell: bash
+      uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
       env:
-        GH_TOKEN: ${{ inputs.notify-token }}
         KB_NOTIFY_REPO: ${{ inputs.notify-repo }}
         KB_RELEASE_TAG: ${{ steps.upload.outputs.release-tag }}
         KB_SLUGS: ${{ steps.build.outputs.slugs }}
-      run: |
-        set -euo pipefail
-        # A failed notify must not fail a successful publish: the artifact is
-        # already on the release, and the deployment's schedule will pick it up.
-        if gh api "repos/$KB_NOTIFY_REPO/dispatches" \
-             --method POST \
-             --field event_type=kb-docs-published \
-             --field "client_payload[repo]=$GITHUB_REPOSITORY" \
-             --field "client_payload[tag]=$KB_RELEASE_TAG" \
-             --field "client_payload[slugs]=$KB_SLUGS"; then
-          echo "Notified $KB_NOTIFY_REPO."
-        else
-          echo "::warning::Could not notify $KB_NOTIFY_REPO. The artifact was published; the deployment will pick it up on its next scheduled build."
-        fi
+        KB_RELEASE_LIB: ${{ github.action_path }}/../lib/release.cjs
+      with:
+        github-token: ${{ inputs.notify-token }}
+        script: |
+          const { notify } = require(process.env.KB_RELEASE_LIB);
+          await notify({ github, core, context, env: process.env });

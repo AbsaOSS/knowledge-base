@@ -28,7 +28,7 @@ If your docs are a real site rather than a markdown file or two, you want
 
 | Path | Role |
 |---|---|
-| `action.yml` | Composite action: setup-node → `npm ci` → render → `gh release upload --clobber` |
+| `action.yml` | Composite action: setup-node → `npm ci` → render → upload (`github-script`, replacing any existing asset) |
 | `src/index.js` | Entry point. Reads inputs from env, writes step outputs. |
 | `src/inputs.js` | Parses and validates the `docs` list. Every message names the entry and the fix. |
 | `src/markdown.js` | markdown-it pipeline: GFM, highlight.js, mermaid passthrough. |
@@ -38,8 +38,19 @@ If your docs are a real site rather than a markdown file or two, you want
 
 Dependencies are pinned once in [`actions/package.json`](../package.json), shared
 with the packaged-site action, so an onboarding repo needs no toolchain of its
-own. Manifest validation, deterministic packing and the runner plumbing live in
-[`actions/lib/`](../lib) and are the same code both actions run.
+own. Manifest validation, deterministic packing, the runner plumbing and the
+release upload (`release.cjs`) live in [`actions/lib/`](../lib) and are the same
+code both actions run.
+
+## Runner requirements
+
+Nothing beyond what the runner itself provides, so self-hosted runners work
+unchanged: Node comes from `actions/setup-node`, the release upload goes through
+`actions/github-script` and its Octokit client rather than the `gh` CLI (#85),
+and `bash` is needed only for the two one-line `run:` steps. The runner must
+support Node 24 actions (`actions/runner` ≥ 2.327.1), as `actions/setup-node@v7`
+already requires. See the [`publish-docs` README](../publish-docs/README.md#runner-requirements)
+for the full list.
 
 ## Working on it
 
