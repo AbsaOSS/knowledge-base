@@ -1,0 +1,4 @@
+# Shell scripts run on Linux runners and on Git bash alike; a CRLF checkout on
+# Windows (core.autocrlf=true, the Git for Windows default) would put a `\r` at
+# the end of every line, which bash reports as a command not found.
+*.sh text eol=lf

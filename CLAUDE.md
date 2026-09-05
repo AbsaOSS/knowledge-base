@@ -157,6 +157,10 @@ commands listed in `AGENTS.md`:
 - `artifact-safety.spec.js` — tarball extraction guards (traversal, absolute paths, symlinks).
 - `nginx-config.spec.js` — static assertions on `nginx.conf`/`nginx.headers.conf`, including
   that the CSP the Express mirror serves is byte-identical to nginx's.
+- `private-registry.spec.js` — both lockfiles resolve to `registry.npmjs.org` (npm rewrites
+  only that host to a configured mirror), the `npm-registry`/`npm-token`/`node-mirror` inputs
+  exist on both actions and `build-image.yml`, and `actions/lib/npm-registry.sh` writes the
+  project `.npmrc` without ever putting the token on disk.
 - `standalone.spec.js` — the `:3000` fragment server directly (`playwright.config.ci.js`).
 - `container.spec.js` — the real nginx image (`playwright.config.docker.js`, needs Docker).
 - `support/fragment.js` — shadow-DOM traversal + reframed-body wait/query helpers.

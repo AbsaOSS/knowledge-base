@@ -63,6 +63,32 @@ on:
         type: string
         required: false
         default: ghcr.io
+      runs-on:
+        description: >-
+          Where to run the build: a single runner label, or a JSON array or
+          object for anything more (`'["self-hosted", "linux"]'`,
+          `'{"group": "internal"}'`). Defaults to ubuntu-latest.
+        type: string
+        required: false
+        default: ubuntu-latest
+      npm-registry:
+        description: >-
+          npm registry to install the build's dependencies from, for runners
+          that cannot reach registry.npmjs.org — an Artifactory npm remote, say.
+          Empty means whatever npm resolves on the runner. The lockfile needs
+          no change: npm rewrites its registry.npmjs.org hosts to this registry.
+        type: string
+        required: false
+        default: ''
+      node-mirror:
+        description: >-
+          Mirror of https://nodejs.org to download Node from, for runners that
+          can reach neither nodejs.org nor the github.com release assets
+          `setup-node` tries first. Not needed when the runner image already
+          carries Node in its tool cache.
+        type: string
+        required: false
+        default: ''
     secrets:
       docs-token:
         description: >-
@@ -73,6 +99,14 @@ on:
       registry-username:
         required: false
       registry-password:
+        required: false
+      npm-token:
+        description: >-
+          Bearer token for `npm-registry`. Leave unset for a registry that
+          allows anonymous reads.
+        required: false
+      node-mirror-token:
+        description: Authorization header value for `node-mirror`.
         required: false
     outputs:
       image:
@@ -85,7 +119,10 @@ permissions:
 jobs:
   build:
     name: Build
-    runs-on: ubuntu-latest
+    # A label is used as it is; anything starting with `[` or `{` is parsed, so
+    # a caller can name several labels or a runner group. `&&`/`||` short-circuit,
+    # so fromJSON never sees a bare label.
+    runs-on: ${{ (startsWith(inputs.runs-on, '[') || startsWith(inputs.runs-on, '{')) && fromJSON(inputs.runs-on) || inputs.runs-on }}
     outputs:
       image: ${{ steps.push.outputs.image }}
     steps:
@@ -108,9 +145,44 @@ jobs:
           node-version: '24'
           cache: npm
           cache-dependency-path: knowledge-base/package-lock.json
+          mirror: ${{ inputs.node-mirror }}
+          mirror-token: ${{ secrets.node-mirror-token }}
+
+      # Same mechanism as the publishing actions (actions/lib/npm-registry.sh):
+      # project-level npm config next to the lockfile, applied to this install
+      # and nothing else. Inlined rather than run from the checkout so that a
+      # caller pinning an older kb-ref still gets the registry it asked for.
+      - name: Point npm at a private registry
+        if: ${{ inputs.npm-registry != '' }}
+        working-directory: knowledge-base
+        env:
+          KB_NPM_REGISTRY: ${{ inputs.npm-registry }}
+          KB_NPM_TOKEN: ${{ secrets.npm-token }}
+        run: |
+          set -euo pipefail
+          case "$KB_NPM_REGISTRY" in
+            *[[:space:]]*)
+              echo "::error::npm-registry must be a single URL with no whitespace, got '$KB_NPM_REGISTRY'"
+              exit 1 ;;
+            http://*|https://*) ;;
+            *)
+              echo "::error::npm-registry must be an http(s) URL, got '$KB_NPM_REGISTRY'"
+              exit 1 ;;
+          esac
+          registry="${KB_NPM_REGISTRY%/}/"
+          {
+            echo "registry=${registry}"
+            # A reference npm expands at run time, so the token never lands on disk.
+            if [ -n "${KB_NPM_TOKEN:-}" ]; then
+              echo "${registry#*:}:_authToken=\${KB_NPM_TOKEN}"
+            fi
+          } > .npmrc
+          echo "npm installs from ${registry}${KB_NPM_TOKEN:+ (authenticated)}"
 
       - name: Install
         working-directory: knowledge-base
+        env:
+          KB_NPM_TOKEN: ${{ secrets.npm-token }}
         run: npm ci
 
       - name: Resolve the registry
@@ -141,6 +213,9 @@ jobs:
           # self-hosted runner need not have. github.token covers public
           # docs repos; private ones need docs-token.
           GITHUB_TOKEN: ${{ secrets.docs-token || github.token }}
+          # The docs repos and the registry are the only things a build should
+          # talk to. Matters on a runner whose egress is a short allowlist.
+          ASTRO_TELEMETRY_DISABLED: '1'
         run: node scripts/build-vite.js ${{ inputs.headless && '--headless' || '' }}
 
       # Without an image name this is a dry run: prove the registry builds, keep

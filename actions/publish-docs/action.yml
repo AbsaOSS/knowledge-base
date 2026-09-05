@@ -48,6 +48,32 @@ inputs:
       `github.token` cannot dispatch to another repository.
     required: false
     default: ''
+  npm-registry:
+    description: >-
+      npm registry to install the action's own dependencies from, for runners
+      that cannot reach registry.npmjs.org — an Artifactory npm remote, say.
+      Empty means whatever npm resolves on the runner, which is the public
+      registry unless the machine's npm configuration says otherwise.
+    required: false
+    default: ''
+  npm-token:
+    description: >-
+      Bearer token for `npm-registry`. Leave empty for a registry that allows
+      anonymous reads.
+    required: false
+    default: ''
+  node-mirror:
+    description: >-
+      Mirror of https://nodejs.org to download Node from, for runners that can
+      reach neither nodejs.org nor the github.com release assets `setup-node`
+      tries first. Not needed when the runner image already carries Node in its
+      tool cache.
+    required: false
+    default: ''
+  node-mirror-token:
+    description: Authorization header value for `node-mirror`.
+    required: false
+    default: ''
 
 outputs:
   slugs:
@@ -72,10 +98,30 @@ runs:
       uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
       with:
         node-version: '20'
+        mirror: ${{ inputs.node-mirror }}
+        mirror-token: ${{ inputs.node-mirror-token }}
+
+    # A private registry is applied as project-level npm config next to the
+    # lockfile, so it reaches nothing outside this install: not the runner's own
+    # npm configuration, not the calling workflow's later steps. The lockfile
+    # itself needs no change — npm rewrites its registry.npmjs.org hosts to the
+    # configured registry (`replace-registry-host`). Skipped when unset.
+    - name: Point npm at a private registry
+      if: ${{ inputs.npm-registry != '' }}
+      shell: bash
+      working-directory: ${{ github.action_path }}/..
+      env:
+        KB_NPM_REGISTRY: ${{ inputs.npm-registry }}
+        KB_NPM_TOKEN: ${{ inputs.npm-token }}
+      run: bash "$GITHUB_ACTION_PATH/../lib/npm-registry.sh"
 
     - name: Install publisher dependencies
       shell: bash
       working-directory: ${{ github.action_path }}/..
+      env:
+        # Expanded by npm from the .npmrc the previous step wrote; the token is
+        # never written to disk.
+        KB_NPM_TOKEN: ${{ inputs.npm-token }}
       run: npm ci --omit=dev --no-audit --no-fund
 
     - name: Verify and pack the artifact

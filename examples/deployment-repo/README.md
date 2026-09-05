@@ -25,6 +25,9 @@ The reasoning behind each piece is in
 3. Replace `ghcr.io/absaoss/knowledge-base` in `build.yml` with your image, and
    pin `kb-ref` to a released tag of `AbsaOSS/knowledge-base`.
 4. Put your real entries in `apps.json`.
+5. If the build has to run on self-hosted runners inside a private network,
+   uncomment `runs-on`, `npm-registry` and `npm-token` in `build.yml` — the
+   "Private networks" section of `contract/DEPLOYMENT.md` explains each.
 
 ## What is deliberately not here
 
