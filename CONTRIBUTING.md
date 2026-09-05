@@ -14,6 +14,10 @@ The build and tests are fully hermetic — they use the committed
 `tests/fixtures/docs-example.dist.tar.gz` fixture (registered via `apps.json`),
 so no `GITHUB_TOKEN`, network, or sibling repository is required.
 
+If your `~/.npmrc` points at a corporate registry, install with
+`--registry=https://registry.npmjs.org/` before committing a lockfile change:
+both lockfiles must keep resolving to the public registry (see `AGENTS.md`).
+
 See [`CLAUDE.md`](CLAUDE.md) for an architecture overview and the full command
 list, and [`README.md`](README.md) for usage.
 

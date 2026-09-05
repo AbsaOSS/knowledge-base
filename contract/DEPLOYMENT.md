@@ -150,6 +150,73 @@ environment — so both run unchanged on self-hosted runners.
 
 ---
 
+## Private networks: self-hosted runners and an internal registry
+
+A deployment repository whose runners sit inside a private network — no route
+to `registry.npmjs.org`, every package served by an internal Artifactory — sets
+three more things and changes nothing else:
+
+```yaml
+  build:
+    needs: token
+    uses: AbsaOSS/knowledge-base/.github/workflows/build-image.yml@v1
+    with:
+      kb-ref: v1.0.0
+      registry: apps.json
+      image-name: artifactory.example.com/docker-local/knowledge-base
+      registry-host: artifactory.example.com
+      runs-on: '["self-hosted", "linux"]'
+      npm-registry: https://artifactory.example.com/artifactory/api/npm/npm-remote/
+      node-mirror: https://artifactory.example.com/artifactory/nodejs-remote   # if needed
+    secrets:
+      docs-token: ${{ needs.token.outputs.token }}
+      npm-token: ${{ secrets.ARTIFACTORY_TOKEN }}
+      registry-username: ${{ secrets.ARTIFACTORY_USER }}
+      registry-password: ${{ secrets.ARTIFACTORY_TOKEN }}
+```
+
+| Input | What it covers |
+|---|---|
+| `runs-on` | A single label as it is; a JSON array or object for several labels or a runner group. Default `ubuntu-latest`. |
+| `npm-registry`, `npm-token` (secret) | The `npm ci` of the build's own dependencies. Empty means whatever npm resolves on the runner. |
+| `node-mirror`, `node-mirror-token` (secret) | Where `setup-node` downloads Node when it can reach neither the github.com release assets it tries first nor nodejs.org. A mirror of `https://nodejs.org` — an Artifactory generic remote. Not needed when the runner image carries Node 24 in its tool cache. |
+
+The publishing actions take the same four inputs, so docs repos on the same
+runners publish the same way (`actions/publish-docs/README.md`,
+`SINGLE_PAGE.md`).
+
+**Why the lockfile needs no change.** Every `resolved` URL in the lockfile
+points at `registry.npmjs.org`, and it stays that way. npm's
+`replace-registry-host` (default `npmjs`) rewrites that host to the configured
+registry at fetch time; the `integrity` hashes still verify because the mirror
+serves the same tarballs. That is what lets one lockfile, one workflow and one
+action ref serve GitHub-hosted and internal runners alike. It is also why the
+lockfile must never be regenerated behind a corporate `.npmrc`: npm rewrites
+*only* the default host, so a lockfile carrying Artifactory URLs installs in
+exactly one network. CI enforces the rule.
+
+**What the registry input does not touch.** It is written as project-level npm
+config next to the lockfile being installed, for that install only. The
+runner's own npm configuration is layered underneath, not replaced — so a
+runner that already carries an `~/.npmrc` naming the mirror can leave
+`npm-registry` empty — and nothing is exported into the calling workflow's
+later steps. The token is referenced from the environment, never written to
+disk.
+
+**What no workflow input can cover.**
+
+- `docker build` pulls the nginx base image from Docker Hub by digest. On a
+  private network that is a *daemon* setting — Artifactory's Docker remote as a
+  `registry-mirrors` entry in the runner's `/etc/docker/daemon.json` — and the
+  digest pin in the `Dockerfile` verifies the mirror served the same image.
+- `setup-node`'s npm cache uses GitHub's cache service, and the App token comes
+  from `api.github.com`. Both are on GitHub's published list of hosts a
+  self-hosted runner must reach.
+- Pushing the image goes to `registry-host` with `registry-username` /
+  `registry-password`, which already cover an Artifactory Docker repository.
+
+---
+
 ## Rebuilding when a docs repo publishes
 
 The publishing actions accept `notify-repo` and `notify-token`. With both set,
@@ -210,3 +277,6 @@ alone cannot give once `latest` has moved.
 - [ ] `concurrency` set so a burst of publishes collapses into one build
 - [ ] Docs repos that should trigger rebuilds have `notify-repo` / `notify-token`
 - [ ] A dry-run check on PRs to the registry (`image-name` empty)
+- [ ] On runners without a route to `registry.npmjs.org`: `runs-on`,
+      `npm-registry` and the `npm-token` secret set; `node-mirror` if Node is
+      neither preinstalled nor downloadable; the Docker daemon's mirror configured

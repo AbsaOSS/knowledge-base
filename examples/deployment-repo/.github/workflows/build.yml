@@ -57,5 +57,12 @@ jobs:
       image-tags: |
         ${{ github.sha }}
         latest
+      # Runners inside a private network, where every package comes from an
+      # internal mirror rather than registry.npmjs.org — see the "Private
+      # networks" section of contract/DEPLOYMENT.md.
+      # runs-on: '["self-hosted", "linux"]'
+      # npm-registry: https://artifactory.example.com/artifactory/api/npm/npm-remote/
+      # node-mirror: https://artifactory.example.com/artifactory/nodejs-remote
     secrets:
       docs-token: ${{ needs.token.outputs.token }}
+      # npm-token: ${{ secrets.ARTIFACTORY_TOKEN }}

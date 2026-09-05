@@ -36,6 +36,10 @@ markdown for you and needs no manifest at all.
 | `github-token` | ☐ | `${{ github.token }}` | Needs `contents: write` |
 | `notify-repo` | ☐ | — | `owner/name` of a deployment repo to notify on publish |
 | `notify-token` | ☐ | — | Token with `contents: write` on `notify-repo` only |
+| `npm-registry` | ☐ | — | npm registry to install the action's dependencies from, for runners that cannot reach `registry.npmjs.org` |
+| `npm-token` | ☐ | — | Bearer token for `npm-registry` |
+| `node-mirror` | ☐ | — | Mirror of `https://nodejs.org` for `setup-node`, when the runner reaches neither nodejs.org nor github.com release assets |
+| `node-mirror-token` | ☐ | — | `Authorization` header value for `node-mirror` |
 
 `dist` is the app's own directory when the manifest declares **one** app — a repo
 publishing a single site should not have to invent a subdirectory named after its
@@ -91,6 +95,38 @@ GitHub-hosted and self-hosted runners:
 
 The runner must be new enough for Node 24 actions (`actions/runner` ≥ 2.327.1),
 which `actions/setup-node@v7` already requires.
+
+### Runners in a private network
+
+If your runners cannot reach `registry.npmjs.org` and every package has to come
+from an internal mirror — an Artifactory npm remote, typically — point the
+action at it:
+
+```yaml
+- uses: AbsaOSS/knowledge-base/actions/publish-docs@v1
+  with:
+    manifest: kb-docs.json
+    dist: dist
+    npm-registry: https://artifactory.example.com/artifactory/api/npm/npm-remote/
+    npm-token: ${{ secrets.ARTIFACTORY_TOKEN }}       # omit for anonymous reads
+```
+
+The action's lockfile resolves every package to `registry.npmjs.org` and stays
+that way: npm rewrites that host to the configured registry when it fetches
+(`replace-registry-host`), and the lockfile's integrity hashes still verify
+because the mirror serves the same tarballs. The registry is applied as
+project-level npm config for this install only — the runner's own npm
+configuration and the rest of your workflow are untouched, and the token is
+read from the environment rather than written to disk.
+
+A runner whose own `~/.npmrc` already names the mirror needs none of this: leave
+`npm-registry` empty and npm uses what the machine says.
+
+`setup-node` fetches Node from the `actions/node-versions` releases on
+github.com, falling back to nodejs.org. If both are blocked, `node-mirror`
+names a mirror of `https://nodejs.org` (an Artifactory generic remote works),
+with `node-mirror-token` as its `Authorization` header. A runner image that
+already carries Node 20 in its tool cache downloads nothing.
 
 ## Notifying a deployment
 

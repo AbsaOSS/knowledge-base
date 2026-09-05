@@ -70,6 +70,10 @@ That is the entire onboarding on your side. Multiple docs go in the same list:
 | `docs` | ✅ | — | YAML (or JSON) **list** of doc definitions — see below |
 | `release-tag` | ☐ | the triggering release, else the repo's latest | Release to attach `kb-docs.tar.gz` to |
 | `github-token` | ☐ | `${{ github.token }}` | Needs `contents: write` |
+| `npm-registry` | ☐ | — | npm registry to install the action's dependencies from, for runners that cannot reach `registry.npmjs.org` — see below |
+| `npm-token` | ☐ | — | Bearer token for `npm-registry` |
+| `node-mirror` | ☐ | — | Mirror of `https://nodejs.org` for `setup-node`, when the runner reaches neither nodejs.org nor github.com release assets |
+| `node-mirror-token` | ☐ | — | `Authorization` header value for `node-mirror` |
 
 ### Each doc definition
 
@@ -99,6 +103,34 @@ naming the entry and the fix.
 The action attaches the bundle to an existing release — it never creates one. If
 the repo has no releases at all the run fails with a message saying so. Trigger
 on `release: published` (as above) and the release is guaranteed to be there.
+
+### Runners in a private network
+
+On GitHub-hosted runners the workflow above is complete. If your job runs on
+self-hosted runners that cannot reach `registry.npmjs.org` — every package has
+to come from an internal Artifactory — add the registry to the same step:
+
+```yaml
+      - uses: AbsaOSS/knowledge-base/actions/publish-single-page-docs@v1
+        with:
+          npm-registry: https://artifactory.example.com/artifactory/api/npm/npm-remote/
+          npm-token: ${{ secrets.ARTIFACTORY_TOKEN }}   # omit for anonymous reads
+          docs: |
+            - md: docs/overview.md
+              …
+```
+
+The action's own lockfile stays pinned to `registry.npmjs.org`; npm rewrites
+that host to the registry you name when it fetches, so the same action ref
+installs on both kinds of runner. The setting applies to this install only and
+the token is never written to disk. A runner whose own `~/.npmrc` already names
+the mirror needs neither input.
+
+Node itself comes from `actions/setup-node`, which tries github.com release
+assets and then nodejs.org. If both are blocked and the runner image does not
+carry Node 20 in its tool cache, set `node-mirror` to a mirror of
+`https://nodejs.org` (an Artifactory generic remote) and `node-mirror-token` if
+it needs one.
 
 ---
 
@@ -261,6 +293,8 @@ only navigation; there is no sidebar and no in-app chrome.
 | `slug "…" is invalid` | Slugs are lowercase kebab-case only — no underscores, capitals or spaces. |
 | `Duplicate app slug "…"` (knowledge-base build) | Another registered app already owns that URL prefix. Rename yours and republish. |
 | `the release artifact has no kb-docs.json at its root` | The release's `kb-docs.tar.gz` was not produced by this action. |
+| `npm error … ENOTFOUND registry.npmjs.org` or a `403` from a proxy at `Install publisher dependencies` | The runner cannot reach the public registry. Set `npm-registry` (and `npm-token`) to your internal mirror. |
+| `Unable to find Node version` / a download error at `Set up Node.js` | The runner reaches neither github.com release assets nor nodejs.org. Set `node-mirror`, or preinstall Node 20 in the runner's tool cache. |
 
 ---
 
