@@ -20,6 +20,13 @@ branding and the Library / current-app navigation.
 > external site must allow embedding (its CSP `frame-ancestors` / `X-Frame-Options` must
 > not block the knowledge base origin). See issue #10.
 
+> **With an AI agent.** The `kb-docs-add` skill in
+> [`skills/kb-docs-add/`](../skills/kb-docs-add) applies this page for you: it makes
+> the existing build produce headless output, writes `kb-docs.json` and the release
+> workflow below, and nothing else. Install with
+> `npx skills add AbsaOSS/knowledge-base --skill kb-docs-add` (Claude Code, GitHub
+> Copilot and other `SKILL.md` readers). This page stays the normative text.
+
 ---
 
 ## Required: Headless build flag

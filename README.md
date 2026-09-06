@@ -292,6 +292,24 @@ Apps must comply with the knowledge base contract before they can be registered:
 > The checklist and workflows below apply to **packaged** doc apps. Single-page
 > docs skip all of it — the action produces a compliant artifact for you.
 
+### With an AI agent
+
+The fastest route through the contract is the `kb-docs-add` agent skill in
+[`skills/kb-docs-add/`](skills/kb-docs-add). It classifies a repo (single-page,
+packaged or iframe), writes only the files the contract requires — one workflow
+for markdown, `kb-docs.json` + headless build + workflow for a site — and maps
+every message the actions emit to its fix. Install it into Claude Code, GitHub
+Copilot or any agent that reads `SKILL.md`:
+
+```bash
+npx skills add AbsaOSS/knowledge-base --skill kb-docs-add
+```
+
+then ask the agent to "add this repo's docs to the knowledge base", or invoke
+`/kb-docs-add` where slash commands are supported. The skill guides; the
+actions validate. Its examples are the contract's own code blocks and
+`tests/skill.spec.js` fails if they drift.
+
 ### Checklist
 - [ ] `kb-docs.json` in repo root, valid against `contract/kb-docs.schema.json`
 - [ ] `npm run build -- --headless` produces a headless `dist/`

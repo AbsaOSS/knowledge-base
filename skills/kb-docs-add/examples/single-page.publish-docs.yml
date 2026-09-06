@@ -1,0 +1,22 @@
+# .github/workflows/publish-docs.yml in your docs repo
+name: Publish docs
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write        # required — the action uploads a release asset
+    steps:
+      - uses: actions/checkout@v4
+      - uses: AbsaOSS/knowledge-base/actions/publish-single-page-docs@v1
+        with:
+          docs: |
+            - md: docs/overview.md
+              title: Service Overview
+              description: What the service does and how to use it.
+              slug: my-service
