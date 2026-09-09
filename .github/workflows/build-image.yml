@@ -235,6 +235,13 @@ jobs:
           registry: ${{ inputs.registry-host }}
           username: ${{ secrets.registry-username || github.actor }}
           password: ${{ secrets.registry-password || github.token }}
+          # The password is already a resolved credential (an ECR authorization
+          # token minted by the caller, or a PAT/GITHUB_TOKEN) — not an IAM
+          # access key. login-action's ECR auto-detection (default) treats
+          # username/password as accessKeyId/secretAccessKey and calls AWS
+          # itself, which fails for any registry-host that looks like ECR.
+          # Force the plain `docker login` path instead.
+          ecr: 'false'
 
       - name: Build and push the image
         id: push

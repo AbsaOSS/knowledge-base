@@ -140,6 +140,20 @@ export function getAppPages(cwd, headless) {
       // Manifest-driven routing: the artifact's `pages` list is authoritative,
       // so the directory is not crawled and nothing it happens to contain
       // becomes a route the publisher did not ask for.
+      const entryPoint = app.entryPoint ?? 'index.html';
+      if (!app.pages.some((page) => page.path === entryPoint)) {
+        pages.push({
+          routePath:   app.slug,
+          file:        join(appDir, entryPoint),
+          slug:        app.slug,
+          fileRelDir:  dirname(entryPoint).replace(/\\/g, '/').replace(/^\.$/, ''),
+          appHeadless,
+          app:         card,
+          title:       app.name ?? app.slug,
+          section:     null,
+        });
+      }
+
       for (const page of app.pages) {
         const file        = join(appDir, page.path);
         const fileRelDir  = dirname(page.path).replace(/\\/g, '/').replace(/^\.$/, '');
