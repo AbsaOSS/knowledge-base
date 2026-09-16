@@ -24,6 +24,7 @@
 import { test, expect } from '@playwright/test';
 import {
   gotoBoundFragment, gotoFragment, waitForFragmentText, fragmentFrame, queryInShadow, countInShadow,
+  armFragmentProbe, fragmentProbe, hostStillAlive,
 } from './support/fragment.js';
 
 /** What the masthead and the catalog look like: computed style per selector. */
@@ -237,10 +238,20 @@ for (const [mode, open] of [['bound', gotoBoundFragment], ['unbound', gotoFragme
       test.setTimeout(90_000);
       await open(page, '/knowledge-base/');
       await waitForCatalog(page);
+      // Sentinels on the host window and inside the reframed iframe, plus
+      // counters for ClientRouter swaps and host-document view transitions:
+      // every hop below must be a router transition, never a document load.
+      await armFragmentProbe(page);
 
       const visited = [];
       const record = async (label, path) => {
         await page.waitForTimeout(500); // let the swap's stylesheet fetches settle
+        const hops = visited.length + 1;
+        expect(await hostStillAlive(page), `${label}: the host document reloaded`).toBe(true);
+        const probe = await fragmentProbe(page);
+        expect(probe.alive, `${label}: the reframed iframe was reloaded or recreated`).toBe(true);
+        expect(probe.swaps, `${label}: ClientRouter swaps after ${hops} hop(s)`).toBe(hops);
+        expect(probe.hostViewTransitions, `${label}: host view transitions after ${hops} hop(s)`).toBe(hops);
         const snap = await appSnapshot(page);
         expect(snap, `${label}: no fragment tree`).not.toBeNull();
         visited.push({ label, path, snap });
