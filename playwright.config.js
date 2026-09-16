@@ -56,12 +56,31 @@ export default defineConfig({
       stdout: 'pipe',
       stderr: 'pipe',
     },
+    {
+      // The same host with server-side piercing on — how a production Angular
+      // SSR gateway embeds the fragment. The first page then arrives as SSR
+      // markup that reframed adopts and portals, a different starting point
+      // for the ClientRouter than client rendering; the docs pages losing
+      // their CSS on the first navigation only ever happened here.
+      command: 'node tests/host/server.mjs',
+      env: { HOST_PORT: '4202', KB_PIERCING: 'true' },
+      port: 4202,
+      reuseExistingServer: !process.env.CI,
+      timeout: 30_000,
+      stdout: 'pipe',
+      stderr: 'pipe',
+    },
   ],
 
+  // Every embedded test runs against both hosts.
   projects: [
     {
       name: 'chromium',
       use: { ...devices['Desktop Chrome'] },
+    },
+    {
+      name: 'chromium-pierced',
+      use: { ...devices['Desktop Chrome'], baseURL: 'http://localhost:4202' },
     },
   ],
 });

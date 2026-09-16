@@ -201,11 +201,17 @@ async function appSnapshot(page) {
     }
     const root = fragmentRoot(document);
     if (!root) return null;
-    // Stylesheet inventory: every link/style in the fragment tree, with its rule count.
+    // Stylesheet inventory: every link/style in the fragment tree, and whether
+    // it is applied — a member of the shadow root's styleSheets with rules.
+    // Not the rule count: a pierced page has every inline rule twice (reframed
+    // re-inserts them when it portals the server-rendered host), and that
+    // changes nothing about how the page renders.
+    const applied = new Set([...root.styleSheets]);
     const sheets = [...root.querySelectorAll('link[rel~="stylesheet"], style')].map((n) => {
-      let rules; try { rules = n.sheet ? n.sheet.cssRules.length : 'no sheet'; } catch { rules = 'opaque'; }
+      let rules; try { rules = n.sheet ? n.sheet.cssRules.length : 0; } catch { rules = 'opaque'; }
       const id = n.getAttribute('href') ?? n.textContent.slice(0, 24).replace(/\s+/g, ' ');
-      return `${n.localName}@${n.parentNode.localName ?? 'shadow'}:${id}:${rules}${n.sheet?.disabled ? ':disabled' : ''}`;
+      const state = !n.sheet ? 'no sheet' : !applied.has(n.sheet) ? 'NOT APPLIED' : rules === 0 ? 'empty' : 'applied';
+      return `${n.localName}@${n.parentNode.localName ?? 'shadow'}:${id}:${state}${n.sheet?.disabled ? ':disabled' : ''}`;
     });
     // The sub-app's content: the first element after the masthead that is not a style.
     let app = root.querySelector('#kb-masthead')?.nextElementSibling;

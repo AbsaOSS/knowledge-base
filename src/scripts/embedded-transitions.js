@@ -81,19 +81,32 @@ function swapHead(head, newHead) {
     const next = counterpart(old, newHead);
     if (next && !reuse.has(next)) reuse.set(next, old);
   }
-  // Walk the new head in order, so the rebuilt head keeps the new page's
-  // order: the layout's `@layer base;` has to stay ahead of the sub-app's
-  // stylesheets after every navigation, not only on first load.
-  const canMove = typeof head.moveBefore === 'function';
-  const placed = new Set();
+  // A reused node is never moved, not even with moveBefore(). On a pierced
+  // page the sub-app's <link rel="stylesheet"> has already been moved once —
+  // reframed portals the server-rendered host into the <web-fragment>'s
+  // shadow root with moveBefore() — and moving it a second time makes
+  // Chromium drop the sheet from the shadow root's applied stylesheets: the
+  // element keeps its .sheet, styleSheets no longer lists it, and the page
+  // renders without its CSS until a reload. (Removing and re-appending would
+  // re-fetch and re-apply it, at the price of a flash.) So reused nodes are
+  // anchors, and each new node is inserted ahead of the next anchor. The
+  // anchors keep the old page's relative order among themselves, which is
+  // fine: every stylesheet declares the cascade layer order itself, so
+  // nothing depends on which one the browser parses first.
+  const kept = new Set();
+  let anchor = head.firstChild;
   for (const next of [...newHead.children]) {
-    const node = reuse.get(next) ?? next;
-    if (node === next || !canMove) head.append(node);
-    else head.moveBefore(node, null); // keeps a stylesheet's state; append would re-apply it
-    placed.add(node);
+    const old = reuse.get(next);
+    if (old) {
+      kept.add(old);
+      anchor = old.nextSibling;
+    } else {
+      head.insertBefore(next, anchor);
+      kept.add(next);
+    }
   }
   for (const old of [...head.children]) {
-    if (!placed.has(old)) old.remove();
+    if (!kept.has(old)) old.remove();
   }
 }
 

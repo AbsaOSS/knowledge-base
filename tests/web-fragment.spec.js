@@ -24,7 +24,8 @@ function collectBadResponses(page) {
   const bad = [];
   page.on('response', (res) => {
     const url = res.url();
-    if (!url.startsWith('http://localhost:4201/')) return; // ignore external (fonts, etc.)
+    // Same origin as the host page — whichever host project this runs against.
+    if (!url.startsWith(new URL(page.url()).origin + '/')) return; // ignore external (fonts, etc.)
     if (res.status() >= 400) bad.push(`${res.status()} ${url}`);
   });
   return bad;

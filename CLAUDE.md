@@ -77,7 +77,7 @@ Orchestrator: `scripts/build-vite.js`. Flags: `--local`, `--headless`.
 - `src/components/Masthead.astro` — Persistent Knowledge base header + Library/current-app sub-nav (all pages, both modes)
 - `src/components/AppCard.astro`, `src/components/AppIcon.astro` — Catalog card and its icon
 - `src/templates/shadow-compat.js` — Shadow-DOM design-token styles, injected into the body by the layout
-- `src/scripts/embedded-transitions.js` — Loaded by the layout; inert standalone. Inside a web fragment it runs Astro's view transition on the host document (the iframe's is never painted) and replaces Astro's swap with one that targets reframed's `wf-html`/`wf-head`/`wf-body`, because the default swap nests a new `wf-html` per navigation and leaks every stylesheet
+- `src/scripts/embedded-transitions.js` — Loaded by the layout; inert standalone. Inside a web fragment it runs Astro's view transition on the host document (the iframe's is never painted) and replaces Astro's swap with one that targets reframed's `wf-html`/`wf-head`/`wf-body`, because the default swap nests a new `wf-html` per navigation and leaks every stylesheet. Its head diff never moves a reused node: on a pierced page a `<link>` already moved once by reframed's portal falls out of the applied stylesheets when moved again
 - `src/utils/config.js` — `PATH_PREFIX`/`BASE_PATH`, `isHeadlessBuild()` and `REGISTRY_FILE` — the build-wide constants
 - `src/utils/registry.js` — Registry validation, manifest reading/validation, expansion map. Shared by the build and by Astro so both resolve the same registry
 - `scripts/build-vite.js` — Build orchestrator (4 steps: prepare, hoist, copy assets, astro build)
@@ -153,9 +153,14 @@ Self-contained Playwright E2E — `npm test` auto-starts everything (no external
 2. **:4201 host** — `tests/host/server.mjs`, a minimal Express "wrapping web-fragment
    application" (`FragmentGateway` + `getNodeMiddleware`) that proxies/embeds the :3000
    fragment on a single origin via `<web-fragment fragment-id="knowledge-base">`.
+3. **:4202 pierced host** — the same server with `KB_PIERCING=true`: server-side piercing
+   on, as a production Angular SSR gateway runs. The first page then arrives as SSR markup
+   that reframed adopts and portals — a different starting tree for the ClientRouter, and
+   the only place the sub-app CSS ever got lost on navigation (a reused head `<link>` moved a
+   second time drops out of the applied stylesheets; see `embedded-transitions.js`).
 
-Tests drive the host origin (`http://localhost:4201`). Suites (`tests/`), all four
-commands listed in `AGENTS.md`:
+Every embedded test runs twice, as Playwright projects `chromium` (:4201) and
+`chromium-pierced` (:4202). Suites (`tests/`), all four commands listed in `AGENTS.md`:
 - `build-integrity.spec.js` — `dist/` output: both apps enumerated, absolute URL rewriting,
   headless markup and the per-app `"headless"` override, the knowledge base stylesheet
   inlined into every body (no page links one from its head) plus its stable `dist/style.css`
