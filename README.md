@@ -271,8 +271,73 @@ app.use(getNodeMiddleware(gateway));           // before host static/catch-all r
 </script>
 ```
 
-> Fragment-internal routes are not mirrored to the host's top-window history and
-> are not address-bar deep-linkable — design host-level routing if you need that.
+### Host router and fragment history
+
+`src` on `<web-fragment>` decides how the fragment's history relates to the
+host's — and so how the knowledge base's `<ClientRouter />` coexists with the
+host's own router (an Angular Router, say). `tests/host-router.spec.js` pins
+both modes down against an Angular Router stand-in (`tests/host/host-router.js`).
+
+| | `src` set — **unbound** | no `src` — **bound** |
+|---|---|---|
+| Fragment history | private stack inside the reframed iframe | the host's `window.history` |
+| Address bar | never moves; the host router hears nothing | moves to `/knowledge-base/…` per page; the host router gets a `popstate` |
+| Deep links, back/forward | none — the browser's back button is the host's, and `history.back()` inside the fragment is a no-op | work |
+| Host route needed | the one route the element sits on | a wildcard covering every fragment page: `/knowledge-base/**` |
+
+**Unbound** is the safe default when the host router must own the URL: the
+fragment cannot disturb it. Choose the first page with `src` (derive it from a
+host route parameter if the host URL should deep-link); `src` is read once, when
+the element connects, so to show a different page later re-create the element.
+
+**Bound** gives fragment pages real URLs and browser history. The host route
+config must cover the whole prefix, otherwise the first click inside the
+fragment lands on the host's fallback route and destroys the fragment:
+
+```ts
+// app.routes.ts
+{ path: 'knowledge-base', children: [{ path: '**', component: KnowledgeBasePage }] }
+
+// knowledge-base.page.ts
+@Component({
+  template: '<web-fragment fragment-id="knowledge-base"></web-fragment>',
+  schemas: [CUSTOM_ELEMENTS_SCHEMA],
+})
+export class KnowledgeBasePage {}
+
+// main.ts — before bootstrapApplication()
+import { initializeWebFragments } from 'web-fragments';
+initializeWebFragments();
+```
+
+Per fragment page this then happens: the ClientRouter pushes `/knowledge-base/…`,
+Angular sees the `popstate` and navigates there, matches the same `**` route
+config and reuses the component (the default `RouteReuseStrategy`), so the
+fragment survives; Angular then rewrites the URL with its own history state and
+strips the trailing slash, which the knowledge base serves anyway. Guards and
+resolvers on that route run on every fragment page. Document requests for
+`/knowledge-base/…` reach the host (the gateway lets them through for a
+`piercing: false` fragment), so Angular SSR must render the shell for them —
+the wildcard route does exactly that. An Angular host also needs
+`"outputMode": "server"` and
+`"externalDependencies": ["web-fragments/gateway", "web-fragments/gateway/node", "htmlrewriter"]`
+in its build target.
+
+### Smooth transitions inside the fragment
+
+Astro's `<ClientRouter />` stays in charge of navigation in both modes; the
+sub-app pages are fetched and swapped, never reloaded. Two things had to be
+corrected for that to feel smooth inside reframed's hidden iframe, both in
+`src/scripts/embedded-transitions.js` (loaded by the layout, inert standalone):
+
+- The view transition runs on the **host** document. Astro would call
+  `startViewTransition()` on the iframe's document, which is never painted, so
+  the swap landed with no crossfade. If the host also uses view transitions
+  (Angular's `withViewTransitions()`), the browser skips whichever starts first;
+  the DOM update still happens.
+- The swap addresses reframed's `wf-html`/`wf-head`/`wf-body` explicitly. Astro's
+  default swap nested a fresh `wf-html` inside the previous one on every
+  navigation and leaked a copy of every stylesheet each time.
 
 ---
 

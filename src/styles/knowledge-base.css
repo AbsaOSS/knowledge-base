@@ -129,13 +129,15 @@ body, wf-body {
   margin: 0;
 }
 
-/* Brand wordmark — sits in the left gutter, outside kb-masthead-inner */
+/* Brand wordmark — a flex item ahead of kb-masthead-inner. It used to be
+   absolutely positioned "in the left gutter", but the inner column is centred
+   at 72rem, so on anything narrower than ~1490px the gutter is smaller than
+   the wordmark and it sat on top of the Library link. */
 .kb-masthead-brand {
   display: none;
 }
 .kb-masthead--compact .kb-masthead-brand {
   display: block;
-  position: absolute;
   font-size: 0.9375rem;
   font-weight: 700;
   letter-spacing: -0.015em;

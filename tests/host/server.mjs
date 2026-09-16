@@ -15,8 +15,11 @@
  *                 │  single origin from the fragment endpoint…
  *                 └──► knowledge-base (astro preview, :3000)
  *
- * The host page places <web-fragment fragment-id="knowledge-base">; the gateway
- * pulls the fragment HTML/assets through and reframes them into a shadow root.
+ * The host page's own router (tests/host/host-router.js, an Angular Router
+ * stand-in) places <web-fragment fragment-id="knowledge-base"> in its outlet;
+ * the gateway pulls the fragment HTML/assets through and reframes them into a
+ * shadow root. Two shells: the unbound one on `/` (element with `src`) and the
+ * bound one on `/knowledge-base/…` (no `src`) — see shell() below.
  *
  * Env:
  *   HOST_PORT     host listen port              (default 4201)
@@ -60,12 +63,23 @@ app.use(getNodeMiddleware(gateway, { mode: 'development' }));
 // Serve the web-fragments client bundle referenced by the shell's import map.
 app.use('/_wf', express.static(join(ROOT, 'node_modules', 'web-fragments', 'dist')));
 
+// The Angular Router stand-in the shell loads (see the file's header comment).
+app.get('/host-router.js', (_req, res) => res.sendFile(join(__dirname, 'host-router.js')));
+
 /**
- * The host shell. `?wf=` selects the fragment's initial route so tests can
- * deep-link a specific sub-app page (fragment-internal routes aren't
- * address-bar deep-linkable on their own — see the Astro fragment notes).
+ * The host shell. The host's own router (tests/host/host-router.js, an Angular
+ * Router stand-in) renders the `<web-fragment>` into `#host-outlet` from the
+ * route table named by `routes`, so both ways of embedding are covered:
+ *
+ *   • unbound — the element carries a `src` (`fragmentSrc`); fragment routes stay
+ *     inside the reframed iframe and never touch the address bar. `?wf=` on the
+ *     landing URL picks that initial route, since the host URL cannot.
+ *   • bound   — no `src`; the fragment's history is the host's history, so the
+ *     host serves this shell for every `/knowledge-base/…` document request and
+ *     the fragment's ClientRouter drives the address bar.
  */
-function shell(initialFragmentRoute) {
+function shell({ routes, fragmentSrc = null }) {
+  const config = JSON.stringify({ mode: fragmentSrc ? 'unbound' : 'bound', routes, fragmentSrc });
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -78,6 +92,8 @@ function shell(initialFragmentRoute) {
     body{margin:0;font-family:system-ui,sans-serif;background:#f5f6f8}
     #host-shell-header{height:48px;display:flex;align-items:center;gap:8px;padding:0 16px;
       background:#0b1220;color:#fff;font-weight:600;font-size:14px}
+    #host-shell-header nav{margin-left:auto;display:flex;gap:12px;font-weight:400}
+    #host-shell-header a{color:#cbd5e1}
     #host-shell-badge{background:#2563eb;border-radius:4px;padding:2px 6px;font-size:11px}
     web-fragment{display:block;min-height:calc(100vh - 48px)}
   </style>
@@ -86,26 +102,44 @@ function shell(initialFragmentRoute) {
   <header id="host-shell-header">
     <span id="host-shell-badge">HOST</span>
     Test Host Shell — knowledge-base embedded as a web fragment
+    <nav aria-label="Host navigation">
+      <a id="host-nav-home" data-host-link href="${fragmentSrc ? '/host-home' : '/bound'}">Host home</a>
+      <a id="host-nav-kb" data-host-link href="${fragmentSrc ? '/' : '/knowledge-base/'}">Knowledge base</a>
+    </nav>
   </header>
   <main id="host-main">
-    <web-fragment
-      fragment-id="knowledge-base"
-      src="${initialFragmentRoute}"
-      data-testid="knowledge-base-web-fragment"></web-fragment>
+    <div id="host-outlet"></div>
   </main>
+  <script id="host-config" type="application/json">${config}</script>
   <script type="module">
     import { initializeWebFragments } from 'web-fragments';
     initializeWebFragments();
   </script>
+  <script src="/host-router.js"></script>
 </body>
 </html>`;
 }
 
-app.get(['/', '/host'], (req, res) => {
+function sendShell(res, options) {
+  res.set('Content-Type', 'text/html; charset=utf-8').end(shell(options));
+}
+
+// Unbound shell: `?wf=` selects the fragment's initial route so tests can
+// deep-link a sub-app page (the host URL cannot carry it in this mode).
+app.get(['/', '/host', '/host-home'], (req, res) => {
   const requested = typeof req.query.wf === 'string' ? req.query.wf : '/knowledge-base/';
   // Only allow fragment routes — anything else falls back to the landing.
-  const initial = requested.startsWith('/knowledge-base/') ? requested : '/knowledge-base/';
-  res.set('Content-Type', 'text/html; charset=utf-8').end(shell(initial));
+  const fragmentSrc = requested.startsWith('/knowledge-base/') ? requested : '/knowledge-base/';
+  sendShell(res, { routes: 'unbound', fragmentSrc });
+});
+
+// Bound shell. The gateway lets a *document* request for a `piercing: false`
+// fragment route through to the host, so the host must answer every
+// `/knowledge-base/…` URL with the shell — exactly what an Angular wildcard
+// route does. `?hostRoutes=narrow` swaps in the misconfigured route table.
+app.get(['/bound', '/knowledge-base', '/knowledge-base/*splat'], (req, res) => {
+  const routes = req.query.hostRoutes === 'narrow' ? 'bound-narrow' : 'bound-wide';
+  sendShell(res, { routes });
 });
 
 app.get('/healthz', (_req, res) => res.type('text/plain').send('ok'));

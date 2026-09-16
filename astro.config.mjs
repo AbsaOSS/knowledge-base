@@ -24,6 +24,13 @@ export default defineConfig({
       },
     ],
     css: { modules: false },
+    build: {
+      // Astro inlines a component <script> smaller than this limit straight
+      // into the page. The deployment serves `script-src 'self'`, so every
+      // script must be a file — the layout's short view-transition delegation
+      // script included. Zero disables the inlining.
+      assetsInlineLimit: 0,
+    },
     // No assetFileNames override: CSS is content-hashed like every other asset.
     //
     // This used to force the name "style.css" onto every CSS asset so that

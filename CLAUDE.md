@@ -56,7 +56,7 @@ Orchestrator: `scripts/build-vite.js`. Flags: `--local`, `--headless`.
 
 ## Build Config
 
-**astro.config.mjs** is the only build config — base `/knowledge-base`, used by `astro build`/`astro dev`. There is no non-Astro build path.
+**astro.config.mjs** is the only build config — base `/knowledge-base`, used by `astro build`/`astro dev`. There is no non-Astro build path. It sets `vite.build.assetsInlineLimit: 0`: Astro would otherwise inline a small component `<script>` into the page, and the deployment serves `script-src 'self'`.
 
 `src/utils/config.js` holds what both the config and the pages need: `PATH_PREFIX`/`BASE_PATH` and `isHeadlessBuild()`. Import them; do not re-spell either one inline.
 
@@ -76,6 +76,7 @@ Orchestrator: `scripts/build-vite.js`. Flags: `--local`, `--headless`.
 - `src/components/Masthead.astro` — Persistent Knowledge base header + Library/current-app sub-nav (all pages, both modes)
 - `src/components/AppCard.astro`, `src/components/AppIcon.astro` — Catalog card and its icon
 - `src/templates/shadow-compat.js` — Shadow-DOM design-token styles, injected into the body by the layout
+- `src/scripts/embedded-transitions.js` — Loaded by the layout; inert standalone. Inside a web fragment it runs Astro's view transition on the host document (the iframe's is never painted) and replaces Astro's swap with one that targets reframed's `wf-html`/`wf-head`/`wf-body`, because the default swap nests a new `wf-html` per navigation and leaks every stylesheet
 - `src/utils/config.js` — `PATH_PREFIX`/`BASE_PATH`, `isHeadlessBuild()` and `REGISTRY_FILE` — the build-wide constants
 - `src/utils/registry.js` — Registry validation, manifest reading/validation, expansion map. Shared by the build and by Astro so both resolve the same registry
 - `scripts/build-vite.js` — Build orchestrator (4 steps: prepare, hoist, copy assets, astro build)
@@ -155,6 +156,15 @@ commands listed in `AGENTS.md`:
   not leak in), routing + smooth no-reload SPA transitions, cross-app navigation, asset
   loading (no host-origin 404s), and the documented history limitation (fragment routing is
   internal to the reframed `wf:<id>` iframe and is not mirrored to top-window history).
+- `host-router.spec.js` — the ClientRouter next to the HOST's router. The shell loads
+  `tests/host/host-router.js`, an Angular Router stand-in (owns the address bar with its own
+  history state and trailing-slash stripping, re-routes on `popstate`, reuses the outlet when
+  the route config is unchanged). Covers both embeddings — **unbound** (`src` set: private
+  history, host URL untouched, no back/forward) and **bound** (no `src`: fragment pages in the
+  address bar, deep links, browser back/forward, outlet reused via a `/knowledge-base/**`
+  route; a narrow route tears the fragment down) — and what "smooth" means: no host reload,
+  the reframed iframe survives, one `astro:after-swap` and one host-document view transition
+  per hop, one `wf-html`, no duplicated stylesheet across a → b → c → a.
 - `artifact-safety.spec.js` — tarball extraction guards (traversal, absolute paths, symlinks).
 - `nginx-config.spec.js` — static assertions on `nginx.conf`/`nginx.headers.conf`, including
   that the CSP the Express mirror serves is byte-identical to nginx's.
