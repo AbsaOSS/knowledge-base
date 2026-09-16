@@ -161,6 +161,131 @@ for (const [mode, open] of [['bound', gotoBoundFragment], ['unbound', gotoFragme
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// The other direction: the sub-app's OWN pages must be styled after a chain of
+// client navigations exactly as they are on a hard load. The reference is the
+// hard load of the same URL, taken afterwards in the same browser, so the test
+// pins no literal values — only that the ClientRouter path (head swap, body
+// swap, layered sub-app stylesheet kept or re-fetched) ends in the same place
+// the streaming path does.
+
+/** Computed styles of the sub-app's content: the element after the masthead in wf-body. */
+const APP_PROBES = {
+  '': ['display', 'flex-direction', 'grid-template-columns', 'max-width', 'font-family', 'color'],
+  'nav': ['display', 'position', 'width', 'background-color', 'border-right-width'],
+  'nav a': ['display', 'color', 'font-size', 'padding-left', 'text-decoration-line'],
+  'main': ['max-width', 'padding-left', 'padding-top', 'margin-left'],
+  'h1': ['font-size', 'font-weight', 'line-height', 'margin-bottom', 'color', 'letter-spacing'],
+  'h2': ['font-size', 'font-weight', 'margin-top', 'margin-bottom', 'color'],
+  'p': ['font-size', 'line-height', 'margin-bottom', 'color'],
+  'main a': ['color', 'text-decoration-line'],
+  'ul': ['list-style-type', 'padding-left', 'margin-bottom'],
+  'li': ['margin-bottom', 'display'],
+  'code': ['font-family', 'font-size', 'background-color', 'padding-left', 'border-radius'],
+  'pre': ['background-color', 'padding-top', 'border-radius', 'overflow-x', 'font-size'],
+  'table': ['border-collapse', 'width'],
+  'th': ['font-weight', 'text-align', 'border-bottom-width'],
+  'img': ['max-width', 'display'],
+  '.sc-hero': ['background-color', 'padding-top'],
+  '.sc-hero__title': ['font-size', 'color', 'font-weight'],
+};
+
+async function appSnapshot(page) {
+  return page.evaluate((probes) => {
+    function fragmentRoot(root) {
+      if (root.querySelector('wf-document')) return root;
+      for (const el of root.querySelectorAll('*')) {
+        if (el.shadowRoot) { const f = fragmentRoot(el.shadowRoot); if (f) return f; }
+      }
+      return null;
+    }
+    const root = fragmentRoot(document);
+    if (!root) return null;
+    // Stylesheet inventory: every link/style in the fragment tree, with its rule count.
+    const sheets = [...root.querySelectorAll('link[rel~="stylesheet"], style')].map((n) => {
+      let rules; try { rules = n.sheet ? n.sheet.cssRules.length : 'no sheet'; } catch { rules = 'opaque'; }
+      const id = n.getAttribute('href') ?? n.textContent.slice(0, 24).replace(/\s+/g, ' ');
+      return `${n.localName}@${n.parentNode.localName ?? 'shadow'}:${id}:${rules}${n.sheet?.disabled ? ':disabled' : ''}`;
+    });
+    // The sub-app's content: the first element after the masthead that is not a style.
+    let app = root.querySelector('#kb-masthead')?.nextElementSibling;
+    while (app && app.localName === 'style') app = app.nextElementSibling;
+    const styles = {};
+    for (const [selector, props] of Object.entries(probes)) {
+      const el = selector ? app?.querySelector(selector) : app;
+      if (!el) { styles[selector] = null; continue; }
+      const cs = getComputedStyle(el);
+      styles[selector] = Object.fromEntries(props.map((p) => [p, cs.getPropertyValue(p)]));
+    }
+    return { sheets, styles, h1: app?.querySelector('h1')?.textContent.replace(/\s+/g, ' ').trim() ?? null };
+  }, APP_PROBES);
+}
+
+/** Waits for the sub-app content's own <h1> (the masthead has none on an app page). */
+async function waitForAppH1(page, text) {
+  await expect.poll(async () => (await appSnapshot(page))?.h1, { timeout: 15_000 }).toBe(text);
+}
+
+const DOCS = {
+  overview: { path: '/knowledge-base/user-guide/docs/', h1: 'Knowledge Base Docs Example' },
+  customising: { path: '/knowledge-base/user-guide/docs/customising/', h1: 'Customising the Template' },
+  addingPages: { path: '/knowledge-base/user-guide/docs/adding-pages/', h1: 'Adding Pages' },
+};
+
+for (const [mode, open] of [['bound', gotoBoundFragment], ['unbound', gotoFragment]]) {
+  test.describe(`docs pages reached by repeated client navigation, ${mode} embedding`, () => {
+    test('catalog → showcase → docs → Customising → Adding Pages: each page styled as on a hard load', async ({ page }) => {
+      test.setTimeout(90_000);
+      await open(page, '/knowledge-base/');
+      await waitForCatalog(page);
+
+      const visited = [];
+      const record = async (label, path) => {
+        await page.waitForTimeout(500); // let the swap's stylesheet fetches settle
+        const snap = await appSnapshot(page);
+        expect(snap, `${label}: no fragment tree`).not.toBeNull();
+        visited.push({ label, path, snap });
+      };
+
+      // Catalog card → the app's showcase index.
+      await clickInFragment(page, CARD.userGuide);
+      await waitForApp(page);
+      await record('showcase', '/knowledge-base/user-guide/');
+
+      // Showcase → the mkdocs part. The sub-app's own link, not the masthead's.
+      await clickInFragment(page, `#showcase-root a[href="${DOCS.overview.path}"]`);
+      await waitForAppH1(page, DOCS.overview.h1);
+      await record('docs overview', DOCS.overview.path);
+
+      // Sidebar hops within the docs.
+      await clickInFragment(page, `a[href="${DOCS.customising.path}"]`);
+      await waitForAppH1(page, DOCS.customising.h1);
+      await record('customising', DOCS.customising.path);
+
+      await clickInFragment(page, `a[href="${DOCS.addingPages.path}"]`);
+      await waitForAppH1(page, DOCS.addingPages.h1);
+      await record('adding pages', DOCS.addingPages.path);
+
+      // Sanity on the last page, so a null-everywhere snapshot cannot pass.
+      const last = visited.at(-1).snap;
+      expect(last.styles['h1'], 'docs h1 not found').not.toBeNull();
+      expect(last.styles['nav a'], 'docs sidebar link not found').not.toBeNull();
+      expect(last.sheets.some((s) => s.includes('/user-guide/docs/style.css')), 'docs stylesheet missing after navigation').toBe(true);
+
+      // Now the reference: every URL hard-loaded, and it must look the same.
+      for (const { label, path, snap } of visited) {
+        await open(page, path);
+        if (path === '/knowledge-base/user-guide/') await waitForApp(page);
+        else await waitForAppH1(page, Object.values(DOCS).find((d) => d.path === path).h1);
+        await page.waitForTimeout(500);
+        const hard = await appSnapshot(page);
+        expect(snap.styles, `${label}: computed styles after client navigation differ from a hard load of ${path}`).toEqual(hard.styles);
+        expect(snap.sheets, `${label}: stylesheet nodes after client navigation differ from a hard load of ${path}`).toEqual(hard.sheets);
+      }
+    });
+  });
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 test.describe('a sub-app stylesheet that outlives its page', () => {
   /**
    * Simulates the reframed leak: on the catalog, append both fixture app
