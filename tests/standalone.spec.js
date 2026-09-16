@@ -158,37 +158,25 @@ test.describe('Headless contract', () => {
 // out of wf-head into the shadow tree; Astro's subsequent cleanup can't find
 // them so they pile up unbounded (each navigation adds more, nothing removes).
 //
-// Fix: transform.js adds data-astro-transition-persist to every <link
-// rel="stylesheet"> injected by sub-app pages so Astro keeps them stable
-// rather than swapping them. This suite verifies the attribute is present.
+// Fix, in two parts: transform.js adds data-astro-transition-persist to every
+// <link rel="stylesheet"> injected by sub-app pages so Astro keeps them stable
+// rather than swapping them; and the knowledge base's own stylesheet is not a
+// head <link> at all — Base.astro inlines it into every <body>, so there is
+// nothing of the knowledge base's for reframed to lose (tests/css-isolation.spec.js
+// covers what happens when a sub-app sheet does leak).
 //
 // Upstream: https://github.com/web-fragments/web-fragments/issues/297
 
 test.describe('CSS link stability (#297)', () => {
-  test('landing-page stylesheet links carry data-astro-transition-persist', async ({ page }) => {
+  test('the landing page links no stylesheet from its head and carries the knowledge base CSS inline', async ({ page }) => {
     await page.goto('/knowledge-base/');
     await page.waitForLoadState('networkidle');
 
-    const links = page.locator('link[rel="stylesheet"]');
-    const count = await links.count();
-    expect(count, 'No <link rel=stylesheet> found on landing page').toBeGreaterThan(0);
-
-    for (let i = 0; i < count; i++) {
-      const href = await links.nth(i).getAttribute('href');
-      // Astro auto-injects the bundled knowledge base stylesheet (/knowledge-base/styleN.css)
-      // from a CSS `import`; that link is framework-managed and cannot carry the attribute.
-      // Astro keeps it across navigation by href-match, and the behavioural
-      // "CSS link count does not grow" test below is the authoritative #297 guard.
-      if (/^\/knowledge-base\/_astro\/.+\.css$/.test(href ?? '')) continue;
-      const persist = await links.nth(i).getAttribute('data-astro-transition-persist');
-      expect(
-        persist,
-        `<link href="${href}"> is missing data-astro-transition-persist.\n` +
-        'Without this attribute Astro ClientRouter removes and re-adds the link on every\n' +
-        'navigation. Inside web-fragments reframed cannot clean up the relocated nodes so\n' +
-        'they accumulate (issue #297).',
-      ).not.toBeNull();
-    }
+    expect(await page.locator('link[rel="stylesheet"]').count(), 'the landing page must not link a stylesheet').toBe(0);
+    expect(await page.locator('body > style[data-kb-stylesheet]').count(), 'inline knowledge base stylesheet').toBe(1);
+    // …and it is applied: the masthead title is the stylesheet's 2.25rem, not the UA's h1.
+    const title = page.locator('.kb-masthead-title');
+    await expect(title).toHaveCSS('font-size', '36px');
   });
 
   test('all stylesheet links on sub-app pages have data-astro-transition-persist', async ({ page }) => {
@@ -203,13 +191,11 @@ test.describe('CSS link stability (#297)', () => {
 
     const links = page.locator('link[rel="stylesheet"]');
     const count = await links.count();
-    if (count === 0) return; // no CSS on this page — pass
+    expect(count, 'the fixture app links its own stylesheets — none found').toBeGreaterThan(0);
 
     for (let i = 0; i < count; i++) {
       const href = await links.nth(i).getAttribute('href');
-      // Same exemption as the landing page: the bundled knowledge base stylesheet is
-      // injected by Astro from the layout's CSS import and cannot carry the attribute.
-      if (/^\/knowledge-base\/_astro\/.+\.css$/.test(href ?? '')) continue;
+      expect(href, 'the knowledge base stylesheet must be inlined, never linked').not.toMatch(/^\/knowledge-base\/_astro\/.+\.css$/);
       const persist = await links.nth(i).getAttribute('data-astro-transition-persist');
       expect(
         persist,
@@ -265,13 +251,17 @@ test.describe('CSS link stability (#297)', () => {
 
 test.describe('Asset routing', () => {
   test('CSS assets accessible via /__wf/knowledge-base/ prefix', async ({ page, request }) => {
-    await page.goto('/knowledge-base/');
+    // The landing page links no stylesheet (the knowledge base CSS is inline), so
+    // the sub-app's own links are the ones to check — plus the stable alias of
+    // the knowledge base stylesheet, which outside consumers fetch by this path.
+    await page.goto('/knowledge-base/user-guide/docs/');
     await page.waitForLoadState('networkidle');
 
     const hrefs = await page.locator('link[rel="stylesheet"]').evaluateAll(
       (els) => els.map((e) => e.getAttribute('href')).filter(Boolean),
     );
-    expect(hrefs.length, 'No stylesheet links found').toBeGreaterThan(0);
+    expect(hrefs.length, 'No stylesheet links found on the sub-app page').toBeGreaterThan(0);
+    hrefs.push('/knowledge-base/style.css');
 
     for (const href of hrefs) {
       // href is like /knowledge-base/style.css → /__wf/knowledge-base/style.css

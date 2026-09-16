@@ -15,32 +15,35 @@ import { readFileSync, existsSync, readdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join, relative } from 'node:path';
 import { isThemeBootstrap } from '../src/utils/transform.js';
+import { LAYER_ORDER, SUB_APP_LAYER } from '../src/utils/css-layers.js';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const DIST = join(ROOT, 'dist');
 const read = (rel) => readFileSync(join(DIST, rel), 'utf8');
 
-/** Every .html file under dist/, recursively. */
-function htmlFiles(dir, acc = []) {
+/** Every file with the extension under dir, recursively. */
+function filesWithExt(dir, ext, acc = []) {
   for (const entry of readdirSync(dir, { withFileTypes: true })) {
     const full = join(dir, entry.name);
-    if (entry.isDirectory()) htmlFiles(full, acc);
-    else if (entry.name.endsWith('.html')) acc.push(full);
+    if (entry.isDirectory()) filesWithExt(full, ext, acc);
+    else if (entry.name.endsWith(ext)) acc.push(full);
   }
   return acc;
 }
 
+/** Every .html file under dist/, recursively. */
+const htmlFiles = (dir) => filesWithExt(dir, '.html');
+
 /**
- * The knowledge base stylesheet a page loads. Astro injects this <link> from
- * Base.astro's CSS import, so the name is content-hashed and changes whenever
- * the stylesheet does — assert the shape, never a literal filename.
+ * The knowledge base stylesheet a page carries. Base.astro inlines it into the
+ * body of every page — inside a web fragment a head <link> is exactly the node
+ * reframed may lose during a ClientRouter swap — so this is the block's text,
+ * and there must be exactly one.
  */
-function kbCssHref(html) {
-  const href = [...html.matchAll(/<link\b[^>]*\brel="stylesheet"[^>]*>/gi)]
-    .map((tag) => tag[0].match(/\bhref="([^"]+)"/)?.[1])
-    .find((h) => h?.startsWith('/knowledge-base/_astro/'));
-  expect(href, 'page does not load the knowledge base stylesheet').toBeTruthy();
-  return href;
+function kbInlineStylesheet(html) {
+  const blocks = [...html.matchAll(/<style\b[^>]*\bdata-kb-stylesheet\b[^>]*>([\s\S]*?)<\/style>/gi)].map((m) => m[1]);
+  expect(blocks, 'page must carry exactly one inline knowledge base stylesheet').toHaveLength(1);
+  return blocks[0];
 }
 
 test.describe('Build integrity', () => {
@@ -65,12 +68,12 @@ test.describe('Build integrity', () => {
   });
 
   test('the knowledge base stylesheet is published at the stable /style.css alias too', () => {
-    // Pages reference the content-hashed bundle; /knowledge-base/style.css stays
-    // available as an alias of the same bytes for anything outside this
+    // Pages carry the stylesheet inline; /knowledge-base/style.css stays
+    // available as a file of the same bytes for anything outside this
     // repository that still asks for it by that path.
     expect(existsSync(join(DIST, 'style.css')), 'dist/style.css alias missing').toBe(true);
-    expect(read('style.css'), 'the alias is not a copy of the bundle the pages load')
-      .toBe(read(kbCssHref(read('index.html')).slice('/knowledge-base/'.length)));
+    expect(read('style.css'), 'the alias is not a copy of the stylesheet the pages carry')
+      .toBe(kbInlineStylesheet(read('index.html')));
   });
 
   test('landing lists both app cards with absolute slug links', () => {
@@ -81,10 +84,10 @@ test.describe('Build integrity', () => {
     expect(html).toContain('href="/knowledge-base/guide-mirror/"');
   });
 
-  test('sub-app pages are marked headless and reference the knowledge base CSS', () => {
+  test('sub-app pages are marked headless and carry the knowledge base CSS', () => {
     const html = read('user-guide/index.html');
     expect(html).toContain('data-kb-headless="true"');
-    expect(kbCssHref(html)).toMatch(/\.css$/);
+    expect(kbInlineStylesheet(html)).toBe(kbInlineStylesheet(read('index.html')));
   });
 
   test('sub-app pages are re-hosted by the layout, keeping their own head + body', () => {
@@ -263,7 +266,7 @@ test.describe('single-page onboarding', () => {
   test('is re-hosted by the layout like any packaged page', () => {
     const html = read('platform-overview/index.html');
     expect(html).toContain('data-kb-headless="true"');
-    expect(kbCssHref(html)).toMatch(/\.css$/);
+    expect(kbInlineStylesheet(html)).toContain('.kb-single-page');
     expect(html.match(/<html\b/gi) ?? []).toHaveLength(1);
     expect(html.match(/<head\b/gi) ?? []).toHaveLength(1);
     expect(html.match(/<body\b/gi) ?? []).toHaveLength(1);
@@ -431,16 +434,59 @@ test.describe('no inline scripts in the build output', () => {
 
 // ── CSS asset handling (#49, #50) ───────────────────────────────────────────
 test.describe('stylesheet emission', () => {
-  test('the knowledge base stylesheet is content-hashed, not pinned to a constant name', () => {
-    // Forcing "style.css" onto every CSS asset made Rollup disambiguate the
-    // collisions as style.css / style2.css / …, which the build then had to
-    // guess between — and it left the one stylesheet every page loads unable to
-    // be cache-busted (#50). Every page's <link> is Astro-injected, so nothing
-    // needed the constant name in the first place.
-    expect(kbCssHref(read('index.html')))
-      .toMatch(/^\/knowledge-base\/_astro\/[^/]+\.[A-Za-z0-9_-]{8,}\.css$/);
+  test('no page links a stylesheet of its own from its head — every page inlines the knowledge base CSS', () => {
+    // Inside a web fragment the head is reframed's, and a <link> there is the
+    // node it may lose during a ClientRouter swap; the catalog and masthead
+    // would then render unstyled. The stylesheet travels in the body instead,
+    // where it is replaced together with the page it styles. The only <link
+    // rel="stylesheet"> left are the sub-apps' own, which are layered instead.
+    for (const file of htmlFiles(DIST)) {
+      const html = readFileSync(file, 'utf8');
+      const rel = relative(DIST, file);
+      const kbLinks = [...html.matchAll(/<link\b[^>]*\brel="stylesheet"[^>]*>/gi)]
+        .map((tag) => tag[0].match(/\bhref="([^"]+)"/)?.[1])
+        .filter((h) => h?.startsWith('/knowledge-base/_astro/'));
+      expect(kbLinks, `${rel} links an Astro-emitted stylesheet from its head`).toEqual([]);
+      const css = kbInlineStylesheet(html);
+      expect(css, `${rel}: the inline stylesheet is not the compiled knowledge base CSS`).toContain('.kb-masthead');
+      expect(css, `${rel}: the inline stylesheet must carry the fence layer`).toContain('@layer kb-reset');
+      // Body-first: parsed before any content it styles.
+      expect(html.indexOf('data-kb-stylesheet'), `${rel}: the stylesheet must open the body`)
+        .toBeLessThan(html.indexOf('id="kb-masthead"'));
+    }
     expect(readdirSync(DIST).filter((f) => /^style\d+\.css$/.test(f)),
       'a style2.css means two bundles collided on one name again').toEqual([]);
+  });
+
+  test('the layout declares the cascade layer order before anything else in the head', () => {
+    // Layer priority is fixed by the first statement naming the layers, so
+    // this must precede every sub-app <link>/<style> the head slot brings in.
+    for (const file of htmlFiles(DIST)) {
+      const html = readFileSync(file, 'utf8');
+      const head = html.slice(html.indexOf('<head>'), html.indexOf('</head>'));
+      const first = head.search(/<(style|link)\b/i);
+      expect(head.slice(first), `${relative(DIST, file)}: first style node in head is not the layer order`)
+        .toMatch(new RegExp(`^<style>${LAYER_ORDER.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}</style>`));
+    }
+  });
+
+  test('every sub-app stylesheet is served wrapped in the sub-app cascade layer', () => {
+    // Below the knowledge base's own rules, so a sheet that outlives its page
+    // inside a web fragment cannot restyle the masthead or the catalog.
+    const appCss = ['user-guide', 'guide-mirror', 'platform-overview', 'release-process']
+      .flatMap((slug) => filesWithExt(join(DIST, slug), '.css'));
+    expect(appCss.length, 'no sub-app CSS in dist/').toBeGreaterThan(0);
+    for (const file of appCss) {
+      const css = readFileSync(file, 'utf8');
+      const rel = relative(DIST, file);
+      expect(css.startsWith(LAYER_ORDER), `${rel} does not open with the layer order`).toBe(true);
+      expect(css, `${rel} is not wrapped in the sub-app layer`).toContain(`@layer ${SUB_APP_LAYER}{`);
+    }
+    // The fixture docs theme is itself Tailwind output declaring theme/base/
+    // components/utilities — nested inside kb-app they stay the app's own.
+    const docs = read('user-guide/docs/style.css');
+    const block = docs.indexOf(`@layer ${SUB_APP_LAYER}{`);
+    expect(docs.indexOf('@layer theme', block + 1), "the app's own layers must sit inside the block").toBeGreaterThan(block);
   });
 
   test('every CSS asset carries a content hash', () => {

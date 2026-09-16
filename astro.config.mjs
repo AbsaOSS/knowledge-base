@@ -6,6 +6,17 @@ export default defineConfig({
   base: BASE_PATH,
   output: 'static',
 
+  build: {
+    // No page links a stylesheet from its <head>. The knowledge base stylesheet
+    // is inlined into every <body> by Base.astro (a `?inline` import), and the
+    // one sheet Astro still collects on its own — the ClientRouter's
+    // route-announcer rule — is inlined here rather than emitted as a <link>.
+    // Inside a web fragment a head <link> is exactly the node reframed may lose
+    // or duplicate across a ClientRouter swap (web-fragments #297), so the
+    // deployment keeps none. See src/utils/css-layers.js for the whole picture.
+    inlineStylesheets: 'always',
+  },
+
   vite: {
     plugins: [
       tailwindcss(),
@@ -31,17 +42,15 @@ export default defineConfig({
       // script included. Zero disables the inlining.
       assetsInlineLimit: 0,
     },
-    // No assetFileNames override: CSS is content-hashed like every other asset.
+    // No assetFileNames override: assets are content-hashed like everything else.
     //
     // This used to force the name "style.css" onto every CSS asset so that
-    // /{PREFIX}/style.css was a fixed path. Nothing needs a fixed path — the
-    // <link> on every page is injected by Astro from Base.astro's CSS import, so
-    // it always carries whatever name the bundle was given. Forcing a constant
-    // name only made Rollup disambiguate collisions as style.css / style2.css,
-    // which the build then had to guess between, and it defeated cache-busting
-    // for the one stylesheet every page loads (#50). scripts/build-vite.js still
-    // publishes dist/style.css as an alias of this bundle for anything outside
-    // this repository that refers to it by that path.
+    // /{PREFIX}/style.css was a fixed path. Nothing needs a fixed path: forcing
+    // a constant name only made Rollup disambiguate collisions as style.css /
+    // style2.css, which the build then had to guess between (#50). Today no
+    // page links a stylesheet at all (see `build.inlineStylesheets` above);
+    // scripts/build-vite.js publishes dist/style.css from the inline block for
+    // anything outside this repository that still refers to it by that path.
   },
 });
 

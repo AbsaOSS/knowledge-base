@@ -1,8 +1,72 @@
+/* ── Cascade layers ─────────────────────────────────────────────────────────
+   Must match LAYER_ORDER in src/utils/css-layers.js — that file explains the
+   order. In short: every documentation app's CSS is wrapped in `kb-app`, which
+   sits below the knowledge base's own rules and utilities, and `kb-reset`
+   holds the fence below that keeps leaked sub-app CSS out of the knowledge
+   base's own regions. Declared ahead of Tailwind's import so this sheet
+   establishes the same order as the layout's <head> and every rewritten
+   sub-app stylesheet, whichever the browser happens to parse first. */
+@layer theme, base, kb-app, kb-reset, components, utilities;
+
 @import "tailwindcss";
 
 /* Scan templates for class names */
 @source "../src/templates/**/*.js";
 @source "../scripts/**/*.js";
+
+/* ── Fence around the knowledge base's own regions ──────────────────────────
+   `.kb-shell` marks the masthead and the landing catalog: the markup the
+   knowledge base owns on a page that otherwise belongs to a documentation app.
+   Inside a web fragment that app's stylesheets can outlive their page (see
+   css-layers.js), and a docs theme's `h1 {…}`, `p {…}`, `a {…}` would restyle
+   the masthead and, on the way back to the catalog, the cards.
+
+   `all: revert` rolls every property back to the browser default, discarding
+   whatever author rule won — and because this layer sits above `kb-app`, the
+   author rule it discards is the leaked one. The knowledge base's own rules
+   are unlayered or in `utilities`, both above `kb-reset`, so they apply on top
+   as before. Custom properties are not touched by `all`, so the design tokens
+   still flow in from :host/wf-html.
+
+   The revert also discards Tailwind's Preflight, which lives in `base`; the
+   handful of Preflight defaults the shell relies on are restated right after.
+   SVG elements and their subtrees are excluded: `revert` would discard their
+   presentation attributes (`fill="none"`, `stroke="currentColor"` on the
+   <svg> itself) along with author CSS — every icon turned solid black when
+   only the subtree was excluded — and no sub-app rule needs fencing inside
+   an icon. */
+@layer kb-reset {
+  .kb-shell,
+  .kb-shell :not(svg, svg *),
+  .kb-shell ::before,
+  .kb-shell ::after {
+    all: revert;
+  }
+  .kb-shell,
+  .kb-shell :not(svg, svg *),
+  .kb-shell ::before,
+  .kb-shell ::after {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+    border: 0 solid;
+  }
+  .kb-shell :is(h1, h2, h3, h4, h5, h6) {
+    font-size: inherit;
+    font-weight: inherit;
+  }
+  .kb-shell a {
+    color: inherit;
+    text-decoration: inherit;
+  }
+  .kb-shell :is(img, svg, video, canvas, audio, iframe, embed, object) {
+    display: block;
+    vertical-align: middle;
+  }
+  .kb-shell :is(ol, ul, menu) {
+    list-style: none;
+  }
+}
 
 /* ── Typeface ───────────────────────────────────────────────────────────────
    Inter, self-hosted from @fontsource-variable/inter.

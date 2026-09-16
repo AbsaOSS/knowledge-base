@@ -56,7 +56,7 @@ Orchestrator: `scripts/build-vite.js`. Flags: `--local`, `--headless`.
 
 ## Build Config
 
-**astro.config.mjs** is the only build config — base `/knowledge-base`, used by `astro build`/`astro dev`. There is no non-Astro build path. It sets `vite.build.assetsInlineLimit: 0`: Astro would otherwise inline a small component `<script>` into the page, and the deployment serves `script-src 'self'`.
+**astro.config.mjs** is the only build config — base `/knowledge-base`, used by `astro build`/`astro dev`. There is no non-Astro build path. It sets `vite.build.assetsInlineLimit: 0`: Astro would otherwise inline a small component `<script>` into the page, and the deployment serves `script-src 'self'`. It also sets `build.inlineStylesheets: 'always'`: no page links a stylesheet of its own from `<head>` (see *CSS isolation* below).
 
 `src/utils/config.js` holds what both the config and the pages need: `PATH_PREFIX`/`BASE_PATH` and `isHeadlessBuild()`. Import them; do not re-spell either one inline.
 
@@ -72,7 +72,8 @@ Orchestrator: `scripts/build-vite.js`. Flags: `--local`, `--headless`.
 - `src/pages/index.astro` — Landing catalog page
 - `src/utils/apps.js` — `getAppPages()` enumerates sub-app HTML (manifest-driven or filesystem crawl)
 - `src/utils/transform.js` — `transformSubAppHtml()`: URL rewriting, document splitting (head/body/title/body-class), headless transforms
-- `src/layouts/Base.astro` — The one document shell: head, knowledge base CSS (which carries the self-hosted Inter faces), `<ClientRouter />`, shadow-DOM compat styles
+- `src/layouts/Base.astro` — The one document shell: head (opening with the cascade layer order), `<ClientRouter />`, and a body that opens with the knowledge base CSS inlined (`?inline` import; carries the self-hosted Inter faces) followed by the shadow-DOM compat styles
+- `src/utils/css-layers.js` — The cascade-layer contract: `LAYER_ORDER` and `layerSubAppCss()`, which wraps a sub-app stylesheet in the `kb-app` layer. Used by the layout, the build and `transform.js`
 - `src/components/Masthead.astro` — Persistent Knowledge base header + Library/current-app sub-nav (all pages, both modes)
 - `src/components/AppCard.astro`, `src/components/AppIcon.astro` — Catalog card and its icon
 - `src/templates/shadow-compat.js` — Shadow-DOM design-token styles, injected into the body by the layout
@@ -105,6 +106,15 @@ Both modes render the same document: the masthead (`Masthead.astro`) — brandin
 **Headless** (web-fragment): Marks `data-kb-headless="true"` on `<html>`, for embedding in a web-fragments gateway. That attribute is the only difference in the output — the shadow-DOM compat styles are emitted in both modes.
 
 Resolution order: a per-app `"headless"` in `apps.json` wins; otherwise `isHeadlessBuild()`.
+
+### CSS Isolation
+
+Inside a web fragment the `<head>` is reframed's, and reframed has lost, relocated and duplicated head `<link>`/`<style>` nodes across ClientRouter swaps (web-fragments #297). The symptom was a catalog rendered under a docs theme after Library → app → Library, and a masthead wearing two themes on the next app. Two defences, both in `src/utils/css-layers.js`'s terms:
+
+- **The knowledge base stylesheet is inlined into every `<body>`**, never linked from `<head>`: it is present exactly when its page is. `scripts/build-vite.js` publishes the same bytes as `dist/style.css` for anything outside the repo that still fetches that URL.
+- **Every sub-app stylesheet is wrapped in the `kb-app` cascade layer** — CSS files by `copyAssets()` in the build, inline `<style>` blocks by `transform.js` — and the knowledge base's own regions (`.kb-shell`: the masthead and the catalog) sit behind a fence in the `kb-reset` layer (`all: revert` plus the Preflight defaults they rely on). Layer order is `theme, base, kb-app, kb-reset, components, utilities`: a leaked docs-theme rule cannot beat a knowledge base rule or a Tailwind utility, cannot fill a gap the knowledge base left unstyled, and Tailwind's Preflight stays below the app's own CSS so headings keep their theme sizes. The order statement is emitted by the layout's head, at the top of every rewritten sub-app stylesheet and in `knowledge-base.css`, so it holds whichever the browser parses first.
+
+Known limit: a `!important` declaration in a sub-app stylesheet outranks the fence (importance inverts layer order).
 
 ### Light Only
 
@@ -147,11 +157,18 @@ Self-contained Playwright E2E — `npm test` auto-starts everything (no external
 Tests drive the host origin (`http://localhost:4201`). Suites (`tests/`), all four
 commands listed in `AGENTS.md`:
 - `build-integrity.spec.js` — `dist/` output: both apps enumerated, absolute URL rewriting,
-  headless markup and the per-app `"headless"` override, the content-hashed knowledge base
-  stylesheet plus its stable `dist/style.css` alias, no inline script anywhere, and
-  single-page bundle expansion (`tests/fixtures/single-page-bundle/` → two apps).
-- `transform.spec.js` — unit tests for `transformSubAppHtml()`: the malformed and
-  hostile documents no fixture app happens to ship.
+  headless markup and the per-app `"headless"` override, the knowledge base stylesheet
+  inlined into every body (no page links one from its head) plus its stable `dist/style.css`
+  alias, the layer order opening every head and every sub-app stylesheet wrapped in `kb-app`,
+  no inline script anywhere, and single-page bundle expansion
+  (`tests/fixtures/single-page-bundle/` → two apps).
+- `transform.spec.js` — unit tests for `transformSubAppHtml()` and `layerSubAppCss()`: the
+  malformed and hostile documents no fixture app happens to ship.
+- `css-isolation.spec.js` — Library → app → Library → app in both embeddings leaves the
+  catalog and masthead computed styles identical to first load; a leak injected on purpose
+  (the fixture stylesheets plus a hostile layered one appended to the fragment head) applies
+  outside the `.kb-shell` fence and changes nothing inside it; a docs page keeps its heading
+  sizes (Preflight below the app CSS).
 - `web-fragment.spec.js` — shadow-DOM isolation (reframed `wf-html`/`wf-body`; host chrome must
   not leak in), routing + smooth no-reload SPA transitions, cross-app navigation, asset
   loading (no host-origin 404s), and the documented history limitation (fragment routing is
@@ -182,9 +199,9 @@ commands listed in `AGENTS.md`:
 
 Two build-pipeline pieces support this: `apps.json` entries may carry a `prebuilt` path
 (tarball or unpacked directory) consumed by `scripts/build-vite.js` (`stageEntry`) for hermetic
-offline builds; and the build copies the knowledge base stylesheet — identified as the local
-stylesheet the landing page loads — to a stable `dist/style.css` alias. Pages themselves
-reference the content-hashed bundle Astro injects, so nothing depends on that filename.
+offline builds; and the build writes the knowledge base stylesheet — taken from the landing
+page's inline `<style data-kb-stylesheet>` block — to a stable `dist/style.css` alias. Pages
+themselves carry the CSS inline, so nothing depends on that filename.
 
 An entry may also carry `"optional": true`: the build then skips it with a warning when its
 `prebuilt`/`localPath` artifact is missing, instead of failing. That is how the sibling

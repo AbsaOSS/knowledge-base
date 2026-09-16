@@ -26,6 +26,7 @@ import { downloadArtifact } from './fetch-apps.js';
 import { HOIST_DIR, hoistAppInlineScripts } from './hoist-inline-scripts.js';
 import { collectHtmlFiles } from '../src/utils/apps.js';
 import { PATH_PREFIX, REGISTRY_FILE } from '../src/utils/config.js';
+import { layerSubAppCss } from '../src/utils/css-layers.js';
 import {
   ARTIFACT_NAME, MANIFEST, expandManifest, findManifestRoot, isIframe,
   readManifest, resolveRegistry, sourceKey, stagingName, toRegistryEntry,
@@ -421,7 +422,10 @@ async function build() {
           /url\(\s*(['"]?)\/(?!\/)/g,
           'url($1/' + PATH_PREFIX + '/' + slug + '/',
         );
-        if (rewritten !== css) writeFileSync(d, rewritten);
+        // Then wrap the whole sheet in the sub-app cascade layer, so that a
+        // sheet which outlives its page inside a web fragment cannot restyle
+        // the knowledge base's own markup — see src/utils/css-layers.js.
+        writeFileSync(d, layerSubAppCss(rewritten));
       } else {
         linkOrCopy(s, d);
       }
@@ -443,38 +447,39 @@ async function build() {
   execSync('npx astro build', { cwd: ROOT, stdio: 'inherit', env });
   ok('Astro build complete');
 
-  // Publish dist/style.css as an alias of the knowledge base stylesheet.
+  // Publish dist/style.css: the knowledge base stylesheet as a file.
   //
-  // Pages do not need it: Astro injects the <link> from Base.astro's CSS import,
-  // with whatever content-hashed name the bundle got. The alias exists because
+  // Pages do not load it: Base.astro inlines the stylesheet into every <body>,
+  // because inside a web fragment a <link> in the head is exactly the node
+  // reframed may lose during a ClientRouter swap. The file exists because
   // /{prefix}/style.css is a URL this deployment has served for a long time and
   // something outside this repository may still ask for it.
   //
-  // The bundle is identified by *use*, not by filename: it is the local
-  // stylesheet the knowledge base's own landing page loads. That is the definition
-  // of "the knowledge base stylesheet", and it cannot drift from what the pages
-  // actually reference the way a filename pattern could (#50).
+  // The bytes are taken from the landing page's inline block rather than from
+  // a second compilation, so the alias cannot drift from what the pages
+  // actually carry (#50).
   const distRoot = join(ROOT, 'dist');
   if (existsSync(distRoot)) {
     const landing = join(distRoot, 'index.html');
     if (!existsSync(landing)) fail('No dist/index.html — the landing page did not build.');
 
-    const hrefs = [...readFileSync(landing, 'utf8').matchAll(/<link\b[^>]*\brel="stylesheet"[^>]*>/gi)]
-      .map(tag => tag[0].match(/\bhref="([^"]+)"/)?.[1])
-      .filter(href => href?.startsWith('/' + PATH_PREFIX + '/'));
+    const blocks = [...readFileSync(landing, 'utf8')
+      .matchAll(/<style\b[^>]*\bdata-kb-stylesheet\b[^>]*>([\s\S]*?)<\/style>/gi)]
+      .map(m => m[1]);
 
-    if (hrefs.length !== 1) {
+    if (blocks.length !== 1) {
       fail(
-        'Expected the landing page to load exactly one local stylesheet — the knowledge base bundle — ' +
-        'but found ' + hrefs.length + (hrefs.length ? ': ' + hrefs.join(', ') : '') +
+        'Expected the landing page to carry exactly one inline knowledge base stylesheet ' +
+        '(<style data-kb-stylesheet>) but found ' + blocks.length +
         '. dist/style.css can only alias an unambiguous one.',
       );
     }
+    if (!blocks[0].includes('@font-face')) {
+      fail('The inline knowledge base stylesheet carries no @font-face — did the ?inline import compile?');
+    }
 
-    const bundle = join(distRoot, hrefs[0].slice(('/' + PATH_PREFIX).length));
-    if (!existsSync(bundle)) fail('The landing page references ' + hrefs[0] + ', which is not in dist/.');
-    copyFileSync(bundle, join(distRoot, 'style.css'));
-    ok('Knowledge base CSS ' + hrefs[0] + ' aliased → dist/style.css');
+    writeFileSync(join(distRoot, 'style.css'), blocks[0]);
+    ok('Knowledge base CSS (' + blocks[0].length + ' bytes, inlined into every page) published → dist/style.css');
   }
 
   // 4. Summary
