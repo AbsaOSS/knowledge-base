@@ -73,6 +73,13 @@ const bodyClasses = [
   <slot name="head" />
   {/* Inter is self-hosted: its @font-face lives in knowledge-base.css, which the
       layout already imports, so there is nothing to link here (#54). */}
+  {/* Embedded as a web fragment, the ClientRouter needs two corrections — a
+      view transition on the host document, and a swap that keeps reframed's
+      wf-* tree flat. Standalone the module is inert. Bundled to a file, never
+      inlined, so `script-src 'self'` holds (see astro.config.mjs). */}
+  <script>
+    import '../scripts/embedded-transitions.js';
+  </script>
   <ClientRouter />
 </head>
 <body class={bodyClasses} style="background-color:var(--bg-page)">
