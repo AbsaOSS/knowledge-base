@@ -251,7 +251,7 @@ const gateway = new FragmentGateway();
 gateway.registerFragment({
   fragmentId: 'knowledge-base',
   endpoint: 'http://localhost:3000',          // the fragment server
-  piercing: false,
+  piercing: false,                            // or true (SSR piercing) — both are tested
   routePatterns: [
     '/knowledge-base/:_*',                     // landing + sub-app pages + assets
     '/__wf/knowledge-base/:_*',                // fragment asset prefix
@@ -309,6 +309,14 @@ export class KnowledgeBasePage {}
 import { initializeWebFragments } from 'web-fragments';
 initializeWebFragments();
 ```
+
+`initializeWebFragments()` must run before anything renders a `<web-fragment>`.
+With piercing on, a `<web-fragment>` created earlier finds the server-rendered
+`<web-fragment-host>` before that element is defined and fails with
+`portalHost is not a function`; the fragment then falls back to client
+rendering. (`tests/host/server.mjs` loads its router stand-in with `defer` for
+exactly this reason.) `piercing: true` — how an Angular SSR gateway usually
+embeds — is supported and is what the `chromium-pierced` test project runs.
 
 Per fragment page this then happens: the ClientRouter pushes `/knowledge-base/…`,
 Angular sees the `popstate` and navigates there, matches the same `**` route

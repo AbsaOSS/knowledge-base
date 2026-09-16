@@ -22,6 +22,7 @@
 // possible rather than being patched one at a time.
 
 import { parse, serialize } from 'parse5';
+import { layerSubAppCss } from './css-layers.js';
 
 // ── URL rewriting ─────────────────────────────────────────────────────────────
 
@@ -148,7 +149,8 @@ export function isThemeBootstrap(code) {
  * Steps (in order):
  *  1. Rewrite every URL-bearing attribute to an absolute /{prefix}/{slug}/… path
  *     and drop any <base> tag
- *  2. Stamp data-astro-transition-persist on every stylesheet link
+ *  2. Stamp data-astro-transition-persist on every stylesheet link, and wrap
+ *     every inline <style> in the sub-app cascade layer (css-layers.js)
  *  3. Split off <head> contents, <body> attributes and <body> contents
  *  4. Lift the <title> out of the head (the layout renders it)
  *  5. Drop <meta charset> / <meta viewport> duplicates (the layout provides both)
@@ -195,9 +197,16 @@ export function transformSubAppHtml(html, slug, fileRelDir, prefix) {
       }
     }
 
+    // 2a. Inline styles: rewrite their url()s, then wrap the block in the
+    //     sub-app cascade layer, exactly as the build does to the app's CSS
+    //     files (see css-layers.js). A block is a single text node in
+    //     practice; several are joined so one wrapper covers them all.
     if (el.tagName === 'style') {
-      for (const text of el.childNodes ?? []) {
-        if (text.nodeName === '#text') text.value = rewriteCssUrls(text.value, base, prefix, slug);
+      const texts = (el.childNodes ?? []).filter((c) => c.nodeName === '#text');
+      if (texts.length) {
+        const css = texts.map((t) => rewriteCssUrls(t.value, base, prefix, slug)).join('');
+        texts[0].value = layerSubAppCss(css);
+        for (const extra of texts.slice(1)) extra.value = '';
       }
     }
 

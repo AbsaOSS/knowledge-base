@@ -34,7 +34,9 @@ const { activeApp, base = '/knowledge-base', appRoot = false } = Astro.props;
 const onLibrary = !activeApp;
 ---
 
-<div id="kb-masthead" class={`kb-masthead${onLibrary ? '' : ' kb-masthead--compact'}`}>
+{/* `kb-shell` is the fence in knowledge-base.css: a sub-app stylesheet that
+    outlives its page inside a web fragment cannot restyle anything in here. */}
+<div id="kb-masthead" class={`kb-shell kb-masthead${onLibrary ? '' : ' kb-masthead--compact'}`}>
   {!onLibrary && (
     <span class="kb-masthead-brand" aria-hidden="true">Knowledge base</span>
   )}

@@ -13,6 +13,7 @@
 
 import { test, expect } from '@playwright/test';
 import { transformSubAppHtml, isThemeBootstrap } from '../src/utils/transform.js';
+import { layerSubAppCss, LAYER_ORDER, SUB_APP_LAYER } from '../src/utils/css-layers.js';
 
 const PREFIX = 'knowledge-base';
 const SLUG = 'demo';
@@ -114,6 +115,74 @@ test.describe('URL rewriting', () => {
     ), 'docs');
     expect(bodyHtml).toContain('url(/knowledge-base/demo/bg.png)');
     expect(headHtml).toContain("url('/knowledge-base/demo/docs/img/hero.png')");
+  });
+});
+
+// Inside a web fragment a sub-app stylesheet can outlive its page (reframed
+// loses track of head nodes across ClientRouter swaps, web-fragments #297).
+// Every sub-app stylesheet is therefore wrapped in the `kb-app` cascade layer,
+// below the knowledge base's own rules, so a leaked one cannot restyle the
+// masthead or the catalog. The build wraps the CSS files; this is the inline
+// <style> half of the same contract.
+test.describe('sub-app CSS layering', () => {
+  const wrapped = (css) => {
+    expect(css.startsWith(LAYER_ORDER), 'layer order must come first').toBe(true);
+    expect(css).toContain(`@layer ${SUB_APP_LAYER}{`);
+  };
+
+  test('<style> blocks in the head and body are wrapped in the sub-app layer', () => {
+    const { headHtml, bodyHtml } = run(doc(
+      '<style>.late{color:red}</style><p>x</p>',
+      "<style>.hero{background:url('img/hero.png')}</style>",
+    ), 'docs');
+    const head = headHtml.match(/<style>([\s\S]*?)<\/style>/)[1];
+    const body = bodyHtml.match(/<style>([\s\S]*?)<\/style>/)[1];
+    wrapped(head);
+    wrapped(body);
+    expect(head, 'url() rewriting still happens inside the wrapper').toContain("url('/knowledge-base/demo/docs/img/hero.png')");
+    expect(body).toContain('.late{color:red}');
+  });
+
+  test('an empty <style> is left alone', () => {
+    expect(run(doc('<p>x</p>', '<style></style>')).headHtml).toContain('<style></style>');
+  });
+
+  test('@charset is dropped and @import hoisted ahead of the layer block, itself layered', () => {
+    const css = layerSubAppCss(
+      '@charset "utf-8";\n@import url("a.css");\n@import "b.css" screen;\n' +
+      '@import url(c.css) layer(theme) supports(display:grid);\n@import url(d.css) layer;\nh1{color:red}',
+    );
+    wrapped(css);
+    expect(css).not.toContain('@charset');
+    const block = css.indexOf(`@layer ${SUB_APP_LAYER}{`);
+    for (const line of [
+      `@import url("a.css") layer(${SUB_APP_LAYER});`,
+      `@import "b.css" layer(${SUB_APP_LAYER}) screen;`,
+      `@import url(c.css) layer(${SUB_APP_LAYER}.theme) supports(display:grid);`,
+      `@import url(d.css) layer(${SUB_APP_LAYER});`,
+    ]) {
+      const at = css.indexOf(line);
+      expect(at, `missing: ${line}`).toBeGreaterThan(-1);
+      expect(at, `${line} must precede the layer block`).toBeLessThan(block);
+    }
+    expect(css.slice(block)).toContain('h1{color:red}');
+  });
+
+  test('an @import after a rule is invalid CSS already and is not activated by hoisting', () => {
+    const css = layerSubAppCss('p{a:b}\n@import url(late.css);');
+    expect(css.indexOf('@import')).toBeGreaterThan(css.indexOf(`@layer ${SUB_APP_LAYER}{`));
+  });
+
+  test("the app's own @layer rules nest inside the sub-app layer untouched", () => {
+    const css = layerSubAppCss('@layer theme, base;\n@layer base{h1{x:1}}\np{a:b}');
+    wrapped(css);
+    expect(css).toContain('@layer theme, base;\n@layer base{h1{x:1}}');
+  });
+
+  test('wrapping is idempotent and strips a BOM', () => {
+    const once = layerSubAppCss('﻿body{margin:0}');
+    expect(once.charCodeAt(0)).not.toBe(0xfeff);
+    expect(layerSubAppCss(once)).toBe(once);
   });
 
   test('rewrites URL-bearing meta content', () => {

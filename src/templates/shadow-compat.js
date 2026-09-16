@@ -4,9 +4,8 @@
 //
 // @tailwindcss/vite strips custom element selectors (wf-html, wf-document) during
 // its CSS optimisation pass, making it impossible to target shadow DOM elements
-// via the external style.css file alone. Injecting these rules as an inline
-// <style> tag places them inside the shadow root's stylesheet scope, where they
-// work without going through the Tailwind pipeline.
+// from knowledge-base.css alone. Injecting these rules as a separate inline
+// <style> tag keeps them out of the Tailwind pipeline.
 //
 // wf-html / wf-document get explicit declarations of every design token, so
 // shadow-root elements have them directly. Belt-and-suspenders — :root and :host

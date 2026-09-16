@@ -16,7 +16,9 @@ const buildDate = new Date().toISOString().slice(0, 10);
 <Base>
   <Masthead base={BASE_PATH} />
 
-  <div class="flex flex-col flex-1">
+  {/* `kb-shell`: the catalog is fenced off from any sub-app stylesheet that
+      outlived its page inside a web fragment — see knowledge-base.css. */}
+  <div class="kb-shell flex flex-col flex-1">
     <!-- App catalog -->
     <main id="content" class="flex-1 max-w-6xl mx-auto w-full px-6 md:px-10 py-10" aria-label="Documentation catalog">
       <div class="flex items-center justify-between mb-6">

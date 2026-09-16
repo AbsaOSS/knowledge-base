@@ -43,8 +43,13 @@ const gateway = new FragmentGateway();
 gateway.registerFragment({
   fragmentId: 'knowledge-base',
   endpoint: KB_ENDPOINT,
-  // Client-rendered embed (no SSR piercing) — matches the Astro fragment recipe.
-  piercing: false,
+  // Client-rendered embed (no SSR piercing) by default — the Astro fragment
+  // recipe. KB_PIERCING=true switches to server-side piercing, the mode a
+  // production Angular SSR gateway runs in: the first page then arrives as
+  // SSR markup inside a declarative shadow root and reframed adopts it, which
+  // is a different starting tree for the ClientRouter than the client-rendered
+  // wf-html/wf-head/wf-body one.
+  piercing: process.env.KB_PIERCING === 'true',
   // One pattern for pages + _astro assets + ClientRouter fetches, one for the
   // /__wf/ knowledge base CSS route the sub-app HTML references.
   routePatterns: ['/knowledge-base/:_*', '/__wf/knowledge-base/:_*'],
@@ -115,7 +120,11 @@ function shell({ routes, fragmentSrc = null }) {
     import { initializeWebFragments } from 'web-fragments';
     initializeWebFragments();
   </script>
-  <script src="/host-router.js"></script>
+  <!-- deferred so it runs AFTER the module above, exactly like an Angular host
+       that calls initializeWebFragments() in main.ts before bootstrapping: a
+       <web-fragment> created before web-fragment-host is defined cannot adopt
+       a pierced host (portalHost is not yet a function on it). -->
+  <script defer src="/host-router.js"></script>
 </body>
 </html>`;
 }

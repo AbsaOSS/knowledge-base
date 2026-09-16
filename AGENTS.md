@@ -145,6 +145,23 @@ class, no dark palette. A sub-app's own theme bootstrap is removed twice:
 class. Do not reintroduce any of it, and keep both halves — hoisting a bootstrap
 instead of deleting it puts it beyond the reach of the transform.
 
+### The knowledge base's CSS is inlined; a sub-app's is layered
+
+Inside a web fragment the `<head>` belongs to reframed, which has lost, moved
+and duplicated head `<link>`/`<style>` nodes across ClientRouter swaps
+(web-fragments #297). So the knowledge base stylesheet is never linked from
+`<head>`: `src/layouts/Base.astro` inlines it into every `<body>`, where it is
+replaced together with the page. And every sub-app stylesheet — CSS files in
+`scripts/build-vite.js`, inline `<style>` blocks in `src/utils/transform.js` —
+is wrapped in the `kb-app` cascade layer, below the knowledge base's own rules,
+with the masthead and the catalog (`.kb-shell`) fenced by `all: revert` in the
+`kb-reset` layer. A sub-app sheet that outlives its page can then not restyle
+them. `src/utils/css-layers.js` owns the order and the wrapper; keep all three
+emitters of the order statement (layout head, rewritten sub-app CSS,
+`knowledge-base.css`) in agreement, and do not reintroduce a `<link>` to the
+knowledge base CSS — `tests/build-integrity.spec.js` and
+`tests/css-isolation.spec.js` fail if you do.
+
 ### Sub-app HTML is untrusted input
 
 Artifacts come from other repositories' releases. Treat their HTML, CSS and
@@ -163,8 +180,9 @@ pages silently in production.
 The check covers `<script>` elements. Inline `on*` handlers are a known gap
 (#67): they are equally blocked by the policy but nothing strips or reports them.
 
-Inline `<style>` is still allowed (`style-src` keeps `'unsafe-inline'`); tightening
-that is a separate piece of work.
+Inline `<style>` is allowed (`style-src` keeps `'unsafe-inline'`) and now relied
+on: the knowledge base stylesheet itself is an inline block in every body (see
+above). Tightening `style-src` would mean hashes or nonces for it, not dropping it.
 
 ### Portability
 
