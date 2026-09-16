@@ -1,13 +1,15 @@
 /* ── Cascade layers ─────────────────────────────────────────────────────────
-   Must match LAYER_ORDER in src/utils/css-layers.js — that file explains the
-   order. In short: every documentation app's CSS is wrapped in `kb-app`, which
+   Layer order is LAYER_ORDER in src/utils/css-layers.js — that file explains
+   it. In short: every documentation app's CSS is wrapped in `kb-app`, which
    sits below the knowledge base's own rules and utilities, and `kb-reset`
    holds the fence below that keeps leaked sub-app CSS out of the knowledge
-   base's own regions. Declared ahead of Tailwind's import so this sheet
-   establishes the same order as the layout's <head> and every rewritten
-   sub-app stylesheet, whichever the browser happens to parse first. */
-@layer theme, base, kb-app, kb-reset, components, utilities;
+   base's own regions.
 
+   The order statement is NOT written here: Tailwind drops a bare
+   `@layer a, b;` from its output, so it would silently vanish. Base.astro
+   prepends it to this sheet's inline block instead, and the layout's <head>
+   and every rewritten sub-app stylesheet carry it too, so the order holds
+   whichever the browser parses first. */
 @import "tailwindcss";
 
 /* Scan templates for class names */

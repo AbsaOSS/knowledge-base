@@ -94,8 +94,13 @@ const bodyClasses = [
 <body class={bodyClasses} style="background-color:var(--bg-page)">
   {/* The knowledge base stylesheet, Inter's self-hosted @font-face included.
       First in the body so it is parsed before any content it styles — and in
-      the body at all for the reason in the header comment. */}
-  <style is:inline data-kb-stylesheet set:html={kbStylesheet}></style>
+      the body at all for the reason in the header comment. The layer order is
+      prepended here rather than written in knowledge-base.css: Tailwind drops
+      a bare `@layer a, b;` statement from its output, so the compiled sheet
+      alone would establish `theme, base, …, kb-reset` and never name `kb-app`,
+      and a runtime that parses this block before the <head> would then order
+      the sub-app layer above the fence. */}
+  <style is:inline data-kb-stylesheet set:html={LAYER_ORDER + '\n' + kbStylesheet}></style>
   <slot />
   <Fragment set:html={shadowCompatStyle} />
 </body>

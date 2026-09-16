@@ -450,6 +450,10 @@ test.describe('stylesheet emission', () => {
       const css = kbInlineStylesheet(html);
       expect(css, `${rel}: the inline stylesheet is not the compiled knowledge base CSS`).toContain('.kb-masthead');
       expect(css, `${rel}: the inline stylesheet must carry the fence layer`).toContain('@layer kb-reset');
+      // Tailwind drops a bare `@layer a, b;` from its output, so the order has
+      // to be prepended by the layout — and it has to be there, or a runtime
+      // that parses this block before the head orders `kb-app` above the fence.
+      expect(css.startsWith(LAYER_ORDER), `${rel}: the inline stylesheet must open with the layer order`).toBe(true);
       // Body-first: parsed before any content it styles.
       expect(html.indexOf('data-kb-stylesheet'), `${rel}: the stylesheet must open the body`)
         .toBeLessThan(html.indexOf('id="kb-masthead"'));
