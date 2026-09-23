@@ -114,10 +114,9 @@ action at it:
     npm-token: ${{ secrets.ARTIFACTORY_TOKEN }}       # omit for anonymous reads
 ```
 
-The action's lockfile resolves every package to `registry.npmjs.org` and stays
-that way: npm rewrites that host to the configured registry when it fetches
-(`replace-registry-host`), and the lockfile's integrity hashes still verify
-because the mirror serves the same tarballs. The registry is applied as
+The action's lockfile names no registry — each package carries a version and an
+integrity hash, no `resolved` URL — so npm fetches from the configured registry,
+and the hashes still verify because the mirror serves the same tarballs. The registry is applied as
 project-level npm config for this install only — the runner's own npm
 configuration and the rest of your workflow are untouched, and the token is
 read from the environment rather than written to disk.

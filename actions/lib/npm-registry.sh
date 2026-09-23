@@ -4,11 +4,12 @@
 # Consuming repositories may run on runners inside a private network where
 # registry.npmjs.org is unreachable and every package has to come from an
 # internal mirror (a JFrog Artifactory npm remote, typically). The lockfiles in
-# this repository resolve every package to registry.npmjs.org, and that is fine:
-# npm's `replace-registry-host` (default `npmjs`) rewrites that host to the
-# configured registry at fetch time, and the lockfile's integrity hashes still
-# verify because the mirror serves the same tarballs. All that is missing is a
-# way to say which registry — this script.
+# this repository name no registry at all: the committed `.npmrc` beside each
+# sets `omit-lockfile-registry-resolved`, so a package carries a version and an
+# integrity hash but no `resolved` URL. npm fetches it from whichever registry is
+# configured when it installs, and the hash still verifies because the mirror
+# serves the same tarballs. All that is missing is a way to say which registry —
+# this script.
 #
 # Usage:  npm-registry.sh [DIR]
 #
@@ -17,10 +18,11 @@
 #                     whatever the runner's own npm configuration says.
 #   KB_NPM_TOKEN      optional bearer token for that registry.
 #
-# Writes DIR/.npmrc (default: the current directory), which npm reads as
-# project-level config for anything installed from DIR. Project config layers
-# on top of the runner's user and global config rather than replacing it, and
-# it reaches no other step of the calling workflow.
+# Appends to DIR/.npmrc (default: the current directory), which npm reads as
+# project-level config for anything installed from DIR. Appending keeps the
+# committed settings already there. Project config layers on top of the
+# runner's user and global config rather than replacing it, and it reaches no
+# other step of the calling workflow.
 #
 # The token is written as a `${KB_NPM_TOKEN}` reference, which npm expands from
 # the environment when it runs, so the secret never lands on disk. The step
@@ -60,7 +62,7 @@ auth_key="${registry#*:}"
   if [ -n "$token" ]; then
     echo "${auth_key}:_authToken=\${KB_NPM_TOKEN}"
   fi
-} > "${dir}/.npmrc"
+} >> "${dir}/.npmrc"
 
 if [ -n "$token" ]; then
   echo "npm installs from ${registry} (authenticated)"

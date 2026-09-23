@@ -76,7 +76,7 @@ on:
           npm registry to install the build's dependencies from, for runners
           that cannot reach registry.npmjs.org — an Artifactory npm remote, say.
           Empty means whatever npm resolves on the runner. The lockfile needs
-          no change: npm rewrites its registry.npmjs.org hosts to this registry.
+          no change: it names no registry, only versions and integrity hashes.
         type: string
         required: false
         default: ''
@@ -149,8 +149,8 @@ jobs:
           mirror-token: ${{ secrets.node-mirror-token }}
 
       # Same mechanism as the publishing actions (actions/lib/npm-registry.sh):
-      # project-level npm config next to the lockfile, applied to this install
-      # and nothing else. Inlined rather than run from the checkout so that a
+      # project-level npm config appended next to the lockfile, applied to this
+      # install and nothing else. Inlined rather than run from the checkout so that a
       # caller pinning an older kb-ref still gets the registry it asked for.
       - name: Point npm at a private registry
         if: ${{ inputs.npm-registry != '' }}
@@ -176,7 +176,7 @@ jobs:
             if [ -n "${KB_NPM_TOKEN:-}" ]; then
               echo "${registry#*:}:_authToken=\${KB_NPM_TOKEN}"
             fi
-          } > .npmrc
+          } >> .npmrc
           echo "npm installs from ${registry}${KB_NPM_TOKEN:+ (authenticated)}"
 
       - name: Install

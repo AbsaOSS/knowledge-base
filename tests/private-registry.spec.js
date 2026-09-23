@@ -7,23 +7,23 @@
  * cover that with one mechanism, and this file pins the parts of it nothing
  * else exercises. Static assertions plus the shell script; no network.
  *
- * The lockfile rule matters most. npm rewrites a `resolved` host to the
- * configured registry only when that host is the default one
- * (`replace-registry-host`, default `npmjs`). A lockfile regenerated behind a
- * corporate `~/.npmrc` carries that registry's URLs instead, npm does not
- * rewrite those, and the lockfile then installs in exactly one network. It
- * would still pass every other test here.
+ * The lockfile rule matters most. Both lockfiles name no registry: the
+ * committed `.npmrc` beside each sets `omit-lockfile-registry-resolved`, so a
+ * package carries a version and an integrity hash but no `resolved` URL, and
+ * npm fetches it from whichever registry is configured at install time. Lose
+ * that setting and a lockfile regenerated behind a corporate `~/.npmrc` bakes
+ * the mirror's URLs in — npm rewrites only the default host, so it would then
+ * install in exactly one network, and still pass every other test here.
  */
 
 import { test, expect } from '@playwright/test';
 import { spawnSync } from 'node:child_process';
-import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs';
+import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { dirname, join } from 'node:path';
+import { dirname, join, posix } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
-const NPMJS = 'https://registry.npmjs.org/';
 const SCRIPT = join(ROOT, 'actions', 'lib', 'npm-registry.sh');
 
 const LOCKFILES = ['package-lock.json', 'actions/package-lock.json'];
@@ -42,22 +42,27 @@ const INPUTS = ['npm-registry', 'npm-token', 'node-mirror', 'node-mirror-token']
 // assertions below.
 const read = (rel) => readFileSync(join(ROOT, rel), 'utf8').replace(/\r\n/g, '\n');
 
-test.describe('lockfiles resolve to the public registry', () => {
+test.describe('lockfiles name no registry', () => {
   for (const rel of LOCKFILES) {
-    test(`${rel}: every package resolves to ${NPMJS} and carries an integrity hash`, () => {
+    test(`${rel}: no package carries a resolved URL, every one an integrity hash`, () => {
       const lock = JSON.parse(read(rel));
       expect(lock.lockfileVersion).toBeGreaterThanOrEqual(2);
 
       const offenders = [];
       for (const [path, pkg] of Object.entries(lock.packages)) {
         if (path === '' || pkg.link || pkg.inBundle) continue;
-        if (typeof pkg.resolved !== 'string' || !pkg.resolved.startsWith(NPMJS)) {
+        if (pkg.resolved !== undefined) {
           offenders.push(`${path}: resolved=${pkg.resolved}`);
         } else if (typeof pkg.integrity !== 'string' || pkg.integrity === '') {
           offenders.push(`${path}: no integrity`);
         }
       }
-      expect(offenders, 'regenerate with --registry=https://registry.npmjs.org/').toEqual([]);
+      expect(offenders, 'regenerate next to the committed .npmrc').toEqual([]);
+    });
+
+    const npmrc = posix.join(posix.dirname(rel), '.npmrc');
+    test(`${npmrc} keeps ${rel} registry-free`, () => {
+      expect(read(npmrc)).toMatch(/^omit-lockfile-registry-resolved=true$/m);
     });
   }
 });
@@ -101,6 +106,9 @@ test.describe('the private-registry inputs exist on every shared CI piece', () =
     expect(read('actions/lib/npm-registry.sh')).toContain(
       'echo "${auth_key}:_authToken=\\${KB_NPM_TOKEN}"',
     );
+    // Both append, so the committed .npmrc keeps its settings.
+    expect(text).toContain('} >> .npmrc');
+    expect(read('actions/lib/npm-registry.sh')).toContain('} >> "${dir}/.npmrc"');
   });
 });
 
@@ -121,15 +129,16 @@ test.describe('actions/lib/npm-registry.sh', () => {
   const hasBash = spawnSync(BASH, ['-c', 'exit 0']).status === 0;
 
   /** Runs the script against a throwaway directory and returns what it did. */
-  function run(env) {
+  function run(env, existing) {
     const dir = mkdtempSync(join(tmpdir(), 'kb-npmrc-'));
+    const file = join(dir, '.npmrc');
     try {
+      if (existing !== undefined) writeFileSync(file, existing);
       // Git bash accepts a drive-letter path as long as the separators are its own.
       const result = spawnSync(BASH, [SCRIPT, dir.replace(/\\/g, '/')], {
         env: { PATH: process.env.PATH, ...env },
         encoding: 'utf8',
       });
-      const file = join(dir, '.npmrc');
       return {
         status: result.status,
         stdout: result.stdout,
@@ -172,6 +181,16 @@ test.describe('actions/lib/npm-registry.sh', () => {
     expect(npmrc).not.toContain('s3cr3t');
     expect(stdout).not.toContain('s3cr3t');
     expect(stdout).toContain('(authenticated)');
+  });
+
+  test('appends to a committed .npmrc instead of replacing it', () => {
+    const committed = 'omit-lockfile-registry-resolved=true\n';
+    const { status, npmrc } = run(
+      { KB_NPM_REGISTRY: 'https://artifactory.example.com/npm' },
+      committed,
+    );
+    expect(status).toBe(0);
+    expect(npmrc).toBe(`${committed}registry=https://artifactory.example.com/npm/\n`);
   });
 
   test('rejects a registry that is not an http(s) URL', () => {

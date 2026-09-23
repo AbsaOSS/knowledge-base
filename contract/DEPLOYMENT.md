@@ -190,17 +190,15 @@ The publishing actions take the same four inputs, so docs repos on the same
 runners publish the same way (`actions/publish-docs/README.md`,
 `SINGLE_PAGE.md`).
 
-**Why the lockfile needs no change.** Every `resolved` URL in the lockfile
-points at `registry.npmjs.org`, and it stays that way. npm's
-`replace-registry-host` (default `npmjs`) rewrites that host to the configured
-registry at fetch time; the `integrity` hashes still verify because the mirror
-serves the same tarballs. That is what lets one lockfile, one workflow and one
-action ref serve GitHub-hosted and internal runners alike. It is also why the
-lockfile must never be regenerated behind a corporate `.npmrc`: npm rewrites
-*only* the default host, so a lockfile carrying Artifactory URLs installs in
-exactly one network. CI enforces the rule.
+**Why the lockfile needs no change.** The lockfile names no registry: the
+`.npmrc` committed beside it sets `omit-lockfile-registry-resolved=true`, so
+each package carries a version and an `integrity` hash but no `resolved` URL.
+npm fetches it from whichever registry is configured at install time, and the
+hash still verifies because the mirror serves the same tarballs. That is what
+lets one lockfile, one workflow and one action ref serve GitHub-hosted and
+internal runners alike. CI fails if a lockfile gains a registry URL.
 
-**What the registry input does not touch.** It is written as project-level npm
+**What the registry input does not touch.** It is appended to the project-level npm
 config next to the lockfile being installed, for that install only. The
 runner's own npm configuration is layered underneath, not replaced — so a
 runner that already carries an `~/.npmrc` naming the mirror can leave

@@ -118,16 +118,17 @@ anything there, rebuild, then run it.
 repository must carry `"optional": true` so a fresh clone still builds. Never
 add a registry entry that requires network or a sibling checkout without it.
 
-### Lockfiles resolve to registry.npmjs.org
+### Lockfiles name no registry
 
-Every `resolved` in `package-lock.json` and `actions/package-lock.json` must
-point at `https://registry.npmjs.org/`, and `tests/private-registry.spec.js`
-fails the build otherwise. Consumers on private networks install from an
-internal mirror by *configuring* a registry; npm rewrites the default host to
-it at fetch time, but only the default host. A lockfile regenerated behind a
-corporate `~/.npmrc` bakes that registry's URLs in and installs in one network
-only. If your machine has such an `.npmrc`, run
-`npm install --registry=https://registry.npmjs.org/` when touching either lockfile.
+`package-lock.json` and `actions/package-lock.json` carry a version and an
+`integrity` hash per package but no `resolved` URL: the committed `.npmrc` next
+to each sets `omit-lockfile-registry-resolved=true`. npm then fetches from
+whichever registry is configured at install time — registry.npmjs.org, or an
+internal mirror on a private network — and the hash still pins the tarball. A
+lockfile regenerated behind a corporate `~/.npmrc` therefore stays portable, no
+`--registry` flag needed. Keep both `.npmrc` files;
+`tests/private-registry.spec.js` fails if either loses the setting or a
+lockfile gains a registry URL.
 
 ### Two build modes, one document
 
