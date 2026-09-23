@@ -1,0 +1,7 @@
+:root { --bg-page: #f8f9fb; --text-body: #374151; }
+body { font-family: 'Source Sans 3', sans-serif; }
+.topnav { position: fixed; top: 0; height: 56px; }
+#sidebar { position: sticky; top: 0; }
+#content h1 { color: #1b0e12 !important; }
+#content a { text-decoration: underline !important; }
+.dark body { background: #111827; color: #e5e7eb; }

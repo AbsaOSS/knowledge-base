@@ -54,6 +54,31 @@
         "The reply says the external site must allow embedding (frame-ancestors / X-Frame-Options)",
         "The reply does not invent a kb-docs.json or a workflow for this repo"
       ]
+    },
+    {
+      "id": 4,
+      "name": "onboarded-mkdocs-audit",
+      "prompt": "card-vault already publishes to the knowledge base, but the publish run is full of warnings and the version picker is broken when the docs are embedded. Can you check it against the knowledge base rules and fix what you can?",
+      "files": [
+        "onboarded-mkdocs"
+      ],
+      "expected_output": "An audit, not an onboarding. The agent notices the workflow builds the standalone config (mkdocs build) instead of the headless variant, and switches it to mkdocs build -f mkdocs-headless.yml. It runs the knowledge base checker from a scratch clone against the headless output. It fixes each finding in the team's theme and docs: the inline dark-mode bootstrap and the toggle go under the headless condition (or move to a file), the onclick copy button gets a listener in a script file, the Google Fonts link is removed or vendored, !important goes from theme/style.css, versions.js resolves versions.json against its own script URL, and the PDF link no longer points into the app. It re-runs the checker to no findings. It reports the root computed from location.pathname in versions.js as a judgment item. The final report is a table of findings with a status each, and says a new release is the only manual step.",
+      "assertions": [
+        "kb-docs.json is unchanged and no new kb-docs.json, manifest or registry entry was written",
+        ".github/workflows/publish-docs.yml still uses AbsaOSS/knowledge-base/actions/publish-docs@v1 with contents: write, and its build step now builds mkdocs-headless.yml",
+        "The agent ran actions/lib/check-cli.js from a knowledge base checkout outside the fixture; no copy of the checker, no scripts/ directory and no Makefile exist in the fixture",
+        "No built output (dist/, site/) was added to the fixture, and no generated HTML was edited",
+        "theme/main.html no longer emits an inline <script> or the theme toggle when config.extra.headless is set, and still does when it is not",
+        "The copy button has no onclick attribute; its listener lives in a .js file under theme/",
+        "The fonts.googleapis.com stylesheet link is gone from the headless output (removed or the font vendored under theme/)",
+        "theme/style.css contains no !important",
+        "theme/js/versions.js no longer calls fetch('versions.json') with a page-relative URL; it resolves against document.currentScript.src or import.meta.url captured at top level",
+        "The KB-HTML-008 link to docs/files/limits.pdf is either replaced (a page or an off-app URL) or explicitly left in the report with what the team must decide; it is not silently ignored",
+        "The report names the location.pathname-based root in versions.js as something the checker cannot see",
+        "The report lists findings with rule IDs (KB-HTML-001, KB-HTML-004, KB-HTML-005, KB-THEME-001, KB-CSP-001, KB-CSS-001, KB-JS-001, KB-HTML-008) and a status each, and a final checker run with no errors",
+        "The report leads with the wiring finding: the workflow built the standalone site, and the checker reports errors on that output (so the publish would fail), not merely warnings",
+        "The report says a new GitHub Release is needed and that the apps.json registry entry does not change"
+      ]
     }
   ]
 }

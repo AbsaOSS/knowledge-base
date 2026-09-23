@@ -36,7 +36,8 @@ All reported at once, each naming `docs[i]` and the fix.
 ## `publish-docs` manifest and HTML errors
 
 Every finding starts with a rule ID; `contract/RULES.md` explains each one, including
-the warnings not listed here. The same checks run before a release with
+the warnings not listed here, and `audit.md` §4 maps each ID to its usual fix. The same
+checks run before a release with
 `node <knowledge-base>/actions/lib/check-cli.js --manifest kb-docs.json --dist <dir>`.
 
 | Message | Fix |
