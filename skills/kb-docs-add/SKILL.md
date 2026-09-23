@@ -1,6 +1,6 @@
 ---
 name: kb-docs-add
-description: Onboard a repository's documentation into the AbsaOSS knowledge base. Classifies the repo (markdown files → single-page, a static docs site → packaged, hosted elsewhere → iframe stopgap), writes only the files the contract requires (one workflow calling publish-single-page-docs, or kb-docs.json + a headless build flag + a publish-docs workflow), and explains how to verify the release carries kb-docs.tar.gz. Use whenever someone wants to publish docs to the knowledge base, add a repo or service to the knowledge base, write kb-docs.json, produce kb-docs.tar.gz, make a docs site headless for the knowledge base, or fix a failing publish-docs / publish-single-page-docs workflow — even when they only say "get our docs into the KB" or "our docs don't show up in the knowledge base".
+description: Onboard a repository's documentation into the AbsaOSS knowledge base. Classifies the repo (markdown files → single-page, a static docs site → packaged, hosted elsewhere → iframe stopgap), writes only the files the contract requires (one workflow calling publish-single-page-docs, or kb-docs.json + a headless build flag + a publish-docs workflow), and explains how to verify the release carries kb-docs.tar.gz. Use whenever someone wants to publish docs to the knowledge base, add a repo or service to the knowledge base, write kb-docs.json, produce kb-docs.tar.gz, make a docs site headless for the knowledge base, or fix a failing publish-docs / publish-single-page-docs workflow — even when they only say "get our docs into the KB" or "our docs don't show up in the knowledge base". Also audits an onboarded repo: runs the contract checker, fixes findings by rule ID (KB-HTML-003…) at the source — for publish warnings or docs that break once embedded.
 license: Apache-2.0
 metadata:
   author: AbsaOSS
@@ -22,6 +22,10 @@ a guided path through it, not a replacement.
 ## 1. Classify the repo
 
 Look at what the repo actually contains before writing anything.
+
+**Already onboarded?** A `kb-docs.json`, or a workflow calling `publish-docs` /
+`publish-single-page-docs`, means the job is an audit, not an onboarding: go to §6,
+unless the user asks to publish something new from the repo.
 
 | You find | Type | What you will write |
 |---|---|---|
@@ -83,9 +87,9 @@ its first run boring:
 1. Every `md:` path (single-page) or `pages[].path` (packaged) exists in the checkout.
 2. Every `slug` matches `^[a-z0-9]+(-[a-z0-9]+)*$`, 2–32 characters, and is
    service-prefixed. Every `description` is 10–280 characters.
-3. Packaged only: run the headless build and confirm, on the output,
-   `data-kb-headless="true"` on `<html>`, no `<base>`, no `href="/`/`src="/`. These are
-   the checks the action fails on; the same grep now saves a CI round trip.
+3. Packaged only: run the headless build, then the action's own checker on the output
+   (`references/audit.md` §3 has the three commands). No errors means the publish will
+   not fail on the HTML. Fix warnings the same way (§4 there), or name them in the report.
 4. The workflow has `permissions: contents: write` — the upload needs it and the error
    without it (`Resource not accessible by integration`) does not say so.
 
@@ -102,9 +106,22 @@ Then tell the user the two things only they can do:
 
 Read `references/troubleshooting.md`: it maps every message the actions and the knowledge
 base build emit to its cause and fix. Do not guess from the symptom — the messages are
-specific on purpose.
+specific on purpose. A message that starts with a rule ID (`KB-…`) is a checker finding:
+`references/audit.md` §4 maps each ID to its fix.
+
+## 6. Audit an onboarded repo
+
+Read `references/audit.md`. In short: check the workflow wiring, build the headless output
+(or download the last release's `kb-docs.tar.gz`), run the checker from a scratch
+clone of the knowledge base, then fix each finding **at its source**, errors first:
+config, the team's own templates, CSS, scripts or markdown. Never fix the built output,
+and never patch a theme the team does not own. Also read the site's own scripts for
+what the checker cannot see (URLs built from `location`, client-side routing), and report
+those. Re-run until no errors remain.
 
 ## Report back
 
 End with: the files written (full paths), the type you chose and why, the manual steps
-above, and any contract requirement you could not satisfy from inside this repo.
+above, and any contract requirement you could not satisfy from inside this repo. After an
+audit, report instead in the shape `references/audit.md` §6 gives: every finding with its
+status.

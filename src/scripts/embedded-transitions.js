@@ -7,7 +7,8 @@
  * Embedded, the knowledge base's scripts run in reframed's hidden iframe, whose
  * `document` is patched so that documentElement/head/body resolve to the
  * wf-html/wf-head/wf-body elements living in the host document's shadow tree.
- * Two things go wrong for the ClientRouter there:
+ * Two things go wrong for the ClientRouter there (and a third, for a pierced
+ * first page, is dropPortalSnapshots() below):
  *
  *  1. document.startViewTransition() animates the hidden iframe, which is never
  *     painted, so a navigation swaps with no crossfade. The gateway keeps the
@@ -25,6 +26,7 @@
  *     head is diffed in place.
  */
 import { swapFunctions } from 'astro:transitions/client';
+import { LAYER_ORDER } from '../utils/css-layers.js';
 
 const PERSIST = 'data-astro-transition-persist';
 
@@ -110,7 +112,40 @@ function swapHead(head, newHead) {
   }
 }
 
+/**
+ * Removes the copies of the sub-app stylesheets that reframed left adopted on
+ * the fragment's shadow root.
+ *
+ * When reframed portals a server-rendered (pierced) fragment it copies every
+ * linked sheet's rules into a constructed stylesheet and adopts it, to cover
+ * the moment the <link> is re-inserted. It deletes those copies once it sees
+ * the stylesheet fetched again — but on the moveBefore() path the <link> is
+ * moved atomically and never re-fetched, so the copies stay adopted for the
+ * life of the fragment: the first app's CSS then applies to every page the
+ * visitor navigates to, the catalog and other apps included. Before the first
+ * swap the <link> each copy stands in for is still applied, so dropping the
+ * copies there changes nothing on the current page.
+ *
+ * Only the knowledge base's own copies are dropped: every sub-app stylesheet
+ * the build writes opens with the cascade-layer order statement (see
+ * src/utils/css-layers.js), and a copy keeps that first rule. document here is
+ * reframed's, whose adoptedStyleSheets is the fragment shadow root's.
+ */
+function dropPortalSnapshots() {
+  const adopted = document.adoptedStyleSheets;
+  if (!adopted || adopted.length === 0) return;
+  const isSnapshot = (sheet) => {
+    try {
+      return !sheet.href && sheet.cssRules[0]?.cssText === LAYER_ORDER;
+    } catch {
+      return false;
+    }
+  };
+  if (adopted.some(isSnapshot)) document.adoptedStyleSheets = adopted.filter((s) => !isSnapshot(s));
+}
+
 document.addEventListener('astro:before-swap', (event) => {
+  dropPortalSnapshots();
   const newDoc = event.newDocument;
   const current = {
     root: document.querySelector('wf-html'),

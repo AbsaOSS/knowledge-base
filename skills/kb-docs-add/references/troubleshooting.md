@@ -35,19 +35,24 @@ All reported at once, each naming `docs[i]` and the fix.
 
 ## `publish-docs` manifest and HTML errors
 
+Every finding starts with a rule ID; `contract/RULES.md` explains each one, including
+the warnings not listed here, and `audit.md` §4 maps each ID to its usual fix. The same
+checks run before a release with
+`node <knowledge-base>/actions/lib/check-cli.js --manifest kb-docs.json --dist <dir>`.
+
 | Message | Fix |
 |---|---|
-| `No manifest at kb-docs.json` | Put `kb-docs.json` at the repo root, or set the `manifest` input to where it is. |
-| `kb-docs.json is not valid JSON` | Trailing comma or comment. JSON, not JSONC. |
-| `kb-docs.json does not satisfy the knowledge base contract:` … | Each bullet names the field. Common: `kbVersion` as a number (must be the string `"1"`), `description` too short, `slug` with a capital, an unknown key in `pages[]`. |
-| `<slug>: entryPoint "index.html" does not exist in the built output` | The `dist` input points at the wrong directory, or the build writes somewhere else (mkdocs `site_dir`, Astro `outDir`). For a one-app manifest `dist` is the app directory itself, not its parent. |
-| `<slug>: pages entry "…" points at "…", which is not in the built output` | Path in `pages[]` does not match the generator's output layout (`foo.html` vs `foo/index.html`). Fix the path or drop `pages`. |
-| `<slug>: the built output contains no HTML at all` | Wrong `dist`, or the build failed silently. |
-| `<slug>/…: missing data-kb-headless="true" on <html>` | The headless variant was not the one built, or the template does not emit the attribute. See `packaged.md` §A. |
-| `<slug>/…: carries data-mp-headless, the pre-v1 marker` | Rename the attribute to `data-kb-headless`. |
-| `<slug>/…: contains a <base> element` | Remove it. Relative paths make it unnecessary. |
-| `<slug>/…: N root-relative URL(s), e.g. "/assets/…"` | The generator emits absolute paths: unset `site_url`/`base`/`baseurl`, or configure relative URLs (`use_directory_urls`, `trailingSlash`, `relativeurls`). |
-| `::warning:: … inline <script> block(s)` | Not a failure. Ship scripts as files if you want control over what runs. |
+| `KB-MAN-001 No manifest at kb-docs.json` | Put `kb-docs.json` at the repo root, or set the `manifest` input to where it is. |
+| `KB-MAN-001 kb-docs.json is not valid JSON` | Trailing comma or comment. JSON, not JSONC. |
+| `KB-MAN-001 kb-docs.json does not satisfy the knowledge base contract:` … | Each bullet names the field. Common: `kbVersion` as a number (must be the string `"1"`), `description` too short, `slug` with a capital, an unknown key in `pages[]`. |
+| `KB-ART-001 <slug>: entryPoint "index.html" does not exist in the built output` | The `dist` input points at the wrong directory, or the build writes somewhere else (mkdocs `site_dir`, Astro `outDir`). For a one-app manifest `dist` is the app directory itself, not its parent. |
+| `KB-ART-002 <slug>: pages entry "…" points at "…", which is not in the built output` | Path in `pages[]` does not match the generator's output layout (`foo.html` vs `foo/index.html`). Fix the path or drop `pages`. |
+| `KB-ART-003 <slug>: the built output contains no HTML at all` | Wrong `dist`, or the build failed silently. |
+| `KB-HTML-001 <slug>/…: missing data-kb-headless="true" on <html>` | The headless variant was not the one built, or the template does not emit the attribute. See `packaged.md` §A. |
+| `KB-HTML-001 <slug>/…: carries data-mp-headless, the pre-v1 marker` | Rename the attribute to `data-kb-headless`. |
+| `KB-HTML-002 <slug>/…: contains a <base> element` | Remove it. Relative paths make it unnecessary. |
+| `KB-HTML-003 <slug>/…: N root-relative URL(s), e.g. "/assets/…"` | The generator emits absolute paths: unset `site_url`/`base`/`baseurl`, or configure relative URLs (`use_directory_urls`, `trailingSlash`, `relativeurls`). |
+| `::warning title=KB-…::` | Not a failure; the publish goes ahead. Each warning's rule in `contract/RULES.md` says what breaks and how to fix it. |
 
 ## Release and upload
 

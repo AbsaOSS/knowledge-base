@@ -194,6 +194,10 @@ move.
 
 ## Checklist
 
+Each item below is checked by the `publish-docs` action; [`RULES.md`](./RULES.md) lists
+every rule it checks by ID — these and the warnings beyond them — and shows how to run
+the same checks before you release.
+
 Before opening a PR to add your app to `apps.json`:
 
 - [ ] `kb-docs.json` is in the repo root and validates against [`contract/kb-docs.schema.json`](./kb-docs.schema.json)

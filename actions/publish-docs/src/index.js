@@ -23,19 +23,7 @@ import { join, resolve } from 'node:path';
 import { ASSET_NAME, PublishError, readManifestFile, writeManifest } from '../../lib/manifest.js';
 import { packArtifact } from '../../lib/pack.js';
 import { run, setOutput, summary } from '../../lib/runner.js';
-import { verifyApps } from '../../lib/verify-html.js';
-
-/**
- * Resolves an app's built output inside the `dist` input.
- *
- * One app is the common case, and then `dist` *is* that app's directory — a repo
- * publishing a single site should not have to invent a subdirectory named after
- * its own slug. With several apps, `dist` holds one subdirectory per slug.
- */
-function appDirResolver(manifest, distDir) {
-  if (manifest.apps.length === 1) return () => distDir;
-  return (slug) => join(distDir, slug);
-}
+import { appDirResolver, verifyApps } from '../../lib/check.js';
 
 function main() {
   const workspace = resolve(process.env.KB_WORKSPACE || process.cwd());

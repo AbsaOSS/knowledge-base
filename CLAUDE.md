@@ -85,7 +85,7 @@ Orchestrator: `scripts/build-vite.js`. Flags: `--local`, `--headless`.
 - `scripts/artifacts.js` — Safe tarball extraction + tree copy, shared by both fetch paths. Validates archive members (no traversal, no absolute paths, no symlinks) before anything is written, and replaces the old `cp -r`/`tar` shell-outs so the build runs on Windows
 - `scripts/hoist-inline-scripts.js` — Moves inline `<script>` bodies in sub-app HTML into files before the Astro build, so the deployment can serve `script-src 'self'`. Needed because bundles published before the action stopped emitting an inline mermaid bootstrap still contain one. A sub-app's dark-mode bootstrap is deleted here rather than hoisted — light only, and hoisting would put it beyond the reach of `transform.js`
 - `actions/publish-single-page-docs/` — Reusable GitHub Action that turns a repo's markdown into a single-page bundle
-- `skills/kb-docs-add/` — Agent skill (Claude Code, GitHub Copilot, `npx skills add`) that walks an agent through onboarding a docs repo: classify, write only the contract-required files, verify, troubleshoot. Guidance only — no scripts; `examples/` are the contract's own code blocks and `tests/skill.spec.js` fails if they drift. Eval fixtures live in `tests/fixtures/kb-docs-add/`
+- `skills/kb-docs-add/` — Agent skill (Claude Code, GitHub Copilot, `npx skills add`) that walks an agent through onboarding a docs repo (classify, write only the contract-required files, verify, troubleshoot) and through auditing one already onboarded (`references/audit.md`: run `actions/lib/check-cli.js` from a scratch clone, fix findings by rule ID at the source, report what the checker cannot see). Guidance only — no scripts; `examples/` are the contract's own code blocks and `tests/skill.spec.js` fails if they drift. Eval fixtures live in `tests/fixtures/kb-docs-add/`
 
 ### Onboarding Types
 
@@ -126,7 +126,7 @@ Known gap: inline `on*` handlers in sub-app HTML are not stripped (#67). They ar
 
 `transform.js` parses the document with **parse5** and rewrites every URL-bearing attribute to an absolute `/{prefix}/{slug}/…` path: `href`/`src`/`action`/`formaction`/`poster`, `object[data]`, `srcset`/`imagesrcset`, `url()` in inline `style=` and `<style>` blocks, and URL-bearing `<meta>` content. `<base>` tags are removed. Because it walks a parsed tree, markup quoted inside prose or comments is left alone.
 
-Root-relative `url()` inside a sub-app's **copied CSS files** is a separate rewrite, in `copyAssets()` (`scripts/build-vite.js`), targeting the same absolute path.
+`url()` and `@import` inside a sub-app's **copied CSS files** are a separate rewrite, in `copyAssets()` (`scripts/build-vite.js`, via `rewriteCssUrls()`): root-relative ones target the same absolute path, relative ones are resolved against the stylesheet's own URL and made absolute too. That is not cosmetic — a pierced fragment's linked sheets are copied by reframed into constructed stylesheets, which resolve URLs against the host document, so a relative `url()` 404s there. `embedded-transitions.js` drops those copies at the first swap (reframed never does on the `moveBefore()` path, so the first app's CSS would otherwise follow the visitor everywhere).
 
 ## Contract for Doc Apps
 
@@ -135,6 +135,7 @@ Apps registered in `apps.json` must comply with:
 - `contract/kb-docs.schema.json` — JSON Schema for `kb-docs.json`
 - `contract/DEPLOYMENT.md` — What a private deployment repo owns, and the reusable workflow it calls
 - `contract/HEADLESS_RULES.md` — Structural requirements (headless HTML, relative paths, `data-kb-headless` attribute)
+- `contract/RULES.md` — Every checked rule by ID (`KB-<area>-<nnn>`), severity and fix. `actions/lib/rules.js` is the machine side; `actions/lib/check.selftest.js` fails if the two differ. The checker is `actions/lib/check.js` (run by `publish-docs`, or standalone via `actions/lib/check-cli.js`). New rules start as `warning`; promoting one to `error` is a major-version change of the actions
 - `contract/STYLE_GUIDE.md` — Design tokens and typography (light only — the knowledge base has no dark mode)
 - `contract/SINGLE_PAGE.md` — The copy-paste onboarding workflow for single-page docs
 

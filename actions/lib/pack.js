@@ -69,7 +69,7 @@ function checkSize(outPath) {
 
   if (bytes > SIZE_LIMIT) {
     throw new PublishError(
-      `The packed artifact is ${mb(bytes)} MB, over the ${mb(SIZE_LIMIT)} MB limit ` +
+      `KB-ART-005 The packed artifact is ${mb(bytes)} MB, over the ${mb(SIZE_LIMIT)} MB limit ` +
       `(which is also GitHub's per-asset release limit).\n` +
       `The usual cause is uncompressed images or a vendored toolchain the built site does not ` +
       `need at runtime. See contract/ARTIFACT.md.`,
@@ -77,7 +77,7 @@ function checkSize(outPath) {
   }
   if (bytes > SIZE_WARN) {
     process.stdout.write(
-      `::warning::The packed artifact is ${mb(bytes)} MB, over the ${mb(SIZE_WARN)} MB target. ` +
+      `::warning title=KB-ART-004::KB-ART-004 The packed artifact is ${mb(bytes)} MB, over the ${mb(SIZE_WARN)} MB target. ` +
       `Every knowledge base build downloads it — see contract/ARTIFACT.md.\n`,
     );
   }

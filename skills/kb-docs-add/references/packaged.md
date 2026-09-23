@@ -79,14 +79,8 @@ variant.
   from the table above, and offer the single-page path for the markdown sources instead.
   A half-headless site in the knowledge base is worse than markdown that renders cleanly.
 
-After the change, build the variant and check the output yourself — the same greps the
-action runs:
-
-```bash
-grep -L 'data-kb-headless="true"' $(find dist -name '*.html')   # must print nothing
-grep -rlE '(href|src|action|poster)="/' dist                     # must print nothing
-grep -rl '<base' dist                                            # must print nothing
-```
+After the change, build the variant and run the action's own checker on the output
+(`audit.md` §3). No errors means the publish will not fail on the HTML.
 
 ## B. `kb-docs.json` in the repo root
 
@@ -182,10 +176,13 @@ the user's situation calls for it; see `contract/DEPLOYMENT.md`.
 
 1. `kb-docs.json` exists, is valid JSON, satisfies `contract/kb-docs.schema.json`.
 2. For every app: `dist/<entryPoint>` exists; every `pages[].path` exists; the output has HTML.
-3. Every HTML file: `data-kb-headless="true"`, no `<base>`, no root-relative URLs.
+3. Every HTML file: `data-kb-headless="true"`, no `<base>`, no root-relative URLs. These
+   fail the publish. The HTML, CSS and scripts are also checked for rules that only warn
+   (inline scripts and handlers, `!important`, dark mode, CDN assets …).
 4. Pack, upload to the release (replacing an existing `kb-docs.tar.gz`), optional notify.
 
-All problems in a step are reported together, naming the file and the fix. If the first
+Every finding starts with its rule ID from `contract/RULES.md`, and all of them are
+reported together. The same checker runs before a release (`audit.md` §3). If the first
 run fails, the message is in `troubleshooting.md`.
 
 ## Then

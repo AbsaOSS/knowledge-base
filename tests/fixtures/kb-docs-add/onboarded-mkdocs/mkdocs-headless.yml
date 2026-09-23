@@ -1,0 +1,3 @@
+INHERIT: mkdocs.yml
+extra:
+  headless: true

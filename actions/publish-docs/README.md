@@ -17,8 +17,11 @@ The action never builds your site. Doc repos use mkdocs, Starlight, Jekyll and
 hand-rolled scripts; the contract is about the output, not the toolchain.
 
 **Full documentation — the artifact layout, the manifest and its schema —
-lives in [`contract/ARTIFACT.md`](../../contract/ARTIFACT.md).** The HTML rules
-it checks are [`contract/HEADLESS_RULES.md`](../../contract/HEADLESS_RULES.md).
+lives in [`contract/ARTIFACT.md`](../../contract/ARTIFACT.md).** Every check it
+runs is a rule in [`contract/RULES.md`](../../contract/RULES.md), and every finding
+names its rule ID: errors stop the publish, warnings are annotated on the run. The
+same checks run without publishing through `actions/lib/check-cli.js` — see
+`contract/RULES.md` → "Running the checks".
 
 If your docs are a markdown file or two rather than a site, you want
 [`publish-single-page-docs`](../publish-single-page-docs) instead: it renders the

@@ -537,4 +537,27 @@ test.describe('stylesheet emission', () => {
     expect(css).toContain('url(#clip)');
     expect(css).toContain('url(//cdn.example.com/x.png)');
   });
+
+  test('relative url() in sub-app CSS is resolved against the stylesheet, not left relative', () => {
+    // Embedded with piercing, reframed copies a linked sheet's rules into a
+    // constructed stylesheet, which resolves URLs against the HOST document —
+    // so a relative url() fetched /knowledge-base/docs/… instead of
+    // /knowledge-base/user-guide/docs/…. Only an absolute URL survives that.
+    expect(read('user-guide/showcase.css'))
+      .toContain("url('/knowledge-base/user-guide/docs/assets/images/hero.png')");
+
+    const subAppCss = filesWithExt(DIST, '.css')
+      .map((f) => relative(DIST, f).split('\\').join('/'))
+      .filter((f) => f.includes('/') && !f.startsWith('_astro/'));
+    expect(subAppCss.length, 'no sub-app stylesheet found in dist/').toBeGreaterThan(0);
+    for (const file of subAppCss) {
+      const css = read(file);
+      const urls = [...css.matchAll(/url\(\s*['"]?([^'")]*)/gi), ...css.matchAll(/@import\s+['"]([^'"]*)/gi)]
+        .map((m) => m[1].trim())
+        .filter((u) => u && !/^([a-z][a-z0-9+.-]*:|\/\/|#)/i.test(u));
+      for (const u of urls) {
+        expect(u, `${file}: relative URL left in a sub-app stylesheet`).toMatch(/^\/knowledge-base\//);
+      }
+    }
+  });
 });

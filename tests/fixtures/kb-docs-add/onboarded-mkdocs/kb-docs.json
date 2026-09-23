@@ -1,0 +1,12 @@
+{
+  "kbVersion": "1",
+  "apps": [
+    {
+      "slug": "card-vault",
+      "name": "Card Vault",
+      "description": "Tokenisation service for card numbers: integration guide and configuration reference.",
+      "icon": "book-open",
+      "tags": ["payments", "security"]
+    }
+  ]
+}
