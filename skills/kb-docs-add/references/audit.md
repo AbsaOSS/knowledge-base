@@ -130,3 +130,6 @@ Report:
   release.
 - The one manual step: publish a release so the fixed output reaches the knowledge base.
   The registry entry does not change.
+- If the repo has no pull-request check yet, say that `AbsaOSS/knowledge-base/actions/check-docs@v1`
+  runs these same checks on every PR (packaged sites only). Offer it, and write that
+  workflow only if the user asks.

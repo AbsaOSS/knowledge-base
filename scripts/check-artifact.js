@@ -17,27 +17,10 @@
  * (tests/artifact-checks.spec.js holds the two in step).
  */
 
+import { summarise } from '../actions/lib/check.js';
 import { RULES_DOC, formatFinding } from '../actions/lib/rules.js';
 
-export { checkApp } from '../actions/lib/check.js';
-
-/**
- * Groups findings by rule: one line per rule with its count and first example,
- * because a docs site repeats the same template on every page and forty
- * identical warnings bury the one that differs.
- */
-export function summarise(findings) {
-  const byRule = new Map();
-  for (const f of findings) {
-    if (!byRule.has(f.id)) byRule.set(f.id, []);
-    byRule.get(f.id).push(f);
-  }
-  return [...byRule.values()].map((group) => {
-    const [first] = group;
-    const count = group.length > 1 ? ` ×${group.length}, e.g.` : '';
-    return { id: first.id, severity: first.severity, line: `${first.id}${count} ${first.where}: ${first.message}` };
-  });
-}
+export { checkApp, summarise } from '../actions/lib/check.js';
 
 /**
  * Reports one artifact's findings through the build's logger.

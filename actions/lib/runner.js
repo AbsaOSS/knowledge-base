@@ -10,10 +10,14 @@ import { appendFileSync } from 'node:fs';
 
 import { PublishError } from './manifest.js';
 
-/** Emits an error annotation. Newlines must be percent-encoded to survive. */
-export function annotate(message) {
+/**
+ * Emits an annotation — an error unless `level` says otherwise, titled when a
+ * `title` is given. Newlines must be percent-encoded to survive.
+ */
+export function annotate(message, { level = 'error', title } = {}) {
   const encoded = String(message).replace(/%/g, '%25').replace(/\r/g, '%0D').replace(/\n/g, '%0A');
-  process.stdout.write(`::error::${encoded}\n`);
+  const props = title ? ` title=${String(title).replace(/[,:]/g, ' ')}` : '';
+  process.stdout.write(`::${level}${props}::${encoded}\n`);
 }
 
 /** Appends `key=value` to the runner's step-output file when running in CI. */

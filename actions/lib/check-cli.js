@@ -2,10 +2,10 @@
 /**
  * check-cli.js — runs the contract checks outside a release.
  *
- * The publish-docs action runs the same checks at release time; this is for
- * everywhere else: a docs repo's pull-request CI, a local build, an agent
- * fixing a repo. It reads nothing but the manifest and the built output, and
- * never packs or uploads.
+ * The publish-docs action runs the same checks at release time and the
+ * check-docs action on pull requests; this is for everywhere else: a local
+ * build, an agent fixing a repo. It reads nothing but the manifest and the
+ * built output, and never packs or uploads.
  *
  *   node actions/lib/check-cli.js [--manifest kb-docs.json] [--dist dist] [--json] [--strict]
  *
@@ -14,12 +14,8 @@
  * caller that wants to act on rule IDs rather than read prose.
  */
 
-import { existsSync } from 'node:fs';
-import { resolve } from 'node:path';
-
-import { appDirResolver, checkApps } from './check.js';
-import { PublishError, readManifestFile } from './manifest.js';
-import { RULES_DOC, finding, formatFinding } from './rules.js';
+import { checkWorkspace } from './check.js';
+import { RULES_DOC, formatFinding } from './rules.js';
 
 function parseArgs(argv) {
   const args = { manifest: 'kb-docs.json', dist: 'dist', json: false, strict: false };
@@ -34,27 +30,6 @@ function parseArgs(argv) {
   return args;
 }
 
-function collect({ manifest: manifestPath, dist }) {
-  let manifest;
-  try {
-    manifest = readManifestFile(resolve(manifestPath));
-  } catch (err) {
-    if (!(err instanceof PublishError)) throw err;
-    return [finding('KB-MAN-001', manifestPath, err.message.replace(/^KB-MAN-001 /, ''))];
-  }
-  const distDir = resolve(dist);
-  if (!existsSync(distDir)) {
-    return [finding('KB-ART-001', dist, `the built output directory does not exist. Build the site first, or pass --dist.`)];
-  }
-  const appDirFor = appDirResolver(manifest, distDir);
-  const missing = manifest.apps.filter((app) => !existsSync(appDirFor(app.slug)));
-  if (missing.length > 0) {
-    return missing.map((app) => finding('KB-ART-001', app.slug,
-      `no built output at ${appDirFor(app.slug)} — with several apps, --dist holds one subdirectory per slug.`));
-  }
-  return checkApps(manifest, appDirFor);
-}
-
 function main() {
   const args = parseArgs(process.argv.slice(2));
   if (args.help) {
@@ -62,7 +37,7 @@ function main() {
     return 0;
   }
 
-  const findings = collect(args);
+  const findings = checkWorkspace(args);
   const errors = findings.filter((f) => f.severity === 'error').length;
 
   if (args.json) {

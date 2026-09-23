@@ -17,7 +17,7 @@
 
 import { test, expect } from '@playwright/test';
 import { spawnSync } from 'node:child_process';
-import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -28,7 +28,11 @@ const SCRIPT = join(ROOT, 'actions', 'lib', 'npm-registry.sh');
 
 const LOCKFILES = ['package-lock.json', 'actions/package-lock.json'];
 
-const ACTIONS = ['actions/publish-docs/action.yml', 'actions/publish-single-page-docs/action.yml'];
+// Every action under actions/, discovered rather than listed, so a new one
+// cannot ship without the inputs a private-network runner needs.
+const ACTIONS = readdirSync(join(ROOT, 'actions'), { withFileTypes: true })
+  .filter((d) => d.isDirectory() && existsSync(join(ROOT, 'actions', d.name, 'action.yml')))
+  .map((d) => `actions/${d.name}/action.yml`);
 const WORKFLOW = '.github/workflows/build-image.yml';
 
 /** The inputs every consumer-facing manifest has to offer, by the same names. */
@@ -59,6 +63,12 @@ test.describe('lockfiles resolve to the public registry', () => {
 });
 
 test.describe('the private-registry inputs exist on every shared CI piece', () => {
+  test('every action is found, including check-docs', () => {
+    expect(ACTIONS).toEqual(expect.arrayContaining([
+      'actions/check-docs/action.yml', 'actions/publish-docs/action.yml', 'actions/publish-single-page-docs/action.yml',
+    ]));
+  });
+
   for (const rel of ACTIONS) {
     test(`${rel} declares the inputs and installs through the shared script`, () => {
       const text = read(rel);

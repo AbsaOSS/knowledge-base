@@ -2,8 +2,8 @@
  * check.js — checks a built docs site against the contract, rule by rule.
  *
  * Runs in the publishing repo: at publish time inside the publish-docs action,
- * and on demand through check-cli.js (a repo's own CI, or an agent fixing the
- * repo). That is the only place anyone can act on a finding. The knowledge base
+ * on pull requests inside the check-docs action, and on demand through
+ * check-cli.js (a local build, or an agent fixing the repo). That is the only place anyone can act on a finding. The knowledge base
  * build repairs some of the same things when it re-hosts a page — it hoists
  * inline scripts, strips a theme bootstrap, absolutises CSS URLs — but by then
  * the artifact is released and the person who can fix it has moved on.
@@ -18,13 +18,13 @@
  */
 
 import { readdirSync, readFileSync, existsSync } from 'node:fs';
-import { join, relative } from 'node:path';
+import { join, relative, resolve } from 'node:path';
 
 import { parseDocument } from 'htmlparser2';
 import postcss from 'postcss';
 
 import { isThemeBootstrap } from '../../src/utils/theme.js';
-import { PublishError } from './manifest.js';
+import { PublishError, readManifestFile } from './manifest.js';
 import { RULES_DOC, finding, formatFinding } from './rules.js';
 
 /** The marker the knowledge base looks for on `<html>`. */
@@ -312,6 +312,60 @@ export function appDirResolver(manifest, distDir) {
 /** Findings for every app in a manifest. */
 export function checkApps(manifest, appDirFor) {
   return manifest.apps.flatMap((app) => checkApp(appDirFor(app.slug), app));
+}
+
+/**
+ * Findings for a docs repo as it sits on disk: its manifest and its built output.
+ *
+ * What the CLI and the check-docs action run. A manifest that cannot be read or
+ * fails the schema, and output that is missing, are findings too, rather than
+ * a crash, so a caller always gets one list to report.
+ *
+ * @param {{manifest: string, dist: string}} paths - as the user gave them
+ */
+export function checkWorkspace({ manifest: manifestPath, dist }) {
+  let manifest;
+  try {
+    manifest = readManifestFile(resolve(manifestPath));
+  } catch (err) {
+    if (!(err instanceof PublishError)) throw err;
+    return [finding('KB-MAN-001', manifestPath, err.message.replace(/^KB-MAN-001 /, ''))];
+  }
+  const distDir = resolve(dist);
+  if (!existsSync(distDir)) {
+    return [finding('KB-ART-001', dist, 'the built output directory does not exist. Build the site first, or point "dist" at its output.')];
+  }
+  const appDirFor = appDirResolver(manifest, distDir);
+  const missing = manifest.apps.filter((app) => !existsSync(appDirFor(app.slug)));
+  if (missing.length > 0) {
+    return missing.map((app) => finding('KB-ART-001', app.slug,
+      `no built output at ${appDirFor(app.slug)} — with several apps, "dist" holds one subdirectory per slug.`));
+  }
+  return checkApps(manifest, appDirFor);
+}
+
+/**
+ * Groups findings by rule: one entry per rule with its count and first example,
+ * because a docs site repeats the same template on every page and forty
+ * identical warnings bury the one that differs.
+ */
+export function summarise(findings) {
+  const byRule = new Map();
+  for (const f of findings) {
+    if (!byRule.has(f.id)) byRule.set(f.id, []);
+    byRule.get(f.id).push(f);
+  }
+  return [...byRule.values()].map((group) => {
+    const [first] = group;
+    const count = group.length > 1 ? ` ×${group.length}, e.g.` : '';
+    return {
+      id: first.id,
+      severity: first.severity,
+      count: group.length,
+      first,
+      line: `${first.id}${count} ${first.where}: ${first.message}`,
+    };
+  });
 }
 
 /**
