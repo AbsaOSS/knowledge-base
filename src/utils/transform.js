@@ -23,6 +23,7 @@
 
 import { parse, serialize } from 'parse5';
 import { layerSubAppCss } from './css-layers.js';
+import { isThemeBootstrap } from './theme.js';
 
 // ── URL rewriting ─────────────────────────────────────────────────────────────
 
@@ -140,20 +141,9 @@ const childElement = (node, tagName) =>
 
 // ── Light-only enforcement ────────────────────────────────────────────────────
 
-/**
- * True when a script body is a sub-app's own dark-mode bootstrap.
- *
- * Exported because the strip has to happen in two places: here for the `astro
- * dev` path, and in scripts/hoist-inline-scripts.js for the build, which turns
- * inline scripts into files before this module ever sees the document — a
- * hoisted bootstrap would otherwise sail past the strip and re-add `dark` at
- * runtime, which is exactly the leak the light-only rule exists to prevent.
- */
-export function isThemeBootstrap(code) {
-  return /\blocalStorage\b/.test(code) &&
-         /\bclassList\b/.test(code) &&
-         /\bdark\b|\btheme\b/i.test(code);
-}
+// isThemeBootstrap() lives in theme.js, dependency-free, so the publishing
+// actions' checker can share it. Re-exported for the build's existing imports.
+export { isThemeBootstrap };
 
 // ── Sub-app HTML transformation ───────────────────────────────────────────────
 

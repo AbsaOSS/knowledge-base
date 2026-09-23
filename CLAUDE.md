@@ -135,6 +135,7 @@ Apps registered in `apps.json` must comply with:
 - `contract/kb-docs.schema.json` — JSON Schema for `kb-docs.json`
 - `contract/DEPLOYMENT.md` — What a private deployment repo owns, and the reusable workflow it calls
 - `contract/HEADLESS_RULES.md` — Structural requirements (headless HTML, relative paths, `data-kb-headless` attribute)
+- `contract/RULES.md` — Every checked rule by ID (`KB-<area>-<nnn>`), severity and fix. `actions/lib/rules.js` is the machine side; `actions/lib/check.selftest.js` fails if the two differ. The checker is `actions/lib/check.js` (run by `publish-docs`, or standalone via `actions/lib/check-cli.js`). New rules start as `warning`; promoting one to `error` is a major-version change of the actions
 - `contract/STYLE_GUIDE.md` — Design tokens and typography (light only — the knowledge base has no dark mode)
 - `contract/SINGLE_PAGE.md` — The copy-paste onboarding workflow for single-page docs
 

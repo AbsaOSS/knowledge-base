@@ -17,7 +17,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { ASSET_NAME, MANIFEST, PublishError, buildManifest, readManifestFile } from '../../lib/manifest.js';
-import { verifyApp } from '../../lib/verify-html.js';
+import { checkApp } from '../../lib/check.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ENTRY = join(__dirname, 'index.js');
@@ -213,19 +213,19 @@ try {
       files: { 'index.html': page('X', '<script>console.log(1)</script>') },
     });
     const { stdout, artifact } = publish(ws);
-    assert.match(stdout, /::warning::.*inline <script>/);
+    assert.match(stdout, /::warning title=KB-HTML-004::.*inline <script>/);
     assert.ok(existsSync(artifact), 'a warning must not block the publish');
   });
 
   check('accepts a page whose only absolute URL is a favicon', () => {
-    const { errors } = verifyApp(
+    const findings = checkApp(
       workspace('favicon', {
         manifest: ONE_APP,
         files: { 'index.html': page('X', '<link rel="icon" href="/favicon.ico">') },
       }) + '/dist',
       ONE_APP.apps[0],
     );
-    assert.deepEqual(errors, []);
+    assert.deepEqual(findings.filter((f) => f.severity === 'error'), []);
   });
 
   // ── Packing ────────────────────────────────────────────────────────────────

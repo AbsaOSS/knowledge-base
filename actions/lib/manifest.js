@@ -70,7 +70,7 @@ export function validateManifest(manifest, source) {
   });
 
   throw new PublishError(
-    `${source} does not satisfy the knowledge base contract:\n${[...new Set(lines)].join('\n')}\n\n` +
+    `KB-MAN-001 ${source} does not satisfy the knowledge base contract:\n${[...new Set(lines)].join('\n')}\n\n` +
     `See contract/ARTIFACT.md for what each field means.`,
   );
 }
@@ -83,7 +83,7 @@ export function validateManifest(manifest, source) {
 export function readManifestFile(file) {
   if (!existsSync(file)) {
     throw new PublishError(
-      `No manifest at ${file}.\n` +
+      `KB-MAN-001 No manifest at ${file}.\n` +
       `Create a ${MANIFEST} in your repository root describing the app(s) this release publishes — ` +
       `see contract/ARTIFACT.md for the shape, or set the action's "manifest" input if it lives elsewhere.`,
     );
@@ -92,7 +92,7 @@ export function readManifestFile(file) {
   try {
     manifest = JSON.parse(readFileSync(file, 'utf8'));
   } catch (err) {
-    throw new PublishError(`${file} is not valid JSON — ${err.message}`);
+    throw new PublishError(`KB-MAN-001 ${file} is not valid JSON — ${err.message}`);
   }
   return validateManifest(manifest, file);
 }

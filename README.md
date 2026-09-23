@@ -359,6 +359,7 @@ Apps must comply with the knowledge base contract before they can be registered:
 | [`contract/kb-docs.schema.json`](contract/kb-docs.schema.json) | JSON Schema for `kb-docs.json` |
 | [`contract/DEPLOYMENT.md`](contract/DEPLOYMENT.md) | Deployment repo layout, credentials, triggers, rollback |
 | [`contract/HEADLESS_RULES.md`](contract/HEADLESS_RULES.md) | Headless HTML, relative paths, `data-kb-headless` |
+| [`contract/RULES.md`](contract/RULES.md) | Every checked rule by ID (`KB-HTML-003` …), its severity and fix; how to run the checker |
 | [`contract/STYLE_GUIDE.md`](contract/STYLE_GUIDE.md) | Design tokens (`--color-kb-*`) and typography — light only; the knowledge base has no dark mode |
 | [`contract/SINGLE_PAGE.md`](contract/SINGLE_PAGE.md) | Zero-config markdown onboarding |
 
