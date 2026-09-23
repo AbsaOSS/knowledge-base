@@ -303,6 +303,62 @@ for (const [mode, open] of [['bound', gotoBoundFragment], ['unbound', gotoFragme
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// A first page that is an app page. Pierced, reframed portals the server-rendered
+// fragment and copies each linked sub-app sheet into an adopted constructed
+// stylesheet; it only drops the copy once the sheet is fetched again, which the
+// moveBefore() path never does. The copy then styled every later page, and
+// resolved the sheet's relative url()s against the host document (404s).
+
+/** Adopted sheets on the fragment's shadow root that are copies of a sub-app stylesheet. */
+async function adoptedSubAppCopies(page) {
+  return page.evaluate((order) => {
+    function fragmentRoot(root) {
+      if (root.querySelector('wf-document')) return root;
+      for (const el of root.querySelectorAll('*')) {
+        if (el.shadowRoot) { const f = fragmentRoot(el.shadowRoot); if (f) return f; }
+      }
+      return null;
+    }
+    const root = fragmentRoot(document);
+    return root ? root.adoptedStyleSheets.filter((s) => s.cssRules[0]?.cssText === order).length : null;
+  }, '@layer theme, base, kb-app, kb-reset, components, utilities;');
+}
+
+const PLATFORM = { path: '/knowledge-base/platform-overview/', card: '.kb-card[href="/knowledge-base/platform-overview/"]' };
+const waitForPlatform = (page) => expect.poll(async () => (await appSnapshot(page))?.h1 ?? '', { timeout: 15_000 }).toMatch(/^Platform Overview/);
+
+for (const [mode, open] of [['bound', gotoBoundFragment], ['unbound', gotoFragment]]) {
+  test.describe(`starting on an app page, ${mode} embedding`, () => {
+    test("the first app's CSS does not follow the visitor to another app, and every URL it names loads", async ({ page }) => {
+      const failed = [];
+      page.on('response', (r) => { if (r.status() >= 400) failed.push(`${r.status()} ${new URL(r.url()).pathname}`); });
+
+      await open(page, '/knowledge-base/user-guide/');
+      await waitForApp(page);
+      await page.waitForTimeout(500);
+
+      await clickInFragment(page, LIBRARY);
+      await waitForCatalog(page);
+      expect(await adoptedSubAppCopies(page), 'a copy of the first app\'s CSS is still adopted on the catalog').toBe(0);
+
+      await clickInFragment(page, PLATFORM.card);
+      await waitForPlatform(page);
+      await page.waitForTimeout(500);
+      expect(await adoptedSubAppCopies(page), 'a copy of the first app\'s CSS is still adopted on another app').toBe(0);
+      const navigated = await appSnapshot(page);
+
+      await open(page, PLATFORM.path);
+      await waitForPlatform(page);
+      await page.waitForTimeout(500);
+      const hard = await appSnapshot(page);
+      expect(navigated.styles, 'another app reached from the first is styled differently from a hard load').toEqual(hard.styles);
+
+      expect(failed, 'asset requests that failed while embedded').toEqual([]);
+    });
+  });
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 test.describe('a sub-app stylesheet that outlives its page', () => {
   /**
    * Simulates the reframed leak: on the catalog, append both fixture app

@@ -60,15 +60,30 @@ const URL_META = new Set([
   'twitter:image', 'twitter:image:src',
 ]);
 
-/** Rewrites every `url(...)` reference in a CSS string (inline `style=` or a <style> block). */
-function rewriteCssUrls(css, base, prefix, slug) {
-  return css.replace(
-    /url\(\s*(['"]?)([^'")]*)\1\s*\)/gi,
-    (match, quote, url) => {
+/**
+ * Rewrites every `url(...)` reference, and every `@import "…"` string, in a CSS
+ * string — an inline `style=`, a <style> block or a copied stylesheet file —
+ * to an absolute path. `base` is the path the CSS is resolved against: the
+ * page for inline CSS, the stylesheet's own URL for a file.
+ *
+ * Absolute even where a relative URL would resolve correctly from the file,
+ * because inside a web fragment the rules do not always stay in the file.
+ * When reframed portals a server-rendered fragment it copies each linked
+ * sheet's rules into a constructed stylesheet, and a constructed sheet
+ * resolves its URLs against the HOST document — `/knowledge-base/app`, with
+ * the host router's trailing slash stripped — so `url('img/x.png')` in
+ * `/knowledge-base/app/site.css` becomes a request for `/knowledge-base/img/x.png`.
+ */
+export function rewriteCssUrls(css, base, prefix, slug) {
+  return css
+    .replace(/url\(\s*(['"]?)([^'")]*)\1\s*\)/gi, (match, quote, url) => {
       const abs = resolveUrl(url.trim(), base, prefix, slug);
       return abs === null ? match : `url(${quote}${abs}${quote})`;
-    },
-  );
+    })
+    .replace(/@import\s+(['"])([^'"]*)\1/gi, (match, quote, url) => {
+      const abs = resolveUrl(url.trim(), base, prefix, slug);
+      return abs === null ? match : `@import ${quote}${abs}${quote}`;
+    });
 }
 
 /**

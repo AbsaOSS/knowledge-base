@@ -126,7 +126,7 @@ Known gap: inline `on*` handlers in sub-app HTML are not stripped (#67). They ar
 
 `transform.js` parses the document with **parse5** and rewrites every URL-bearing attribute to an absolute `/{prefix}/{slug}/…` path: `href`/`src`/`action`/`formaction`/`poster`, `object[data]`, `srcset`/`imagesrcset`, `url()` in inline `style=` and `<style>` blocks, and URL-bearing `<meta>` content. `<base>` tags are removed. Because it walks a parsed tree, markup quoted inside prose or comments is left alone.
 
-Root-relative `url()` inside a sub-app's **copied CSS files** is a separate rewrite, in `copyAssets()` (`scripts/build-vite.js`), targeting the same absolute path.
+`url()` and `@import` inside a sub-app's **copied CSS files** are a separate rewrite, in `copyAssets()` (`scripts/build-vite.js`, via `rewriteCssUrls()`): root-relative ones target the same absolute path, relative ones are resolved against the stylesheet's own URL and made absolute too. That is not cosmetic — a pierced fragment's linked sheets are copied by reframed into constructed stylesheets, which resolve URLs against the host document, so a relative `url()` 404s there. `embedded-transitions.js` drops those copies at the first swap (reframed never does on the `moveBefore()` path, so the first app's CSS would otherwise follow the visitor everywhere).
 
 ## Contract for Doc Apps
 

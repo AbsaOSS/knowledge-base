@@ -12,7 +12,7 @@
  */
 
 import { test, expect } from '@playwright/test';
-import { transformSubAppHtml, isThemeBootstrap } from '../src/utils/transform.js';
+import { transformSubAppHtml, isThemeBootstrap, rewriteCssUrls } from '../src/utils/transform.js';
 import { layerSubAppCss, LAYER_ORDER, SUB_APP_LAYER } from '../src/utils/css-layers.js';
 
 const PREFIX = 'knowledge-base';
@@ -115,6 +115,24 @@ test.describe('URL rewriting', () => {
     ), 'docs');
     expect(bodyHtml).toContain('url(/knowledge-base/demo/bg.png)');
     expect(headHtml).toContain("url('/knowledge-base/demo/docs/img/hero.png')");
+  });
+
+  test('a stylesheet file resolves its URLs against its own path, never the page', () => {
+    const css = rewriteCssUrls(
+      '@import "base.css";\n@import url(../theme/t.css) screen;\n' +
+      ".a{background:url('img/x.png')}\n.b{background:url(/root.png)}\n" +
+      '.c{background:url(data:image/gif;base64,R0)}\n.d{mask:url(#m)}\n' +
+      '.e{background:url(https://cdn.example.com/y.png)}\n.f{background:url(//cdn.example.com/z.png)}',
+      '/knowledge-base/demo/assets/css/site.css', PREFIX, SLUG,
+    );
+    expect(css).toContain('@import "/knowledge-base/demo/assets/css/base.css";');
+    expect(css).toContain('@import url(/knowledge-base/demo/assets/theme/t.css) screen;');
+    expect(css).toContain("url('/knowledge-base/demo/assets/css/img/x.png')");
+    expect(css).toContain('url(/knowledge-base/demo/root.png)');
+    expect(css).toContain('url(data:image/gif;base64,R0)');
+    expect(css).toContain('url(#m)');
+    expect(css).toContain('url(https://cdn.example.com/y.png)');
+    expect(css).toContain('url(//cdn.example.com/z.png)');
   });
 });
 

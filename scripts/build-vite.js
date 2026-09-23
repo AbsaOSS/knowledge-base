@@ -27,6 +27,7 @@ import { HOIST_DIR, hoistAppInlineScripts } from './hoist-inline-scripts.js';
 import { collectHtmlFiles } from '../src/utils/apps.js';
 import { PATH_PREFIX, REGISTRY_FILE } from '../src/utils/config.js';
 import { layerSubAppCss } from '../src/utils/css-layers.js';
+import { rewriteCssUrls } from '../src/utils/transform.js';
 import {
   ARTIFACT_NAME, MANIFEST, expandManifest, findManifestRoot, isIframe,
   readManifest, resolveRegistry, sourceKey, stagingName, toRegistryEntry,
@@ -383,8 +384,8 @@ async function build() {
   }
 
   /**
-   * Copies a sub-app's non-HTML assets, rewriting root-relative CSS url()
-   * references on the way through.
+   * Copies a sub-app's non-HTML assets, rewriting every CSS url() and
+   * `@import` to an absolute path on the way through.
    *
    * A sub-app's CSS is authored for the root of its own site, so `url(/fonts/x)`
    * means "this app's /fonts/x" — but the app is served from
@@ -394,8 +395,12 @@ async function build() {
    * `{slug}/style.css` used to climb out of the app entirely and
    * `{slug}/assets/css/a.css` landed one level short (#49). An absolute target
    * needs no depth arithmetic and matches what transform.js does for HTML.
+   *
+   * Relative references are made absolute too, resolved against the file's own
+   * URL: inside a web fragment a sheet's rules can end up resolved against the
+   * host document instead of the file (see rewriteCssUrls).
    */
-  function copyAssets(src, dest, slug) {
+  function copyAssets(src, dest, slug, rel = '') {
     mkdirSync(dest, { recursive: true });
     // withFileTypes: the entry type comes out of the directory read that already
     // happened, instead of a statSync syscall per file — and a symlink reports as
@@ -407,7 +412,7 @@ async function build() {
       const s = join(src, entry.name);
       const d = join(dest, entry.name);
 
-      if (entry.isDirectory()) { copyAssets(s, d, slug); continue; }
+      if (entry.isDirectory()) { copyAssets(s, d, slug, rel + entry.name + '/'); continue; }
       if (!entry.isFile() || entry.name.endsWith('.html')) continue;
 
       if (entry.name.endsWith('.css')) {
@@ -415,13 +420,10 @@ async function build() {
         // place, and a hardlink would write that edit back into apps/{slug}/.
         copyFileSync(s, d);
         const css = readFileSync(d, 'utf8');
-        // url(/path) | url('/path') | url("/path") → url(/{prefix}/{slug}/path).
-        // The (?!\/) guard skips protocol-relative //host/…; data: and #ref
-        // never match, since neither starts with a slash.
-        const rewritten = css.replace(
-          /url\(\s*(['"]?)\/(?!\/)/g,
-          'url($1/' + PATH_PREFIX + '/' + slug + '/',
-        );
+        // url(/path) → url(/{prefix}/{slug}/path); url(path) → resolved against
+        // this file's URL. External, protocol-relative, data: and #ref are kept.
+        const fileUrl = '/' + PATH_PREFIX + '/' + slug + '/' + rel + entry.name;
+        const rewritten = rewriteCssUrls(css, fileUrl, PATH_PREFIX, slug);
         // Then wrap the whole sheet in the sub-app cascade layer, so that a
         // sheet which outlives its page inside a web fragment cannot restyle
         // the knowledge base's own markup — see src/utils/css-layers.js.
