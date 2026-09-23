@@ -426,6 +426,12 @@ jobs:
 The archive layout and the manifest are specified in
 [`contract/ARTIFACT.md`](contract/ARTIFACT.md).
 
+To catch problems before a release, run the same checks on every pull request with
+[`actions/check-docs`](actions/check-docs): the same build step, then
+`uses: AbsaOSS/knowledge-base/actions/check-docs@v1` with the same `manifest` and `dist`.
+Findings are annotated by rule ID ([`contract/RULES.md`](contract/RULES.md)); errors fail
+the check.
+
 ---
 
 ## Deployment
@@ -482,6 +488,7 @@ knowledge-base/
 ├── apps.json                  ← Registry of doc apps
 ├── astro.config.mjs           ← Astro SSG config (base /knowledge-base)
 ├── actions/publish-single-page-docs/      ← Reusable action: markdown → single-page bundle
+├── actions/check-docs/        ← Reusable action: contract checks on a docs repo's pull request
 ├── src/
 │   ├── pages/
 │   │   ├── index.astro        ← Landing catalog

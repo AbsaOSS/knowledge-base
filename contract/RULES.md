@@ -18,9 +18,10 @@ it has not seen before.
 
 ## Running the checks
 
-The `publish-docs` action runs them before it packs anything. To run them earlier — on
-a pull request, or while fixing a repo — use the same code from a checkout of this
-repository:
+The `publish-docs` action runs them before it packs anything. On a pull request, the
+[`check-docs`](../actions/check-docs) action runs the same checks without releasing
+anything: add it next to the publish workflow, with the same build step and `dist`.
+Locally — or while fixing a repo — use the same code from a checkout of this repository:
 
 ```bash
 git clone --depth 1 https://github.com/AbsaOSS/knowledge-base.git /tmp/knowledge-base

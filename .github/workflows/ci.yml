@@ -162,6 +162,21 @@ jobs:
           '
       - run: npm run selftest
         working-directory: actions
+      # The self-tests call check-docs' entry point directly; this runs the
+      # composite action itself, the way a docs repo's pull request does, on a
+      # fixture that must come out clean.
+      - name: Run check-docs as a docs repo would
+        id: check-docs
+        uses: ./actions/check-docs
+        with:
+          manifest: tests/fixtures/single-page-bundle/kb-docs.json
+          dist: tests/fixtures/single-page-bundle
+          strict: 'true'
+      - name: check-docs reported no findings
+        env:
+          KB_ERRORS: ${{ steps.check-docs.outputs.errors }}
+          KB_WARNINGS: ${{ steps.check-docs.outputs.warnings }}
+        run: test "$KB_ERRORS" = 0 && test "$KB_WARNINGS" = 0
 
   # ── 5. Deployment workflow dry run ─────────────────────────────────────────
   #

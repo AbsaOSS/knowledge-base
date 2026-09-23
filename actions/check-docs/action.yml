@@ -1,0 +1,108 @@
+name: Check docs against the knowledge base contract
+description: >-
+  Run the knowledge base contract checks on a repository's built headless
+  documentation site, on a pull request, without releasing or uploading
+  anything. Findings are annotated by rule ID and summarised on the run.
+author: AbsaOSS
+
+branding:
+  icon: check-circle
+  color: purple
+
+inputs:
+  manifest:
+    description: >-
+      Path to the repository's kb-docs.json, relative to the workspace.
+    required: false
+    default: kb-docs.json
+  dist:
+    description: >-
+      The built headless output, relative to the workspace — the same value the
+      publish-docs workflow passes. With one app in the manifest this is that
+      app's directory; with several, it holds one subdirectory per slug.
+    required: false
+    default: dist
+  strict:
+    description: >-
+      "true" fails the check on warnings as well as errors. Errors always fail
+      it: they are what the publish-docs action refuses to release.
+    required: false
+    default: 'false'
+  npm-registry:
+    description: >-
+      npm registry to install the action's own dependencies from, for runners
+      that cannot reach registry.npmjs.org — an Artifactory npm remote, say.
+      Empty means whatever npm resolves on the runner, which is the public
+      registry unless the machine's npm configuration says otherwise.
+    required: false
+    default: ''
+  npm-token:
+    description: >-
+      Bearer token for `npm-registry`. Leave empty for a registry that allows
+      anonymous reads.
+    required: false
+    default: ''
+  node-mirror:
+    description: >-
+      Mirror of https://nodejs.org to download Node from, for runners that can
+      reach neither nodejs.org nor the github.com release assets `setup-node`
+      tries first. Not needed when the runner image already carries Node in its
+      tool cache.
+    required: false
+    default: ''
+  node-mirror-token:
+    description: Authorization header value for `node-mirror`.
+    required: false
+    default: ''
+
+outputs:
+  errors:
+    description: Number of error findings.
+    value: ${{ steps.check.outputs.errors }}
+  warnings:
+    description: Number of warning findings.
+    value: ${{ steps.check.outputs.warnings }}
+
+runs:
+  using: composite
+  steps:
+    # The same pinned toolchain and dependency tree the publishing actions use,
+    # so a pull request is checked by exactly the code that will check the
+    # release.
+    - name: Set up Node.js
+      uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+      with:
+        node-version: '20'
+        mirror: ${{ inputs.node-mirror }}
+        mirror-token: ${{ inputs.node-mirror-token }}
+
+    # See publish-docs/action.yml: project-level npm config next to the
+    # lockfile, reaching nothing outside this install. Skipped when unset.
+    - name: Point npm at a private registry
+      if: ${{ inputs.npm-registry != '' }}
+      shell: bash
+      working-directory: ${{ github.action_path }}/..
+      env:
+        KB_NPM_REGISTRY: ${{ inputs.npm-registry }}
+        KB_NPM_TOKEN: ${{ inputs.npm-token }}
+      run: bash "$GITHUB_ACTION_PATH/../lib/npm-registry.sh"
+
+    - name: Install checker dependencies
+      shell: bash
+      working-directory: ${{ github.action_path }}/..
+      env:
+        # Expanded by npm from the .npmrc the previous step wrote; the token is
+        # never written to disk.
+        KB_NPM_TOKEN: ${{ inputs.npm-token }}
+      run: npm ci --omit=dev --no-audit --no-fund
+
+    # Runs in the workspace, and the paths go in as the user wrote them, so the
+    # findings name `kb-docs.json` and `dist/…` rather than runner paths.
+    - name: Check the built output
+      id: check
+      shell: bash
+      run: node "$GITHUB_ACTION_PATH/src/index.js"
+      env:
+        KB_MANIFEST: ${{ inputs.manifest }}
+        KB_DIST: ${{ inputs.dist }}
+        KB_CHECK_STRICT: ${{ inputs.strict }}
