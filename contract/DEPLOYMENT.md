@@ -57,6 +57,11 @@ A strict build enforces what a production registry may contain:
 | `optional` | Permission to ship without an app nobody noticed was missing |
 | an entry that produces no apps | A registered artifact that publishes nothing is a broken deploy |
 | an empty registry | A knowledge base with no docs is not a successful build |
+| an artifact with an `error` finding ([`RULES.md`](./RULES.md)) | The publish action refuses those; an artifact that has one reached the release some other way (hand-packed, or an action older than the rule) |
+
+Every build, strict or not, runs the contract checks on each installed artifact and logs
+the findings grouped by rule, so the registry owner can see which docs repo to chase.
+Warnings never fail a build.
 
 `iframe` entries are still allowed — they are an explicit, documented stopgap
 (issue #10) and carry `"temporary": true`.

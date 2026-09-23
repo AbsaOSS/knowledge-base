@@ -28,6 +28,7 @@ import { collectHtmlFiles } from '../src/utils/apps.js';
 import { PATH_PREFIX, REGISTRY_FILE } from '../src/utils/config.js';
 import { layerSubAppCss } from '../src/utils/css-layers.js';
 import { rewriteCssUrls } from '../src/utils/transform.js';
+import { checkApp, reportFindings } from './check-artifact.js';
 import {
   ARTIFACT_NAME, MANIFEST, expandManifest, findManifestRoot, isIframe,
   readManifest, resolveRegistry, sourceKey, stagingName, toRegistryEntry,
@@ -155,46 +156,23 @@ function installArtifact(app, stageDir, label) {
   // never registered.
   warnOnUnclaimedMembers(root, apps, key);
 
+  const findings = [];
   for (const entry of apps) {
     const destDir = join(APPS_DIR, entry.slug);
     if (existsSync(destDir)) rmSync(destDir, { recursive: true });
     copyDir(entry.appDir, destDir);
 
-    const html = readFileSync(join(destDir, entry.entryPoint), 'utf8');
-    checkHeadlessMarker(html, `${entry.slug}: ${entry.entryPoint}`);
+    // Checked as delivered, before the build hoists or strips anything, and on
+    // every source — prebuilt and local included, not only a GitHub fetch.
+    findings.push(...checkApp(destDir, entry));
 
     ok(`${entry.slug} ready (${label})`);
   }
+
+  // The same contract checks the publish-docs action runs (contract/RULES.md).
+  // Warnings unless the build is strict, where an error fails it.
+  reportFindings(key, findings, { strict: STRICT, warn });
   return apps.map(toRegistryEntry);
-}
-
-/** The marker a headless artifact must carry on `<html>`. */
-const HEADLESS_MARKER = 'data-kb-headless="true"';
-/** Its pre-rename spelling — see issue #77. */
-const LEGACY_HEADLESS_MARKER = 'data-mp-headless';
-
-/**
- * Warns when an artifact's entry point is not marked headless.
- *
- * A bundle published before the rename carries `data-mp-headless`, which is
- * indistinguishable from "not headless at all" to every downstream consumer.
- * Saying so explicitly is the difference between a publisher re-reading the
- * contract and a publisher re-reading their build script.
- *
- * This used to run only on the GitHub fetch path, so the sources CI actually
- * uses were never checked.
- */
-function checkHeadlessMarker(html, label) {
-  if (html.includes(HEADLESS_MARKER)) return;
-  if (html.includes(LEGACY_HEADLESS_MARKER)) {
-    warn(
-      `${label} carries ${LEGACY_HEADLESS_MARKER}, which this knowledge base no longer reads. ` +
-      `The artifact was produced against the pre-rename contract — republish it with a current ` +
-      `AbsaOSS/knowledge-base action so it emits ${HEADLESS_MARKER}.`,
-    );
-    return;
-  }
-  warn(`${label} is missing ${HEADLESS_MARKER} on <html> — see contract/HEADLESS_RULES.md.`);
 }
 
 /**
