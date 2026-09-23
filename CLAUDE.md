@@ -194,10 +194,11 @@ Every embedded test runs twice, as Playwright projects `chromium` (:4201) and
 - `artifact-safety.spec.js` — tarball extraction guards (traversal, absolute paths, symlinks).
 - `nginx-config.spec.js` — static assertions on `nginx.conf`/`nginx.headers.conf`, including
   that the CSP the Express mirror serves is byte-identical to nginx's.
-- `private-registry.spec.js` — both lockfiles resolve to `registry.npmjs.org` (npm rewrites
-  only that host to a configured mirror), the `npm-registry`/`npm-token`/`node-mirror` inputs
-  exist on both actions and `build-image.yml`, and `actions/lib/npm-registry.sh` writes the
-  project `.npmrc` without ever putting the token on disk.
+- `private-registry.spec.js` — both lockfiles name no registry (no `resolved` URL, an
+  integrity hash on every package; the committed `.npmrc` sets
+  `omit-lockfile-registry-resolved`), the `npm-registry`/`npm-token`/`node-mirror` inputs
+  exist on both actions and `build-image.yml`, and `actions/lib/npm-registry.sh` appends to
+  the project `.npmrc` without ever putting the token on disk.
 - `skill.spec.js` — `skills/kb-docs-add/`: frontmatter satisfies the Agent Skills spec
   (name ↔ directory, portable fields only), no scripts shipped, every referenced file exists,
   `examples/` are byte-identical to the contract's code blocks, and the docs carry the install

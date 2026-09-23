@@ -127,9 +127,9 @@ to come from an internal Artifactory — add the registry to the same step:
               …
 ```
 
-The action's own lockfile stays pinned to `registry.npmjs.org`; npm rewrites
-that host to the registry you name when it fetches, so the same action ref
-installs on both kinds of runner. The setting applies to this install only and
+The action's own lockfile names no registry, only versions and integrity
+hashes; npm fetches from the registry you name, so the same action ref installs
+on both kinds of runner. The setting applies to this install only and
 the token is never written to disk. A runner whose own `~/.npmrc` already names
 the mirror needs neither input.
 

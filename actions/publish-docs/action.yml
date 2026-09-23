@@ -104,8 +104,8 @@ runs:
     # A private registry is applied as project-level npm config next to the
     # lockfile, so it reaches nothing outside this install: not the runner's own
     # npm configuration, not the calling workflow's later steps. The lockfile
-    # itself needs no change — npm rewrites its registry.npmjs.org hosts to the
-    # configured registry (`replace-registry-host`). Skipped when unset.
+    # itself needs no change — it names no registry, only versions and integrity
+    # hashes, so npm fetches from the configured one. Skipped when unset.
     - name: Point npm at a private registry
       if: ${{ inputs.npm-registry != '' }}
       shell: bash
