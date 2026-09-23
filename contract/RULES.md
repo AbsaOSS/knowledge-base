@@ -31,6 +31,10 @@ node /tmp/knowledge-base/actions/lib/check-cli.js --manifest kb-docs.json --dist
 `--json` prints the findings as a JSON array (`id`, `severity`, `where`, `message`);
 `--strict` exits non-zero on warnings as well as errors.
 
+The knowledge base build runs the same checks again on every artifact it installs and
+logs the findings. A strict (production) build refuses an artifact with an error finding
+— see [`DEPLOYMENT.md`](./DEPLOYMENT.md).
+
 ## Index
 
 | ID | Severity | Rule |

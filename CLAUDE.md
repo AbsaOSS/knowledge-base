@@ -83,6 +83,7 @@ Orchestrator: `scripts/build-vite.js`. Flags: `--local`, `--headless`.
 - `scripts/build-vite.js` — Build orchestrator (4 steps: prepare, hoist, copy assets, astro build)
 - `scripts/fetch-apps.js` — GitHub Release artifact downloader. Only *obtains* an artifact; installing it is one shared path in `build-vite.js`
 - `scripts/artifacts.js` — Safe tarball extraction + tree copy, shared by both fetch paths. Validates archive members (no traversal, no absolute paths, no symlinks) before anything is written, and replaces the old `cp -r`/`tar` shell-outs so the build runs on Windows
+- `scripts/check-artifact.js` — Runs the publish action's contract checker (`actions/lib/check.js`) on every installed artifact, before hoisting; logs findings grouped by rule, and fails a strict build on an error. `check.js` resolves its parsers from `actions/node_modules` or the root, which pins the same versions
 - `scripts/hoist-inline-scripts.js` — Moves inline `<script>` bodies in sub-app HTML into files before the Astro build, so the deployment can serve `script-src 'self'`. Needed because bundles published before the action stopped emitting an inline mermaid bootstrap still contain one. A sub-app's dark-mode bootstrap is deleted here rather than hoisted — light only, and hoisting would put it beyond the reach of `transform.js`
 - `actions/publish-single-page-docs/` — Reusable GitHub Action that turns a repo's markdown into a single-page bundle
 - `skills/kb-docs-add/` — Agent skill (Claude Code, GitHub Copilot, `npx skills add`) that walks an agent through onboarding a docs repo (classify, write only the contract-required files, verify, troubleshoot) and through auditing one already onboarded (`references/audit.md`: run `actions/lib/check-cli.js` from a scratch clone, fix findings by rule ID at the source, report what the checker cannot see). Guidance only — no scripts; `examples/` are the contract's own code blocks and `tests/skill.spec.js` fails if they drift. Eval fixtures live in `tests/fixtures/kb-docs-add/`
@@ -188,6 +189,7 @@ Every embedded test runs twice, as Playwright projects `chromium` (:4201) and
   route; a narrow route tears the fragment down) — and what "smooth" means: no host reload,
   the reframed iframe survives, one `astro:after-swap` and one host-document view transition
   per hop, one `wf-html`, no duplicated stylesheet across a → b → c → a.
+- `artifact-checks.spec.js` — the build-side checker: root and `actions/` pin the same parser versions, findings are grouped by rule, a strict build refuses an error finding.
 - `artifact-safety.spec.js` — tarball extraction guards (traversal, absolute paths, symlinks).
 - `nginx-config.spec.js` — static assertions on `nginx.conf`/`nginx.headers.conf`, including
   that the CSP the Express mirror serves is byte-identical to nginx's.
@@ -219,7 +221,7 @@ in the committed `apps.json` without breaking CI, which only has this repo.
 
 - `GITHUB_TOKEN` — GitHub API auth for fetching Release artifacts
 - `KB_REGISTRY` — registry file to build from. Relative to the project root, or absolute (a deployment repo's registry is checked out beside this one). Default `apps.json`. Read through `REGISTRY_FILE` in `src/utils/config.js`, never inline.
-- `KB_STRICT` — `true` rejects `prebuilt`/`localPath`/`optional` entries, an empty registry, and any entry that yields no apps. Production builds only; this repo's own registry is a fixture and fails it by design.
+- `KB_STRICT` — `true` rejects `prebuilt`/`localPath`/`optional` entries, an empty registry, any entry that yields no apps, and any artifact with an `error` finding from the contract checker (`scripts/check-artifact.js`; every build logs the findings, grouped by rule, strict or not). Production builds only; this repo's own registry is a fixture and fails it by design.
 - `KB_HEADLESS` — `true` produces web-fragment output; **anything else, including unset, means standalone**. `scripts/build-vite.js` always exports an explicit value, so the default only applies when `astro build`/`astro dev` runs directly. Read it through `isHeadlessBuild()`, never inline. A per-app `"headless"` in `apps.json` overrides it in either direction.
 - `AWS_REGION`, `ECR_REPOSITORY`, `ECS_CLUSTER`, `ECS_SERVICE` — deployment config
 - `KB_EXAMPLE_ARTIFACT` — overrides the packaged artifact `scripts/setup-test-apps.mjs` registers
