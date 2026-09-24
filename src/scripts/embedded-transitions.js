@@ -144,6 +144,31 @@ function dropPortalSnapshots() {
   if (adopted.some(isSnapshot)) document.adoptedStyleSheets = adopted.filter((s) => !isSnapshot(s));
 }
 
+/**
+ * A copy of `el` owned by the host document, so its nodes belong to the host
+ * window's realm.
+ *
+ * reframed runs a fragment script in its iframe only when the script reaches
+ * the fragment's DOM through a host-realm insertion method — it patches the
+ * host window's Node/Element prototypes and nothing else. The page the router
+ * fetched was parsed in the iframe, so its nodes are iframe-realm. After the
+ * swap, Astro re-runs each new script with `script.replaceWith(fresh)`; on an
+ * iframe-realm `script` that is the iframe's unpatched replaceWith, and the
+ * fresh script executes in the HOST window: a mermaid bundle defined
+ * `window.mermaid` on the host page, and the diagram stayed source text.
+ * Scripts keep their `data-astro-exec` marks through the copy, so what is
+ * already running is not run twice.
+ */
+function adoptIntoHost(el) {
+  let hostDoc;
+  try {
+    hostDoc = window.parent.document;
+  } catch {
+    return el;
+  }
+  return hostDoc && hostDoc !== document ? hostDoc.importNode(el, true) : el;
+}
+
 document.addEventListener('astro:before-swap', (event) => {
   dropPortalSnapshots();
   const newDoc = event.newDocument;
@@ -165,10 +190,12 @@ document.addEventListener('astro:before-swap', (event) => {
 
   event.swap = () => {
     swapFunctions.deselectScripts(newDoc);
+    const head = adoptIntoHost(next.head);
+    const body = adoptIntoHost(next.body);
     swapRootAttributes(current.root, next.root);
-    swapHead(current.head, next.head);
+    swapHead(current.head, head);
     const restoreFocus = swapFunctions.saveFocus();
-    swapFunctions.swapBodyElement(next.body, current.body);
+    swapFunctions.swapBodyElement(body, current.body);
     restoreFocus();
   };
 });

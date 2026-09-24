@@ -101,7 +101,11 @@ const bodyClasses = [
       and a runtime that parses this block before the <head> would then order
       the sub-app layer above the fence. */}
   <style is:inline data-kb-stylesheet set:html={LAYER_ORDER + '\n' + kbStylesheet}></style>
-  <slot />
+  {/* The design tokens the fragment's shadow tree reads, likewise ahead of the
+      content: a blocking <script src> in a sub-app body (a vendored mermaid
+      bundle is 2.5 MB) holds the parser, and until it reaches this block an
+      embedded page renders with no tokens — black text, no theme. */}
   <Fragment set:html={shadowCompatStyle} />
+  <slot />
 </body>
 </html>

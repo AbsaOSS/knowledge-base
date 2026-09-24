@@ -77,7 +77,7 @@ Orchestrator: `scripts/build-vite.js`. Flags: `--local`, `--headless`.
 - `src/components/Masthead.astro` — Persistent Knowledge base header + Library/current-app sub-nav (all pages, both modes)
 - `src/components/AppCard.astro`, `src/components/AppIcon.astro` — Catalog card and its icon
 - `src/templates/shadow-compat.js` — Shadow-DOM design-token styles, injected into the body by the layout
-- `src/scripts/embedded-transitions.js` — Loaded by the layout; inert standalone. Inside a web fragment it runs Astro's view transition on the host document (the iframe's is never painted) and replaces Astro's swap with one that targets reframed's `wf-html`/`wf-head`/`wf-body`, because the default swap nests a new `wf-html` per navigation and leaks every stylesheet. Its head diff never moves a reused node: on a pierced page a `<link>` already moved once by reframed's portal falls out of the applied stylesheets when moved again
+- `src/scripts/embedded-transitions.js` — Loaded by the layout; inert standalone. Inside a web fragment it runs Astro's view transition on the host document (the iframe's is never painted) and replaces Astro's swap with one that targets reframed's `wf-html`/`wf-head`/`wf-body`, because the default swap nests a new `wf-html` per navigation and leaks every stylesheet. Its head diff never moves a reused node: on a pierced page a `<link>` already moved once by reframed's portal falls out of the applied stylesheets when moved again. It also imports the fetched head and body into the host document before swapping them in: reframed routes a script into its iframe only through host-realm DOM methods, and the router's page is parsed in the iframe, so Astro's `script.replaceWith()` re-run would otherwise execute every swapped-in sub-app script in the host window
 - `src/utils/config.js` — `PATH_PREFIX`/`BASE_PATH`, `isHeadlessBuild()` and `REGISTRY_FILE` — the build-wide constants
 - `src/utils/registry.js` — Registry validation, manifest reading/validation, expansion map. Shared by the build and by Astro so both resolve the same registry
 - `scripts/build-vite.js` — Build orchestrator (4 steps: prepare, hoist, copy assets, astro build)
@@ -148,7 +148,9 @@ Self-contained Playwright E2E — `npm test` auto-starts everything (no external
 1. **:3000 fragment** — `scripts/setup-test-apps.mjs` writes a hermetic `apps.json` that
    registers the vendored `tests/fixtures/docs-example.kb-docs.tar.gz` (two apps)
    (slugs `user-guide` + `guide-mirror`, for cross-app nav), an iframe entry pinned
-   `"headless": false`, and the generated single-page bundle fixture. `build:headless` builds it;
+   `"headless": false`, and the generated single-page bundle fixture — with the real
+   mermaid bundle, copied from the root `mermaid` devDependency (pinned to the version
+   `actions/` vendors) and gitignored. `build:headless` builds it;
    `tests/fragment-server.mjs` serves `dist/` mirroring the production **nginx** rewrites
    (`/__wf/knowledge-base/*` → `/knowledge-base/*`). NB: `astro preview` is NOT used — its
    Vite `configurePreviewServer` rewrite hook does not run for static output, so the
@@ -181,6 +183,9 @@ Every embedded test runs twice, as Playwright projects `chromium` (:4201) and
   not leak in), routing + smooth no-reload SPA transitions, cross-app navigation, asset
   loading (no host-origin 404s), and the documented history limitation (fragment routing is
   internal to the reframed `wf:<id>` iframe and is not mirrored to top-window history).
+  Mermaid: the fixture flowchart renders to SVG on a hard load, after router navigation into
+  the doc and after leaving and coming back, and the bundle runs in the fragment's iframe,
+  never on the host window.
 - `host-router.spec.js` — the ClientRouter next to the HOST's router. The shell loads
   `tests/host/host-router.js`, an Angular Router stand-in (owns the address bar with its own
   history state and trailing-slash stripping, re-routes on `popstate`, reuses the outlet when

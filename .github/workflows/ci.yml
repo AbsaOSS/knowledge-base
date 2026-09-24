@@ -59,9 +59,11 @@ jobs:
           node-version: '24'
           cache: npm
       - run: npm ci
-      # Builds from the committed apps.json (vendored fixture) — no token/network.
+      # Builds from the vendored fixtures — no token/network. setup-test-apps
+      # copies the real mermaid bundle into the single-page fixture (gitignored),
+      # so the container suite's diagram assertions have something to render.
       - name: Build (headless)
-        run: npm run build:headless
+        run: node scripts/setup-test-apps.mjs && npm run build:headless
       - name: Upload dist artifact
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:

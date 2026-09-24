@@ -50,6 +50,15 @@ test.describe('the build and the action parse the same way', () => {
       expect(root[name], `package.json must pin ${name} exactly as actions/ does`).toBe(actions[name]);
     }
   });
+
+  // scripts/setup-test-apps.mjs vendors the root copy into the single-page
+  // fixture, standing in for the one the action vendors into published docs.
+  test('the fixture mermaid bundle is the version the action vendors', () => {
+    const root = pkg('package.json').devDependencies.mermaid;
+    const actions = pkg('actions/package.json').dependencies.mermaid;
+    expect(actions, 'actions/package.json must pin mermaid').toMatch(/^\d+\.\d+\.\d+$/);
+    expect(root, 'package.json must pin mermaid exactly as actions/ does').toBe(actions);
+  });
 });
 
 test.describe('reporting an artifact', () => {

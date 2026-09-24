@@ -221,6 +221,15 @@ test.describe('CSP in a browser', () => {
     });
   }
 
+  // The fixture ships the real mermaid bundle the action vendors; a diagram
+  // that stays source text is the silent failure this policy could cause.
+  test('a mermaid diagram renders to SVG under the policy', async ({ page }) => {
+    await page.goto('/knowledge-base/platform-overview/');
+    const diagram = page.locator('main.kb-single-page pre.mermaid').first();
+    await expect(diagram.locator('svg')).toBeVisible({ timeout: 15_000 });
+    await expect(diagram).not.toContainText('flowchart LR');
+  });
+
   test('the hoisted sub-app scripts actually execute under the policy', async ({ page }) => {
     const blocked = [];
     page.on('response', (res) => {
