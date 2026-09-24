@@ -131,6 +131,23 @@ The `<body>` of each doc page must follow this structure:
 
 ---
 
+## Required: scripts as files
+
+The knowledge base serves `script-src 'self'`. Anything a page runs must come from a
+`<script src>` in your artifact:
+
+- **No inline event handlers.** `onclick="…"`, `onload="…"` and every other `on*`
+  attribute is stripped when the knowledge base re-hosts the page — the element stays,
+  the handler is gone. Attach listeners from a script file instead
+  ([KB-HTML-005](./RULES.md#kb-html-005--no-inline-event-handler-attributes)).
+- **No inline `<script>` blocks.** They are moved into files at build time so already
+  published bundles keep working, but ship them as files yourself
+  ([KB-HTML-004](./RULES.md#kb-html-004--no-inline-script-blocks)).
+- **No `javascript:` URLs.** Blocked like an inline handler
+  ([KB-HTML-006](./RULES.md#kb-html-006--no-javascript-urls)).
+
+---
+
 ## Required: design tokens
 
 Your CSS must define (or import) the canonical design tokens.  
@@ -206,5 +223,6 @@ Before opening a PR to add your app to `apps.json`:
 - [ ] No `<header class="fixed top-0...">` present in any headless HTML page
 - [ ] `data-kb-headless="true"` is on the `<html>` element
 - [ ] All asset paths are relative (no leading `/`)
+- [ ] No `on*` attributes — listeners are attached from script files
 - [ ] Design tokens are defined in your CSS
 - [ ] A GitHub Release with `kb-docs.tar.gz` exists on your repo

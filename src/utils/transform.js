@@ -139,6 +139,9 @@ function detach(node) {
 const childElement = (node, tagName) =>
   (node?.childNodes ?? []).find((c) => c.tagName === tagName);
 
+/** `onclick`, `onload`, … — every attribute a browser treats as an inline handler. */
+const isEventHandler = (name) => /^on./i.test(name);
+
 // ── Light-only enforcement ────────────────────────────────────────────────────
 
 // isThemeBootstrap() lives in theme.js, dependency-free, so the publishing
@@ -152,8 +155,8 @@ export { isThemeBootstrap };
  * needs to re-host it.
  *
  * Steps (in order):
- *  1. Rewrite every URL-bearing attribute to an absolute /{prefix}/{slug}/… path
- *     and drop any <base> tag
+ *  1. Rewrite every URL-bearing attribute to an absolute /{prefix}/{slug}/… path,
+ *     drop any <base> tag and strip every inline `on*` event handler
  *  2. Stamp data-astro-transition-persist on every stylesheet link, and wrap
  *     every inline <style> in the sub-app cascade layer (css-layers.js)
  *  3. Split off <head> contents, <body> attributes and <body> contents
@@ -184,6 +187,15 @@ export function transformSubAppHtml(html, slug, fileRelDir, prefix) {
     // 1. URLs. Only attributes of real elements are touched, so a `href="/x"`
     //    written out in a code sample stays the string the author typed.
     if (el.tagName === 'base') { doomed.push(el); continue; }
+
+    // 1a. Inline event handlers. `script-src 'self'` blocks them in production,
+    //     so the handler is dead code there — and where no CSP is served
+    //     (astro dev/preview) it runs, which is how a sub-app's theme toggle
+    //     re-added `dark`. Stripping is what production already does, made
+    //     true everywhere.
+    if (el.attrs?.some((a) => isEventHandler(a.name))) {
+      el.attrs = el.attrs.filter((a) => !isEventHandler(a.name));
+    }
 
     for (const attr of el.attrs ?? []) {
       if (URL_ATTRS.has(attr.name) || (attr.name === 'data' && el.tagName === 'object')) {

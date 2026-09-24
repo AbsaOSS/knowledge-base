@@ -149,7 +149,9 @@ not scripts and are not reported.
 **Severity:** warning
 
 `onclick="…"` and every other `on*` attribute is blocked by `script-src 'self'`: the
-handler never runs. Attach listeners from a script file.
+handler never runs. The knowledge base strips every one when it re-hosts the page, so
+the element stays and does nothing — in development too, where no policy is served.
+Attach listeners from a script file.
 
 ### KB-HTML-006 — No `javascript:` URLs
 

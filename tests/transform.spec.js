@@ -82,6 +82,31 @@ test.describe('light-only enforcement', () => {
   });
 });
 
+test.describe('inline event handlers', () => {
+  test('every on* attribute is stripped, the element and its other attributes kept', () => {
+    const { bodyHtml, headHtml } = run(doc(
+      `<button id="theme-toggle" aria-label="Toggle" onclick="document.body.classList.toggle('dark')">t</button>` +
+      '<img src="a.png" ONERROR="x()" onload="y()">' +
+      '<template><a href="#" onmouseover="z()">in template</a></template>',
+      '<link rel="stylesheet" href="s.css" onload="this.media=\'all\'">',
+    ));
+    expect(bodyHtml + headHtml).not.toMatch(/\son[a-z]+=/i);
+    expect(bodyHtml).toContain('<button id="theme-toggle" aria-label="Toggle">t</button>');
+    expect(bodyHtml).toContain('src="/knowledge-base/demo/a.png"');
+    expect(bodyHtml).toContain('in template');
+  });
+
+  test('a bare `on` attribute is not a handler', () => {
+    const { bodyHtml } = run(doc('<div on="x" onfoo="y">d</div>'));
+    expect(bodyHtml).toContain('<div on="x">d</div>');
+  });
+
+  test('onclick quoted in prose is text, not an attribute', () => {
+    const { bodyHtml } = run(doc('<pre><code>&lt;button onclick="go()"&gt;</code></pre>'));
+    expect(bodyHtml).toContain('onclick="go()"');
+  });
+});
+
 test.describe('URL rewriting', () => {
   test('rewrites the single-URL attributes', () => {
     const { bodyHtml } = run(doc(

@@ -14,6 +14,7 @@ import { test, expect } from '@playwright/test';
 import { readFileSync, existsSync, readdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join, relative } from 'node:path';
+import { parse } from 'parse5';
 import { isThemeBootstrap } from '../src/utils/transform.js';
 import { LAYER_ORDER, SUB_APP_LAYER } from '../src/utils/css-layers.js';
 
@@ -412,6 +413,35 @@ test.describe('no inline scripts in the build output', () => {
       expect(src, 'hoisted script must be rewritten like every other URL').toMatch(/^\/knowledge-base\/user-guide\/_kb-inline\//);
       expect(existsSync(join(DIST, src.replace(/^\/knowledge-base\//, ''))), `${src} is not in dist/`).toBe(true);
     }
+  });
+
+  test('no element in dist/ carries an inline event handler', () => {
+    // script-src 'self' blocks onclick="…" exactly like an inline <script>, so
+    // one that survives is dead in production and live under astro dev. Walked
+    // as a parsed tree: `onclick="…"` quoted in a code sample is prose, not an
+    // attribute.
+    const offenders = [];
+    const walk = (node, file) => {
+      for (const child of node.childNodes ?? []) {
+        for (const attr of child.attrs ?? []) {
+          if (/^on./i.test(attr.name)) offenders.push(`${relative(DIST, file)}: <${child.tagName} ${attr.name}>`);
+        }
+        if (child.content) walk(child.content, file);
+        walk(child, file);
+      }
+    };
+    for (const file of htmlFiles(DIST)) walk(parse(readFileSync(file, 'utf8')), file);
+    expect(offenders, "inline on* handler in the output — script-src 'self' blocks it; transform.js should strip it").toEqual([]);
+  });
+
+  test('the fixture theme toggle survives without its handler', () => {
+    // The docs-example fixture ships `<button id="theme-toggle" onclick="…">`,
+    // so this asserts the strip ran on a real handler rather than that there
+    // was nothing to strip.
+    const html = read('user-guide/docs/index.html');
+    const button = html.match(/<button\b[^>]*\bid="theme-toggle"[^>]*>/)?.[0];
+    expect(button, 'fixture no longer ships the theme toggle — pick another handler-bearing element').toBeTruthy();
+    expect(button).not.toMatch(/\bon[a-z]+=/i);
   });
 
   test('the sub-app theme bootstrap is deleted, not hoisted into a file', () => {
