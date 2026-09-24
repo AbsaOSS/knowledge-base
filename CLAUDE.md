@@ -120,9 +120,7 @@ Known limit: a `!important` declaration in a sub-app stylesheet outranks the fen
 
 ### Light Only
 
-The knowledge base has no dark mode: no theme toggle, no persisted theme, no `dark` class, no dark palette. A sub-app's own theme bootstrap is removed twice over — `hoist-inline-scripts.js` deletes it while it is still inline, and `transformSubAppHtml()` strips any that reaches Astro, along with a `dark` body class — so an embedding host's theme cannot bleed into the fragment.
-
-Known gap: inline `on*` handlers in sub-app HTML are not stripped (#67). They are inert under the CSP but not under `astro dev`.
+The knowledge base has no dark mode: no theme toggle, no persisted theme, no `dark` class, no dark palette. A sub-app's own theme bootstrap is removed twice over — `hoist-inline-scripts.js` deletes it while it is still inline, and `transformSubAppHtml()` strips any that reaches Astro, along with a `dark` body class — so an embedding host's theme cannot bleed into the fragment. `transformSubAppHtml()` also strips every inline `on*` handler: inert under the CSP anyway, and under `astro dev` a sub-app theme toggle's `onclick` would re-add `dark`.
 
 ### URL Rewriting
 
