@@ -16,7 +16,7 @@
 import { test, expect } from '@playwright/test';
 import {
   gotoFragment, waitForFragmentText, hostStillAlive,
-  queryInShadow, getFragmentText, shadowHrefs, fragmentIsDark,
+  queryInShadow, getFragmentText, shadowHrefs, fragmentIsDark, fragmentFrame,
 } from './support/fragment.js';
 
 /** Attach a collector of same-origin (host) responses with status >= 400. */
@@ -222,6 +222,89 @@ test.describe('Single-page docs', () => {
     // Nothing but the masthead: a single-page doc ships no navigation of its own.
     expect(await queryInShadow(page, 'nav#sidebar'), 'single-page doc must not render a sidebar').toBeNull();
     expect(await queryInShadow(page, '#kb-masthead'), 'masthead missing').not.toBeNull();
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Mermaid diagrams. The platform-overview fixture ships the real mermaid bundle
+// the action vendors, so these fail if the bundle or its init file is missing,
+// errors, or leaves the diagram source on the page.
+test.describe('Mermaid diagrams', () => {
+  const DIAGRAM = 'main.kb-single-page pre.mermaid';
+
+  /** Resolves once the fixture flowchart is an <svg> with its three nodes. */
+  async function expectRenderedDiagram(page) {
+    const diagram = page.locator(DIAGRAM).first();
+    await expect(diagram.locator('svg'), 'the flowchart was not rendered to SVG').toBeVisible({ timeout: 15_000 });
+    await expect(diagram.locator('svg .node')).toHaveCount(3);
+    await expect(diagram, 'mermaid source is still visible').not.toContainText('flowchart LR');
+    await expect(diagram).not.toContainText('-->');
+  }
+
+  /** Fails the test on any page or fragment-frame error thrown while it runs. */
+  function collectErrors(page) {
+    const errors = [];
+    page.on('pageerror', (e) => errors.push(String(e)));
+    page.on('console', (msg) => { if (msg.type() === 'error') errors.push(msg.text()); });
+    return errors;
+  }
+
+  test('renders on initial load, from the packaged bundle', async ({ page }) => {
+    const errors = collectErrors(page);
+    const assets = [];
+    page.on('response', (res) => {
+      if (/\/knowledge-base\/platform-overview\/assets\/mermaid(-init|\.min)\.js$/.test(res.url())) {
+        assets.push(`${res.status()} ${new URL(res.url()).pathname}`);
+      }
+    });
+
+    await gotoFragment(page, '/knowledge-base/platform-overview/');
+    await expectRenderedDiagram(page);
+
+    expect(assets.sort()).toEqual([
+      '200 /knowledge-base/platform-overview/assets/mermaid-init.js',
+      '200 /knowledge-base/platform-overview/assets/mermaid.min.js',
+    ]);
+    expect(errors, errors.join('\n')).toEqual([]);
+  });
+
+  test('renders after in-fragment navigation into the doc', async ({ page }) => {
+    const errors = collectErrors(page);
+    await gotoFragment(page, '/knowledge-base/');
+    await clickFragmentLink(page, '.kb-card[href="/knowledge-base/platform-overview/"]');
+    await waitForFragmentText(page, /Request flow/i);
+
+    await expectRenderedDiagram(page);
+    expect(await hostStillAlive(page)).toBe(true);
+    expect(errors, errors.join('\n')).toEqual([]);
+  });
+
+  // The failure behind the diagram: a script the ClientRouter swapped in ran
+  // in the host window, not in reframed's iframe (see adoptIntoHost() in
+  // src/scripts/embedded-transitions.js). A sub-app global on the host page is
+  // the leak itself, whether or not anything then fails to render.
+  test('scripts swapped in by the router run in the fragment, never in the host window', async ({ page }) => {
+    await gotoFragment(page, '/knowledge-base/');
+    await clickFragmentLink(page, '.kb-card[href="/knowledge-base/platform-overview/"]');
+    await expectRenderedDiagram(page);
+
+    expect(await page.evaluate(() => typeof window.mermaid), 'mermaid leaked onto the host window').toBe('undefined');
+    expect(await fragmentFrame(page).evaluate(() => typeof window.mermaid)).toBe('object');
+  });
+
+  test('renders again after navigating away and back', async ({ page }) => {
+    const errors = collectErrors(page);
+    await gotoFragment(page, '/knowledge-base/platform-overview/');
+    await expectRenderedDiagram(page);
+
+    await clickFragmentLink(page, '#kb-masthead a[href="/knowledge-base/"]');
+    await waitForFragmentText(page, /Release Process/i);
+    await clickFragmentLink(page, '.kb-card[href="/knowledge-base/platform-overview/"]');
+    await waitForFragmentText(page, /Request flow/i);
+
+    await expectRenderedDiagram(page);
+    expect(await hostStillAlive(page)).toBe(true);
+    expect(errors, errors.join('\n')).toEqual([]);
   });
 });
 

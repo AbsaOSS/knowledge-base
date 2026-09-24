@@ -2,5 +2,6 @@
   "extends": "astro/tsconfigs/strict",
   "compilerOptions": {
     "types": ["node"]
-  }
+  },
+  "exclude": ["dist", "tmp", "apps", "public", "tests/fixtures", "actions/node_modules"]
 }

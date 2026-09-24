@@ -25,7 +25,8 @@
  * kb-docs.tar.gz / an unpacked artifact directory.
  */
 
-import { mkdirSync, rmSync, writeFileSync, existsSync } from 'node:fs';
+import { copyFileSync, mkdirSync, rmSync, writeFileSync, existsSync } from 'node:fs';
+import { createRequire } from 'node:module';
 import { dirname, join, resolve, isAbsolute } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -53,8 +54,10 @@ if (!existsSync(artifactAbs)) {
 //
 // Written as an *unpacked* bundle directory (apps.json `prebuilt` accepts either
 // a tarball or a directory), so it stays reviewable in git instead of being an
-// opaque blob. It is regenerated here on every run and committed, so CI's plain
-// `npm run build:headless` works without running this script first.
+// opaque blob. It is regenerated here on every run and committed — all but the
+// vendored mermaid bundle, which is copied from node_modules and gitignored, so
+// a build that should render diagrams runs this script first (CI's build job
+// does).
 //
 // The document shell comes from the real action (actions/publish-single-page-docs/src/
 // template.js — deliberately dependency-free) so the fixture cannot drift from
@@ -105,16 +108,14 @@ const RELEASE_PROCESS_BODY = `<h1 id="release-process" tabindex="-1">Release Pro
 </ol>`;
 
 /**
- * Stand-in for the vendored mermaid bundle.
- *
- * The real action copies mermaid's 2.5 MB UMD build into each doc that needs it;
- * committing that to the fixture would bloat the repo for no test value. What the
- * suite actually needs is that the reference resolves (no 404 while browsing) and
- * that the diagram source survives the build.
+ * The mermaid bundle the action vendors — the real one, so the suites can
+ * assert a diagram actually renders inside the fragment rather than only that
+ * the script reference resolves. Pinned in the root package.json to the
+ * version actions/package.json pins (tests/artifact-checks.spec.js keeps them
+ * equal). Copied here on every run and gitignored: 2.5 MB of minified JS is
+ * not worth committing when node_modules already has it.
  */
-const MERMAID_STUB = `/* Test fixture stand-in for the vendored mermaid bundle. */
-window.mermaid = { initialize: function () {}, run: function () {} };
-`;
+const MERMAID_BUNDLE = createRequire(import.meta.url).resolve('mermaid/dist/mermaid.min.js');
 
 /**
  * Regression fixture for #49 — a stylesheet two directories deep that references
@@ -175,7 +176,7 @@ function writeSinglePageBundle() {
     writeFileSync(join(docDir, CSS_PATH), DOC_CSS);
     if (doc.depthFixture) writeFileSync(join(docDir, dirname(CSS_PATH), 'depth-check.css'), DEPTH_CHECK_CSS);
     if (doc.usesMermaid) {
-      writeFileSync(join(docDir, MERMAID_PATH), MERMAID_STUB);
+      copyFileSync(MERMAID_BUNDLE, join(docDir, MERMAID_PATH));
       // Real init script, not a stub: it is the thing that must stay out of the
       // HTML for the knowledge base's script-src 'self' to hold, so the fixture
       // ships it exactly as the action does.

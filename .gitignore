@@ -9,3 +9,5 @@ playwright-report/
 test-results/
 .astro/
 public/
+# Copied from node_modules by scripts/setup-test-apps.mjs on every run.
+tests/fixtures/single-page-bundle/*/assets/mermaid.min.js
