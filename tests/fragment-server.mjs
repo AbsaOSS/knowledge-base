@@ -51,13 +51,27 @@ const CSP = [
   "object-src 'none'",
 ].join('; ');
 
+/**
+ * nginx: map $request_uri $kb_cache_control — the caching policy per asset
+ * class. Kept in step with nginx.conf; tests/nginx-config.spec.js asserts the
+ * two agree on every value.
+ */
+const IMMUTABLE = 'public, max-age=31536000, immutable, no-transform';
+const REVALIDATE = 'no-cache, no-transform';
+const IMMUTABLE_PATHS = [
+  /^\/(__wf\/)?knowledge-base\/_astro\//,
+  /^\/(__wf\/)?knowledge-base\/[^?]*\/_kb-inline\/[0-9a-f]{16}\.js(\?|$)/,
+];
+const cacheControl = (requestUri) =>
+  IMMUTABLE_PATHS.some((re) => re.test(requestUri)) ? IMMUTABLE : REVALIDATE;
+
 const app = express();
 
 // nginx: include /etc/nginx/kb-headers.conf — the shared CORS + security set.
 // Applied to every response, which is what the nginx config does now that each
 // location declaring an add_header re-includes the snippet. Kept in sync with
 // nginx.headers.conf; tests/nginx-config.spec.js asserts the nginx side.
-app.use((_req, res, next) => {
+app.use((req, res, next) => {
   res.set({
     'Access-Control-Allow-Origin': '*',
     'Access-Control-Allow-Methods': 'GET, OPTIONS',
@@ -70,6 +84,12 @@ app.use((_req, res, next) => {
     // breaks reframing fails silently, and this is where that would show up.
     'Content-Security-Policy': CSP,
   });
+  // Only on the prefixed locations, as nginx sets it. An error response drops
+  // it again: Express's final 404 handler clears every header, much as nginx's
+  // add_header without `always` skips one.
+  if (req.url.startsWith(`/${PREFIX}`) || req.url.startsWith(`/__wf/${PREFIX}/`)) {
+    res.set('Cache-Control', cacheControl(req.url));
+  }
   next();
 });
 
@@ -105,7 +125,7 @@ app.use((req, _res, next) => {
 // production server does not have.
 app.use(
   `/${PREFIX}`,
-  express.static(DIST, { extensions: ['html'], index: 'index.html', redirect: false }),
+  express.static(DIST, { extensions: ['html'], index: 'index.html', redirect: false, cacheControl: false }),
 );
 
 // nginx: the `$uri/index.html` half of try_files — a directory path resolves to
@@ -115,7 +135,7 @@ app.use(`/${PREFIX}`, (req, res, next) => {
   // Never serve outside dist/, whatever the request path claims.
   if (!candidate.startsWith(DIST)) return next();
   if (!existsSync(candidate)) return next();
-  res.sendFile(candidate);
+  res.sendFile(candidate, { cacheControl: false });
 });
 
 app.get('/healthz', (_req, res) => res.type('text/plain').send('ok'));

@@ -103,6 +103,21 @@ test.describe('HTTP headers', () => {
     expect(res.status()).toBe(200);
     expect(res.headers()['location']).toBeUndefined();
   });
+
+  // The mirror's half of nginx's per-asset-class Cache-Control map;
+  // tests/container.spec.js asserts the shipped config.
+  test('caches hashed assets as immutable and revalidates everything else', async ({ request }) => {
+    const landing = await (await request.get('/knowledge-base/')).text();
+    const astro = landing.match(/src="(\/knowledge-base\/_astro\/[^"]+)"/)?.[1];
+    expect(astro, 'the landing page references no _astro/ asset').toBeTruthy();
+    for (const path of [astro, astro.replace(/^\//, '/__wf/')]) {
+      expect((await request.get(path)).headers()['cache-control'], path)
+        .toBe('public, max-age=31536000, immutable, no-transform');
+    }
+    for (const path of ['/knowledge-base/', '/knowledge-base/user-guide', '/knowledge-base/style.css', '/__wf/knowledge-base/style.css']) {
+      expect((await request.get(path)).headers()['cache-control'], path).toBe('no-cache, no-transform');
+    }
+  });
 });
 
 // ─────────────────────────────────────────────────────────────────────────────

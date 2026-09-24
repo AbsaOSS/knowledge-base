@@ -126,6 +126,41 @@ test.describe('nginx.conf header inheritance', () => {
     expect(mirrorCsp, 'the mirror and nginx must serve the same policy').toBe(nginxCsp);
   });
 
+  test('both prefix locations set Cache-Control from the per-asset-class map', () => {
+    // Every asset is served from one of these ^~ locations, and ^~ skips regex
+    // locations — a caching policy anywhere else is never reached.
+    const blocks = locationBlocks(uncomment(CONF));
+    for (const selector of ['^~ /knowledge-base/', '^~ /__wf/knowledge-base/']) {
+      const block = blocks.find((b) => b.selector === selector);
+      expect(block, `${selector} location block`).toBeTruthy();
+      expect(block.body).toMatch(/add_header\s+Cache-Control\s+\$kb_cache_control\s*;/);
+      expect(block.body, 'without `always`: an error response must not be cached as immutable')
+        .not.toMatch(/add_header\s+Cache-Control[^;]*\balways\b/);
+    }
+    const unreachable = blocks.filter((b) => /^~/.test(b.selector) && /Cache-Control|expires/.test(b.body));
+    expect(unreachable.map((b) => b.selector), 'a regex location never runs under the ^~ prefixes').toEqual([]);
+  });
+
+  test('the cache map and the test mirror agree on every class', () => {
+    const map = uncomment(CONF).match(/map\s+\$request_uri\s+\$kb_cache_control\s*\{([\s\S]*?)\n\}/)?.[1];
+    expect(map, 'no $kb_cache_control map in nginx.conf').toBeTruthy();
+    const entries = [...map.matchAll(/^\s*("?)(\S+?)\1\s+"([^"]+)";/gm)].map((m) => [m[2], m[3]]);
+    const nginxDefault = entries.find(([k]) => k === 'default')?.[1];
+    const nginxImmutable = entries.filter(([k]) => k !== 'default');
+
+    const mirror = readFileSync(join(ROOT, 'tests', 'fragment-server.mjs'), 'utf8');
+    const constant = (name) => mirror.match(new RegExp(`const ${name} = '([^']+)'`))?.[1];
+    const mirrorPatterns = [...(mirror.match(/const IMMUTABLE_PATHS = \[([\s\S]*?)\];/)?.[1] ?? '')
+      .matchAll(/^\s*\/(.+)\/,\r?$/gm)].map((m) => m[1].replace(/\\\//g, '/'));
+
+    expect(nginxDefault).toBe(constant('REVALIDATE'));
+    expect(new Set(nginxImmutable.map(([, v]) => v))).toEqual(new Set([constant('IMMUTABLE')]));
+    expect(nginxImmutable.map(([k]) => k.replace(/^~/, ''))).toEqual(mirrorPatterns);
+    for (const policy of [nginxDefault, constant('IMMUTABLE')]) {
+      expect(policy, 'the gateway must not re-encode any response').toContain('no-transform');
+    }
+  });
+
   test('healthz sets its content type with default_type, not a post-return add_header', () => {
     const healthz = locationBlocks(uncomment(CONF)).find((b) => b.selector === '= /healthz');
     expect(healthz, '/healthz location block').toBeTruthy();

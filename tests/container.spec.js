@@ -176,11 +176,69 @@ test.describe('response headers', () => {
     expect(res.headers()['content-security-policy']).toBeTruthy();
   });
 
-  test('knowledge-base responses carry Cache-Control: no-transform', async ({ request }) => {
-    // Stops an intermediate proxy (the FragmentGateway) re-encoding the body and
-    // leaking a Content-Encoding header the browser then fails to decode.
-    const res = await request.get('/knowledge-base/');
-    expect(res.headers()['cache-control']).toContain('no-transform');
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Caching policy per asset class
+//
+// Both prefixes are ^~ locations, which skip regex locations — a policy set
+// anywhere but inside them is never reached. Only the real nginx settles that.
+// ─────────────────────────────────────────────────────────────────────────────
+
+test.describe('caching', () => {
+  const IMMUTABLE = /^public, max-age=31536000, immutable, no-transform$/;
+  const REVALIDATE = /^no-cache, no-transform$/;
+
+  /** A URL of each immutable class, taken from what the pages actually reference. */
+  async function hashedUrls(request) {
+    const landing = await (await request.get('/knowledge-base/')).text();
+    const astro = landing.match(/(?:src|href)="(\/knowledge-base\/_astro\/[^"]+)"/)?.[1];
+    const admin = await (await request.get('/knowledge-base/user-guide/admin/')).text();
+    const inline = admin.match(/src="(\/knowledge-base\/user-guide\/_kb-inline\/[0-9a-f]{16}\.js)"/)?.[1];
+    expect(astro, 'the landing page references no _astro/ asset').toBeTruthy();
+    expect(inline, 'user-guide/admin references no hoisted script').toBeTruthy();
+    return { astro, inline };
+  }
+
+  test('hashed assets are cached for a year as immutable, under both prefixes', async ({ request }) => {
+    const { astro, inline } = await hashedUrls(request);
+    for (const path of [astro, inline, astro.replace(/^\//, '/__wf/'), inline.replace(/^\//, '/__wf/')]) {
+      const res = await request.get(path);
+      expect(res.status(), path).toBe(200);
+      expect(res.headers()['cache-control'], path).toMatch(IMMUTABLE);
+    }
+  });
+
+  // style.css is the one knowledge base asset that cannot be content-addressed:
+  // external consumers fetch it by that name. Immutable would pin a stale copy
+  // for a year after a deploy.
+  for (const [label, path] of [
+    ['the landing page', '/knowledge-base/'],
+    ['a sub-app page', '/knowledge-base/user-guide/'],
+    ['the no-trailing-slash path', '/knowledge-base'],
+    ['style.css', '/knowledge-base/style.css'],
+    ['fragment-prefixed style.css', '/__wf/knowledge-base/style.css'],
+    ['a sub-app asset with a stable name', '/knowledge-base/user-guide/docs/style.css'],
+  ]) {
+    test(`${label} is revalidated on every use`, async ({ request }) => {
+      const res = await request.get(path, { maxRedirects: 0 });
+      expect(res.status()).toBe(200);
+      expect(res.headers()['cache-control']).toMatch(REVALIDATE);
+    });
+  }
+
+  test('a missing hashed asset is not cached as immutable', async ({ request }) => {
+    const res = await request.get('/knowledge-base/_astro/no-such-file.DEADBEEF.js');
+    expect(res.status()).toBe(404);
+    expect(res.headers()['cache-control'] ?? '').not.toContain('immutable');
+  });
+
+  test('an unchanged asset revalidates to a 304', async ({ request }) => {
+    const first = await request.get('/knowledge-base/style.css');
+    const etag = first.headers()['etag'];
+    expect(etag, 'nginx sends an ETag for static files').toBeTruthy();
+    const again = await request.get('/knowledge-base/style.css', { headers: { 'If-None-Match': etag } });
+    expect(again.status()).toBe(304);
   });
 });
 
