@@ -3,15 +3,30 @@
 //
 // Persistent Knowledge base masthead. Rendered by every page through Base.astro
 // (landing catalog, packaged sub-app pages, iframe entries) in both headless and
-// standalone builds, so the branding and the way back to the catalog never
+// standalone builds, so the branding and the way around the knowledge base never
 // disappear once a user opens a documentation app.
 //
-// Sub-navigation:
-//   • "Library"  → the catalog of all documentation sites
-//   • a dynamic second entry naming the app currently being viewed
-// The entry matching the current location is inert text with aria-current="page"
-// rather than a link to itself.
+// Navigation is scoped to the app being viewed, built from its manifest
+// (src/utils/navigation.js): "Library", the app's name, then the app's own
+// entries — a page without a section as a link, a section as a dropdown of its
+// pages. The catalog is the way between apps, so the bar does not grow with the
+// number of apps. A page added to a manifest shows up here with no change to
+// this file.
+//
+// Two renderings of the same entries, switched by CSS at the tablet breakpoint:
+//   • the bar       — wide screens; sections are <details> dropdowns
+//   • the menu      — tablet and narrower; a "Menu" button opening a popover
+//                     sheet with the app's pages, sections as headed groups
+// Both work without script: <details> and the Popover API bring their own
+// keyboard handling, and the popover its own Escape and light dismiss. The
+// script below only adds Escape and outside-click to the bar's dropdowns.
+//
+// The page being viewed stays a link with aria-current="page"; the app and the
+// section holding it are marked aria-current="true".
 import AppIcon from './AppIcon.astro';
+import NavPages from './NavPages.astro';
+import { loadRegistry } from '../utils/apps.js';
+import { navigationFor } from '../utils/navigation.js';
 
 interface App {
   slug: string;
@@ -20,18 +35,26 @@ interface App {
 }
 
 interface Props {
-  /** The app being viewed, or undefined on the catalog. Not the whole registry:
-      the masthead names one app, and a per-page copy of every app's metadata is
-      what Astro would otherwise serialise into every route (#51). */
+  /** The app being viewed, or undefined on the catalog. */
   activeApp?: App;
   base?: string;
-  /** True when the current page is the active app's own index (its crumb is then inert). */
-  appRoot?: boolean;
+  /** Absolute URL of the page being viewed, e.g. /knowledge-base/app/docs/. Defaults to the catalog. */
+  currentPath?: string;
 }
 
-const { activeApp, base = '/knowledge-base', appRoot = false } = Astro.props;
+const { activeApp, base = '/knowledge-base' } = Astro.props;
+const libraryHref = `${base}/`;
+const currentPath = Astro.props.currentPath ?? libraryHref;
 
 const onLibrary = !activeApp;
+const app = activeApp && navigationFor(loadRegistry(process.cwd()), base).find((entry) => entry.slug === activeApp.slug);
+const items = app?.items ?? [];
+
+const holdsCurrent = (item: (typeof items)[number]) =>
+  item.type === 'page' ? item.href === currentPath : item.pages.some((page) => page.href === currentPath);
+/** The app's own link is the current page only when no entry below it is. */
+const appIsPage = !!app && app.href === currentPath && !items.some(holdsCurrent);
+const menuLabel = app ? `${app.name} pages` : undefined;
 ---
 
 {/* `kb-shell` is the fence in knowledge-base.css: a sub-app stylesheet that
@@ -62,26 +85,95 @@ const onLibrary = !activeApp;
       maintained and deployed — one consistent experience.
     </p>
 
-    <nav class="kb-masthead-nav" aria-label="Knowledge base sections">
-      {onLibrary
-        ? <span class="kb-masthead-link active" aria-current="page">Library</span>
-        : <a class="kb-masthead-link" href={`${base}/`}>Library</a>
-      }
+    <nav class="kb-masthead-nav" aria-label="Knowledge base">
+      {/* The bar: wide screens. Items wrap onto a second row rather than scroll or clip. */}
+      <ul class="kb-nav-bar" role="list">
+        <li>
+          <a class:list={['kb-masthead-link', { active: onLibrary }]} href={libraryHref} aria-current={onLibrary ? 'page' : undefined}>Library</a>
+        </li>
+        {app && (
+          <li class="kb-nav-scope">
+            <a class:list={['kb-masthead-link', 'kb-nav-app-link', { active: appIsPage }]} href={app.href} aria-current={appIsPage ? 'page' : 'true'}>
+              <AppIcon icon={app.icon} size={14} />
+              <span>{app.name}</span>
+            </a>
+            {items.length > 0 && (
+              <svg class="kb-nav-scope-mark" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="9 6 15 12 9 18"/></svg>
+            )}
+          </li>
+        )}
+        {items.map((item) => (
+          <li class="kb-nav-item">
+            {item.type === 'page' ? (
+              <a class:list={['kb-masthead-link', { active: holdsCurrent(item) }]} href={item.href} aria-current={holdsCurrent(item) ? 'page' : undefined}>{item.title}</a>
+            ) : (
+              /* `name` makes the dropdowns exclusive: opening one closes the other. */
+              <details class="kb-nav-dropdown" name="kb-nav-dropdown">
+                <summary class:list={['kb-masthead-link', { active: holdsCurrent(item) }]} aria-current={holdsCurrent(item) ? 'true' : undefined}>
+                  <span>{item.title}</span>
+                  <svg class="kb-nav-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg>
+                </summary>
+                <div class="kb-nav-panel">
+                  <NavPages pages={item.pages} currentPath={currentPath} label={item.title} />
+                </div>
+              </details>
+            )}
+          </li>
+        ))}
+      </ul>
 
-      {activeApp && (appRoot
-        ? (
-          <span class="kb-masthead-link active" aria-current="page">
-            <AppIcon icon={activeApp.icon || 'book-open'} size={14} />
-            <span>{activeApp.name}</span>
-          </span>
-        )
-        : (
-          <a class="kb-masthead-link active" href={`${base}/${activeApp.slug}/`}>
-            <AppIcon icon={activeApp.icon || 'book-open'} size={14} />
-            <span>{activeApp.name}</span>
+      {/* The compact bar: tablet and narrower. Where you are, and the app's menu. */}
+      <div class="kb-nav-compact">
+        <a class:list={['kb-masthead-link', { active: onLibrary }]} href={libraryHref} aria-current={onLibrary ? 'page' : undefined}>Library</a>
+        {app && (
+          <a class:list={['kb-masthead-link', 'kb-nav-app-link', 'kb-nav-crumb', { active: appIsPage }]} href={app.href} aria-current={appIsPage ? 'page' : 'true'}>
+            <AppIcon icon={app.icon} size={14} />
+            <span class="kb-nav-crumb-text">{app.name}</span>
           </a>
-        )
-      )}
+        )}
+        {items.length > 0 && (
+          <button type="button" class="kb-nav-toggle" popovertarget="kb-nav-menu" aria-label={menuLabel}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+            <span>Menu</span>
+          </button>
+        )}
+      </div>
     </nav>
   </div>
+
+  {/* The menu sheet: the current app's pages. A popover: the top layer keeps it
+      above any sub-app stacking context, and the browser supplies Escape, light
+      dismiss and the toggle's aria-expanded. */}
+  {items.length > 0 && (
+    <div id="kb-nav-menu" class="kb-nav-sheet" popover>
+      <div class="kb-nav-sheet-head">
+        <p class="kb-nav-sheet-title">{app!.name}</p>
+        <button type="button" class="kb-nav-close" popovertarget="kb-nav-menu" popovertargetaction="hide" aria-label="Close menu">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+      <nav aria-label={menuLabel}>
+        <ul class="kb-nav-tree" role="list">
+          {items.map((item) => (
+            <li>
+              {item.type === 'page' ? (
+                <a class:list={['kb-nav-page', { active: holdsCurrent(item) }]} href={item.href} aria-current={holdsCurrent(item) ? 'page' : undefined}>{item.title}</a>
+              ) : (
+                <div class="kb-nav-group">
+                  <p class="kb-nav-section" aria-hidden="true">{item.title}</p>
+                  <NavPages pages={item.pages} currentPath={currentPath} label={item.title} />
+                </div>
+              )}
+            </li>
+          ))}
+        </ul>
+      </nav>
+    </div>
+  )}
+
+  {/* Inside the masthead, not after it: Astro renders a component script where
+      the component is, and the masthead's next sibling is the sub-app's content. */}
+  <script>
+    import '../scripts/masthead-nav.js';
+  </script>
 </div>

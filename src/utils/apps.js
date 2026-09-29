@@ -6,6 +6,7 @@ import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { join, relative, dirname, resolve } from 'node:path';
 import { EXPANSION_FILE, isIframe, readExpansionMap, resolveRegistry } from './registry.js';
 import { REGISTRY_FILE } from './config.js';
+import { pageRelDir } from './navigation.js';
 
 /**
  * Cached result of loadRegistry, keyed by cwd and invalidated by mtime.
@@ -146,7 +147,7 @@ export function getAppPages(cwd, headless) {
           routePath:   app.slug,
           file:        join(appDir, entryPoint),
           slug:        app.slug,
-          fileRelDir:  dirname(entryPoint).replace(/\\/g, '/').replace(/^\.$/, ''),
+          fileRelDir:  pageRelDir(entryPoint),
           appHeadless,
           app:         card,
           title:       app.name ?? app.slug,
@@ -156,7 +157,7 @@ export function getAppPages(cwd, headless) {
 
       for (const page of app.pages) {
         const file        = join(appDir, page.path);
-        const fileRelDir  = dirname(page.path).replace(/\\/g, '/').replace(/^\.$/, '');
+        const fileRelDir  = pageRelDir(page.path);
         const routeParts  = [app.slug];
         if (fileRelDir) routeParts.push(fileRelDir);
 
