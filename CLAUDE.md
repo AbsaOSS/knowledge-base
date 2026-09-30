@@ -74,7 +74,8 @@ Orchestrator: `scripts/build-vite.js`. Flags: `--local`, `--headless`.
 - `src/utils/transform.js` — `transformSubAppHtml()`: URL rewriting, document splitting (head/body/title/body-class), headless transforms
 - `src/layouts/Base.astro` — The one document shell: head (opening with the cascade layer order), `<ClientRouter />`, and a body that opens with the knowledge base CSS inlined (`?inline` import; carries the self-hosted Inter faces) followed by the shadow-DOM compat styles
 - `src/utils/css-layers.js` — The cascade-layer contract: `LAYER_ORDER` and `layerSubAppCss()`, which wraps a sub-app stylesheet in the `kb-app` layer. Used by the layout, the build and `transform.js`
-- `src/components/Masthead.astro` — Persistent Knowledge base header + Library/current-app sub-nav (all pages, both modes)
+- `src/components/Masthead.astro` — Persistent Knowledge base header + the navigation (all pages, both modes), scoped to the app being viewed: Library, the current app, then that app's manifest `pages` — a page without a `section` as a link, a section as a dropdown of its pages (`NavPages.astro`). The catalog is the only way between apps, so the bar does not grow with the registry. From 1024px a bar that wraps; below it a compact bar (Library, current app, Menu — only for an app with `pages`) whose Menu button opens a popover sheet of the app's pages. Works without script; `src/scripts/masthead-nav.js` only adds Escape/outside-click/edge-flip to the bar's `<details>` dropdowns — and, embedded, learns the real window from `event.view`, because reframed reports its iframe's document as the masthead's `ownerDocument` and root node. Its `<script>` sits inside the masthead: Astro renders a component script in place, and the masthead's next sibling must be the sub-app content
+- `src/utils/navigation.js` — The masthead's model, built once per resolved registry (`navigationFor`), never passed through `getStaticPaths` props. `pageRelDir()`/`routeHref()` are shared with `apps.js`, so a menu link cannot point where no route was built
 - `src/components/AppCard.astro`, `src/components/AppIcon.astro` — Catalog card and its icon
 - `src/templates/shadow-compat.js` — Shadow-DOM design-token styles, injected into the body by the layout
 - `src/scripts/embedded-transitions.js` — Loaded by the layout; inert standalone. Inside a web fragment it runs Astro's view transition on the host document (the iframe's is never painted) and replaces Astro's swap with one that targets reframed's `wf-html`/`wf-head`/`wf-body`, because the default swap nests a new `wf-html` per navigation and leaks every stylesheet. Its head diff never moves a reused node: on a pierced page a `<link>` already moved once by reframed's portal falls out of the applied stylesheets when moved again. It also imports the fetched head and body into the host document before swapping them in: reframed routes a script into its iframe only through host-realm DOM methods, and the router's page is parsed in the iframe, so Astro's `script.replaceWith()` re-run would otherwise execute every swapped-in sub-app script in the host window
@@ -101,7 +102,7 @@ The registry file is `apps.json` by default; `KB_REGISTRY` points the build at a
 
 ### Two Modes
 
-Both modes render the same document: the masthead (`Masthead.astro`) — branding plus the Library / current-app sub-navigation — on every page, and nothing else chrome-like. There is no fixed top bar and no app switcher; the masthead is the navigation.
+Both modes render the same document: the masthead (`Masthead.astro`) — branding plus navigation to the Library and, inside an app, that app's manifest pages — on every page, and nothing else chrome-like. There is no fixed top bar; the masthead is the navigation.
 
 **Non-headless** (standalone): Plain knowledge base pages. Navigation is Astro's `<ClientRouter />` (view transitions).
 
@@ -144,8 +145,9 @@ Apps registered in `apps.json` must comply with:
 Self-contained Playwright E2E — `npm test` auto-starts everything (no external gateway):
 
 1. **:3000 fragment** — `scripts/setup-test-apps.mjs` writes a hermetic `apps.json` that
-   registers the vendored `tests/fixtures/docs-example.kb-docs.tar.gz` (two apps)
-   (slugs `user-guide` + `guide-mirror`, for cross-app nav), an iframe entry pinned
+   registers the vendored `tests/fixtures/docs-example.kb-docs.tar.gz` (three apps)
+   (slugs `user-guide` crawled, `guide-mirror` + `handbook` with `pages` manifests — one
+   section and two — for cross-app nav and the app-scoped masthead), an iframe entry pinned
    `"headless": false`, and the generated single-page bundle fixture — with the real
    mermaid bundle, copied from the root `mermaid` devDependency (pinned to the version
    `actions/` vendors) and gitignored. `build:headless` builds it;
@@ -172,6 +174,11 @@ Every embedded test runs twice, as Playwright projects `chromium` (:4201) and
   (`tests/fixtures/single-page-bundle/` → two apps).
 - `transform.spec.js` — unit tests for `transformSubAppHtml()` and `layerSubAppCss()`: the
   malformed and hostile documents no fixture app happens to ship.
+- `navigation.spec.js` — unit tests for `buildNavigation()`: registry order, `order`/`section`
+  grouping, an entry point the manifest omits, iframe entries. `build-integrity.spec.js`
+  asserts the rendered menu (only the current app's entries, manifest titles, `aria-current`, every link built);
+  `standalone.spec.js` the responsive switch at 320–1920px with no overflow and keyboard use;
+  `web-fragment.spec.js` the dropdown and sheet inside the fragment, across a swap.
 - `css-isolation.spec.js` — Library → app → Library → app in both embeddings leaves the
   catalog and masthead computed styles identical to first load; a leak injected on purpose
   (the fixture stylesheets plus a hostile layered one appended to the fragment head) applies

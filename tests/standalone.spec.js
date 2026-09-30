@@ -14,6 +14,8 @@
  *                          (tests/fragment-server.mjs mirrors the nginx rewrite rule)
  *   ─ Path contract        all internal links are absolute /knowledge-base/* paths
  *   ─ Client-side nav      navigating between pages does NOT cause a full page reload
+ *   ─ Masthead menu        bar vs compact menu per viewport, no horizontal overflow,
+ *                          keyboard operation, current-page state
  *
  * Architecture under test (standalone):
  *   Playwright → http://localhost:3000/knowledge-base/
@@ -225,7 +227,7 @@ test.describe('CSS link stability (#297)', () => {
     const initialCount = await page.locator('link[rel="stylesheet"]').count();
 
     // Find any internal link — if none, build had no apps; skip gracefully
-    const appLink = page.locator('a[href^="/knowledge-base/"]').first();
+    const appLink = page.locator('a.kb-card[href^="/knowledge-base/"]').first();
     if (await appLink.count() === 0) {
       test.skip();
       return;
@@ -332,7 +334,7 @@ test.describe('Client-side navigation', () => {
     let reloaded = false;
     page.on('load', () => { reloaded = true; });
 
-    const appLink = page.locator('a[href^="/knowledge-base/"]').first();
+    const appLink = page.locator('a.kb-card[href^="/knowledge-base/"]').first();
     if (await appLink.count() === 0) {
       test.skip(); // no app links — build had no apps
       return;
@@ -353,7 +355,7 @@ test.describe('Client-side navigation', () => {
     await page.waitForLoadState('networkidle');
     const originalUrl = page.url();
 
-    const appLink = page.locator('a[href^="/knowledge-base/"]').first();
+    const appLink = page.locator('a.kb-card[href^="/knowledge-base/"]').first();
     if (await appLink.count() === 0) {
       test.skip();
       return;
@@ -365,5 +367,196 @@ test.describe('Client-side navigation', () => {
 
     expect(page.url()).not.toBe(originalUrl);
     expect(page.url()).toContain(href);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Masthead menu
+//
+// Scoped to the app being viewed: Library, the app, then that app's manifest
+// entries — a section as a dropdown of its pages. From 1024px the full bar
+// shows; below it a compact bar with a Menu button opening a popover sheet of
+// the app's pages. The Showcase page is used rather than a docs page: the
+// fixture's docs pages pin their own fixed top bar over the masthead, which is
+// the fixture's business, not the menu's.
+// ─────────────────────────────────────────────────────────────────────────────
+
+test.describe('Masthead menu', () => {
+  const SHOWCASE = '/knowledge-base/guide-mirror/';
+  const WIDTHS = [320, 375, 768, 1023, 1024, 1280, 1920];
+
+  /** Horizontal overflow of the document, and any masthead control past the viewport edge. */
+  const overflow = (page) => page.evaluate(() => {
+    const width = document.documentElement.clientWidth;
+    const clipped = [...document.querySelectorAll('#kb-masthead a, #kb-masthead summary, #kb-masthead button')]
+      .filter((el) => el.getClientRects().length > 0)
+      .filter((el) => { const r = el.getBoundingClientRect(); return r.left < -0.5 || r.right > width + 0.5; })
+      .map((el) => el.textContent.trim());
+    return { scroll: document.documentElement.scrollWidth - width, clipped };
+  });
+
+  for (const width of WIDTHS) {
+    test(`${width}px: the right navigation shows and nothing overflows`, async ({ page }) => {
+      await page.setViewportSize({ width, height: 800 });
+      const wide = width >= 1024;
+      for (const path of ['/knowledge-base/', SHOWCASE]) {
+        await page.goto(path);
+        await expect(page.locator('.kb-nav-bar')).toBeVisible({ visible: wide });
+        // Only an app with manifest pages has a menu to open.
+        await expect(page.locator('.kb-nav-toggle')).toBeVisible({ visible: !wide && path === SHOWCASE });
+        expect(await overflow(page), `${path} at ${width}px`).toEqual({ scroll: 0, clipped: [] });
+      }
+    });
+  }
+
+  test('the links sit where they do on the catalog; the brand never moves or covers them', async ({ page }) => {
+    const layout = () => page.evaluate(() => {
+      const library = [...document.querySelectorAll('#kb-masthead .kb-masthead-nav a')].find((a) => a.getClientRects().length);
+      const brand = document.querySelector('.kb-masthead-brand');
+      return {
+        library: library.getBoundingClientRect().left,
+        brandRight: brand?.getClientRects().length ? brand.getBoundingClientRect().right : null,
+      };
+    });
+    for (const width of [800, 1024, 1280, 1439, 1440, 1920]) {
+      await page.setViewportSize({ width, height: 800 });
+      await page.goto('/knowledge-base/');
+      const { library } = await layout();
+      for (const path of [SHOWCASE, '/knowledge-base/user-guide/']) {
+        await page.goto(path);
+        const app = await layout();
+        expect(app.library, `Library moved on ${path} at ${width}px`).toBeCloseTo(library, 0);
+        if (app.brandRight !== null) expect(app.brandRight, `brand covers Library at ${width}px`).toBeLessThanOrEqual(app.library);
+      }
+      // The brand shows wherever its gutter holds it.
+      expect((await layout()).brandRight !== null, `brand at ${width}px`).toBe(width >= 1440);
+    }
+  });
+
+  test("the compact menu holds the current app's pages and keeps the page from scrolling sideways", async ({ page }) => {
+    await page.setViewportSize({ width: 375, height: 800 });
+    await page.goto(SHOWCASE);
+    const toggle = page.locator('.kb-nav-toggle');
+    await expect(toggle).toHaveAccessibleName('Guide Mirror pages');
+    await toggle.click();
+    const sheet = page.locator('#kb-nav-menu');
+    await expect(sheet).toBeVisible();
+
+    const menu = page.getByRole('navigation', { name: 'Guide Mirror pages' });
+    for (const name of ['Showcase', 'Overview', 'Adding Pages', 'Customising']) {
+      await expect(menu.getByRole('link', { name, exact: true })).toBeVisible();
+    }
+    for (const name of ['User Guide', 'External Docs', 'Platform Overview', 'Release Process']) {
+      await expect(menu.getByRole('link', { name, exact: true })).toHaveCount(0);
+    }
+    await expect(menu.getByRole('link', { name: 'Showcase' })).toHaveAttribute('aria-current', 'page');
+    expect(await overflow(page)).toMatchObject({ scroll: 0 });
+
+    // The sheet fits the viewport.
+    const box = await sheet.boundingBox();
+    expect(box.x).toBeGreaterThanOrEqual(0);
+    expect(box.x + box.width).toBeLessThanOrEqual(375.5);
+
+    // The close button and Escape both dismiss it.
+    await page.getByRole('button', { name: 'Close menu' }).click();
+    await expect(sheet).toBeHidden();
+    await toggle.click();
+    await expect(sheet).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(sheet).toBeHidden();
+  });
+
+  test('the compact menu works from the keyboard and navigates', async ({ page }) => {
+    await page.setViewportSize({ width: 768, height: 800 });
+    await page.goto(SHOWCASE);
+    await page.locator('.kb-nav-toggle').focus();
+    await page.keyboard.press('Enter');
+    await expect(page.locator('#kb-nav-menu')).toBeVisible();
+
+    const target = page.getByRole('navigation', { name: 'Guide Mirror pages' }).getByRole('link', { name: 'Overview' });
+    await target.focus();
+    await page.keyboard.press('Enter');
+    await page.waitForURL('**/knowledge-base/guide-mirror/docs/');
+    await expect(page.locator('.kb-nav-compact .kb-nav-crumb')).toContainText('Guide Mirror');
+  });
+
+  test('the entries follow the app being viewed', async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await page.goto('/knowledge-base/');
+    await expect(page.locator('.kb-nav-bar > li')).toHaveCount(1);
+
+    await page.locator('a.kb-card[href="/knowledge-base/guide-mirror/"]').click();
+    await page.waitForURL('**/knowledge-base/guide-mirror/');
+    await expect(page.locator('.kb-nav-bar > li > a, .kb-nav-bar > li > details > summary')).toHaveText(['Library', 'Guide Mirror', 'Showcase', 'Overview', 'Guide']);
+
+    await page.locator('.kb-nav-bar a', { hasText: 'Library' }).click();
+    await page.waitForURL(/\/knowledge-base\/$/);
+    await page.locator('a.kb-card[href="/knowledge-base/user-guide/"]').click();
+    await page.waitForURL('**/knowledge-base/user-guide/');
+    await expect(page.locator('.kb-nav-bar > li > a, .kb-nav-bar > li > details > summary')).toHaveText(['Library', 'User Guide']);
+  });
+
+  test('a section dropdown opens from the keyboard, shows a focus ring and closes on Escape', async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await page.goto(SHOWCASE);
+    const summary = page.locator('.kb-nav-bar summary', { hasText: 'Guide' });
+    const details = page.locator('.kb-nav-bar details.kb-nav-dropdown');
+
+    // Tab from the last plain entry onto the dropdown, the way a keyboard user gets there.
+    await page.locator('.kb-nav-bar a', { hasText: 'Overview' }).focus();
+    await page.keyboard.press('Tab');
+    await expect(summary).toBeFocused();
+    expect(await summary.evaluate((el) => getComputedStyle(el).outlineStyle)).toBe('solid');
+
+    await page.keyboard.press('Enter');
+    await expect(details).toHaveAttribute('open', '');
+    await page.keyboard.press('Tab');
+    await expect(page.locator('.kb-nav-panel a', { hasText: 'Adding Pages' })).toBeFocused();
+
+    await page.keyboard.press('Escape');
+    await expect(details).not.toHaveAttribute('open', '');
+    await expect(summary).toBeFocused();
+  });
+
+  test('a section dropdown closes on an outside click and when focus tabs out of it', async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await page.goto(SHOWCASE);
+    const summary = page.locator('.kb-nav-bar summary', { hasText: 'Guide' });
+    const details = page.locator('.kb-nav-bar details.kb-nav-dropdown');
+
+    await summary.click();
+    await expect(details).toHaveAttribute('open', '');
+    await page.mouse.click(5, 700);
+    await expect(details).not.toHaveAttribute('open', '');
+
+    await summary.click();
+    await page.locator('.kb-nav-panel a', { hasText: 'Customising' }).focus();
+    await page.keyboard.press('Tab');
+    await expect(details).not.toHaveAttribute('open', '');
+  });
+
+  test('opening one section dropdown closes the other', async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await page.goto('/knowledge-base/handbook/');
+    await expect(page.locator('.kb-nav-bar > li > a, .kb-nav-bar > li > details > summary'))
+      .toHaveText(['Library', 'Handbook', 'Showcase', 'Getting started', 'Authoring']);
+    const first = page.locator('.kb-nav-bar details', { hasText: 'Getting started' });
+    const second = page.locator('.kb-nav-bar details', { hasText: 'Authoring' });
+
+    await first.locator('summary').click();
+    await expect(first).toHaveAttribute('open', '');
+    await second.locator('summary').click();
+    await expect(second).toHaveAttribute('open', '');
+    await expect(first).not.toHaveAttribute('open', '');
+  });
+
+  test('a section page link navigates and becomes the current page', async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await page.goto(SHOWCASE);
+    await page.locator('.kb-nav-bar summary', { hasText: 'Guide' }).click();
+    await page.locator('.kb-nav-panel a', { hasText: 'Adding Pages' }).click();
+    await page.waitForURL('**/knowledge-base/guide-mirror/docs/adding-pages/');
+    await expect(page.locator('.kb-nav-bar summary[aria-current="true"]')).toContainText('Guide');
+    await expect(page.locator('.kb-nav-panel a[aria-current="page"]')).toHaveText('Adding Pages');
   });
 });
