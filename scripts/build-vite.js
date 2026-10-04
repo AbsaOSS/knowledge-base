@@ -29,6 +29,7 @@ import { PATH_PREFIX, REGISTRY_FILE } from '../src/utils/config.js';
 import { layerSubAppCss } from '../src/utils/css-layers.js';
 import { rewriteCssUrls } from '../src/utils/transform.js';
 import { checkApp, reportFindings } from './check-artifact.js';
+import { buildMcpArtifacts } from './build-mcp.js';
 import {
   ARTIFACT_NAME, MANIFEST, expandManifest, findManifestRoot, isIframe,
   readManifest, resolveRegistry, sourceKey, stagingName, toRegistryEntry,
@@ -461,6 +462,10 @@ async function build() {
     writeFileSync(join(distRoot, 'style.css'), blocks[0]);
     ok('Knowledge base CSS (' + blocks[0].length + ' bytes, inlined into every page) published → dist/style.css');
   }
+
+  // 3b. Build runtime-only MCP assets after Astro has published every page.
+  step('3b/4  Generating MCP corpus → dist/_mcp/');
+  await buildMcpArtifacts({ root: ROOT, headless: HEADLESS, provenance, log: { ok, warn, step } });
 
   // 4. Summary
   step('4/4  Build complete');

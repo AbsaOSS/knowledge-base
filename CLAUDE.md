@@ -49,6 +49,7 @@ apps.json (registry)
   → [3] astro build: [...path].astro enumerates all HTML via getStaticPaths
          → transformSubAppHtml() rewrites URLs + splits the document,
            which Base.astro then re-hosts (masthead + head/body)
+  → [3b] buildMcpArtifacts() extracts plain-text corpus + bundles MCP server → dist/_mcp/
   → dist/
 ```
 
@@ -80,7 +81,9 @@ Orchestrator: `scripts/build-vite.js`. Flags: `--local`, `--headless`.
 - `src/scripts/embedded-transitions.js` — Loaded by the layout; inert standalone. Inside a web fragment it runs Astro's view transition on the host document (the iframe's is never painted) and replaces Astro's swap with one that targets reframed's `wf-html`/`wf-head`/`wf-body`, because the default swap nests a new `wf-html` per navigation and leaks every stylesheet. Its head diff never moves a reused node: on a pierced page a `<link>` already moved once by reframed's portal falls out of the applied stylesheets when moved again. It also imports the fetched head and body into the host document before swapping them in: reframed routes a script into its iframe only through host-realm DOM methods, and the router's page is parsed in the iframe, so Astro's `script.replaceWith()` re-run would otherwise execute every swapped-in sub-app script in the host window
 - `src/utils/config.js` — `PATH_PREFIX`/`BASE_PATH`, `isHeadlessBuild()` and `REGISTRY_FILE` — the build-wide constants
 - `src/utils/registry.js` — Registry validation, manifest reading/validation, expansion map. Shared by the build and by Astro so both resolve the same registry
-- `scripts/build-vite.js` — Build orchestrator (4 steps: prepare, hoist, copy assets, astro build)
+- `scripts/build-vite.js` — Build orchestrator; step 3b generates MCP corpus and self-contained runtime bundle
+- `mcp/` — build-time untrusted HTML extraction, deterministic index/search, MCP surface, HTTP handler and CLI; runtime data never scrapes HTML
+- `scripts/build-mcp.js` — Emits `dist/_mcp/corpus.json` and bundled `server.mjs`
 - `scripts/fetch-apps.js` — GitHub Release artifact downloader. Only *obtains* an artifact; installing it is one shared path in `build-vite.js`
 - `scripts/artifacts.js` — Safe tarball extraction + tree copy, shared by both fetch paths. Validates archive members (no traversal, no absolute paths, no symlinks) before anything is written, and replaces the old `cp -r`/`tar` shell-outs so the build runs on Windows
 - `scripts/check-artifact.js` — Runs the publish action's contract checker (`actions/lib/check.js`) on every installed artifact, before hoisting; logs findings grouped by rule, and fails a strict build on an error. `check.js` resolves its parsers from `actions/node_modules` or the root, which pins the same versions
