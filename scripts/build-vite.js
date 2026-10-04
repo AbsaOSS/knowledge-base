@@ -16,7 +16,7 @@
  *       Sub-app pages are rendered by src/pages/[...path].astro via getStaticPaths.
  */
 
-import { appendFileSync, existsSync, readFileSync, writeFileSync, mkdirSync, rmSync, copyFileSync, linkSync, readdirSync, statSync } from 'node:fs';
+import { appendFileSync, existsSync, readFileSync, writeFileSync, mkdirSync, rmSync, copyFileSync, readdirSync, statSync } from 'node:fs';
 import { join, dirname, resolve, isAbsolute } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { homedir } from 'node:os';
@@ -198,21 +198,15 @@ function warnOnUnclaimedMembers(root, apps, key) {
 function fail(msg) { throw new Error(msg); }
 
 /**
- * Hardlinks a file, copying only if the filesystem will not link it.
+ * Copies a public asset rather than hardlinking it from apps/.
  *
- * Every sub-app asset is already written twice — once by the tarball extraction
- * into apps/{slug}/, once by Astro's static copy of public/ into dist/. The hop
- * in between does not need a third set of bytes, and for an artifact carrying
- * images or fonts that is the largest of the three. A link is not possible
- * across devices (EXDEV) or on a filesystem without hardlink support, hence the
- * fallback rather than a bare linkSync.
+ * The build artifact crosses both Astro's static copier and GitHub Actions'
+ * artifact archiver. A regular file keeps that path portable: some archivers
+ * can lose a hardlinked fixture asset when its link peer sits outside the
+ * archived dist/ tree, which turns a JavaScript request into the HTML fallback.
  */
-function linkOrCopy(src, dest) {
-  try {
-    linkSync(src, dest);
-  } catch {
-    copyFileSync(src, dest);
-  }
+function copyAsset(src, dest) {
+  copyFileSync(src, dest);
 }
 
 async function build() {
@@ -408,7 +402,7 @@ async function build() {
         // the knowledge base's own markup — see src/utils/css-layers.js.
         writeFileSync(d, layerSubAppCss(rewritten));
       } else {
-        linkOrCopy(s, d);
+        copyAsset(s, d);
       }
     }
   }
