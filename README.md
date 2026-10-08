@@ -210,6 +210,12 @@ own apps for a real deployment.
 
 ---
 
+## AI agents (MCP)
+
+Public read-only MCP endpoint: `https://<host>/knowledge-base/mcp`. It exposes searchable `kb://` documentation resources plus `search_documents`, `list_documents`, and `read_document`. See [MCP.md](MCP.md) for client setup, limits, security posture, and operations.
+
+---
+
 ## Testing
 
 E2E tests use Playwright. Everything is hermetic — built from
@@ -219,7 +225,8 @@ E2E tests use Playwright. Everything is hermetic — built from
 |---|---|
 | `npm test` | **Embedded** harness (`playwright.config.js`). Starts the fragment server (`:3000`) and a minimal web-fragments **host gateway** (`tests/host/server.mjs`, `:4201`) that embeds the fragment. Covers shadow-DOM isolation, smooth no-reload SPA routing, cross-app navigation, asset 404s, and the fragment-history limitation. |
 | `npx playwright test --config=playwright.config.ci.js` | **Standalone** layer. Hits the fragment server (`tests/fragment-server.mjs`, `:3000`) directly. Covers HTTP header safety (`X-Frame-Options`), the headless contract, CSS-link stability (web-fragments [#297](https://github.com/web-fragments/web-fragments/issues/297)), and asset routing. |
-| `npm run test:container` | **Container** layer (needs Docker). Runs the real production image — nginx serving `dist/` — instead of the Express mirror the other two use. Covers the shipped `nginx.conf`: rewrites, response headers, the CSP in a browser, and that the image does not run as root. |
+| `npm run test:container` | **Container** layer (needs Docker). Runs real production image — nginx plus loopback MCP sidecar — instead of Express mirror. Covers shipped rewrites, headers, CSP, MCP proxy, and unprivileged runtime. |
+| `npm run mcp:stdio` / `npm run mcp:http` | Runs generated MCP corpus server after `npm run build:headless`. |
 
 > `tests/fragment-server.mjs` serves `dist/` and mirrors the production
 > `nginx.conf` rewrites (including `/__wf/knowledge-base/* → /knowledge-base/*`).

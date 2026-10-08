@@ -19,7 +19,10 @@
 import express from 'express';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
+import { validateCorpus } from '../mcp/corpus.js';
+import { createIndex } from '../mcp/search.js';
+import { createMcpHttpHandler } from '../mcp/http.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(__dirname, '..');
@@ -31,6 +34,12 @@ if (!existsSync(DIST)) {
   console.error(`✗ dist/ not found at ${DIST} — run "npm run build:headless" first.`);
   process.exit(1);
 }
+const MCP_CORPUS = join(DIST, '_mcp', 'corpus.json');
+if (!existsSync(MCP_CORPUS)) {
+  console.error(`✗ ${MCP_CORPUS} missing — build step 3b did not run.`);
+  process.exit(1);
+}
+const mcpHandler = createMcpHttpHandler(createIndex(validateCorpus(JSON.parse(readFileSync(MCP_CORPUS, 'utf8')))));
 
 /**
  * Kept byte-identical to the policy in nginx.headers.conf.
@@ -66,6 +75,11 @@ const cacheControl = (requestUri) =>
   IMMUTABLE_PATHS.some((re) => re.test(requestUri)) ? IMMUTABLE : REVALIDATE;
 
 const app = express();
+
+// nginx: location = /knowledge-base/mcp; shared Node handler keeps guard parity.
+app.all(`/${PREFIX}/mcp`, (req, res) => mcpHandler(req, res));
+// _mcp is runtime-only and must never be served by either static path.
+app.use(/^\/(__wf\/)?knowledge-base\/_mcp(\/|$)/, (_req, res) => res.sendStatus(404));
 
 // nginx: include /etc/nginx/kb-headers.conf — the shared CORS + security set.
 // Applied to every response, which is what the nginx config does now that each

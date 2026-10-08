@@ -283,3 +283,28 @@ alone cannot give once `latest` has moved.
 - [ ] On runners without a route to `registry.npmjs.org`: `runs-on`,
       `npm-registry` and the `npm-token` secret set; `node-mirror` if Node is
       neither preinstalled nor downloadable; the Docker daemon's mirror configured
+
+---
+
+## MCP runtime
+
+Build step 3b emits `dist/_mcp/corpus.json` and self-contained `server.mjs`.
+Image runs nginx plus loopback Node MCP process. Docker moves `_mcp` to
+`/opt/kb-mcp`, outside public web root; image build uses no npm install or
+`apk add`.
+
+Gateway must forward unauthenticated `POST /knowledge-base/mcp` with JSON body
+and MCP protocol headers. Do not serve `/knowledge-base/_mcp/*`. Node binds
+`127.0.0.1:8081`; nginx proxies exact endpoint; supervisor exits container when
+either process dies. ECS task replacement remains required because it ignores
+Docker health checks.
+
+Runtime variables: `KB_MCP_CORPUS`, `KB_MCP_HOST`, `KB_MCP_PORT`,
+`KB_MCP_ALLOWED_ORIGINS` (comma-separated exact origins), and
+`KB_MCP_PUBLIC_ORIGIN` (optional pathless HTTP(S) origin). MCP is public,
+read-only documentation; edge controls may add abuse limits but must not require
+authentication for endpoint.
+
+Private Docker runners need pinned nginx and Node layers available from their
+Docker mirror. Node binary and Alpine libraries are copied from digest-pinned
+`node:24-alpine`; Docker performs no network package installation.
