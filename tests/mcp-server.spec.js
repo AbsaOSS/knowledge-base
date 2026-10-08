@@ -37,10 +37,12 @@ test.describe('MCP in-process HTTP protocol', () => {
       expect(init.response.headers.get('mcp-session-id')).toBeNull();
       expect(init.body.result.capabilities).toEqual({ resources: { listChanged: false, subscribe: false }, tools: { listChanged: false } });
       expect(init.body.result.instructions).toContain('Knowledge Base documentation server');
+      expect(init.body.result.serverInfo.name).toBe('knowledge-base-mcp-server');
 
       const tools = await service.request({ jsonrpc: '2.0', id: 2, method: 'tools/list', params: {} }, { headers: { 'mcp-protocol-version': '2025-11-25' } });
       expect(tools.body.result.tools.map((tool) => tool.name)).toEqual(['search_documents', 'list_documents', 'read_document']);
       expect(tools.body.result.tools.every((tool) => tool.inputSchema && tool.outputSchema && tool.annotations.readOnlyHint)).toBe(true);
+      expect(tools.body.result.tools.every((tool) => tool.inputSchema.additionalProperties === false && tool.outputSchema.additionalProperties === false)).toBe(true);
 
       const call = await service.request({ jsonrpc: '2.0', id: 3, method: 'tools/call', params: { name: 'search_documents', arguments: { query: 'release process' } } }, { headers: { 'mcp-protocol-version': '2025-11-25' } });
       const result = call.body.result;
