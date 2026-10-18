@@ -15,6 +15,7 @@ import { readFileSync } from 'node:fs';
 import { getAppPages } from '../utils/apps.js';
 import { BASE_PATH, PATH_PREFIX, isHeadlessBuild } from '../utils/config.js';
 import { transformSubAppHtml } from '../utils/transform.js';
+import { routeHref } from '../utils/navigation.js';
 import Base from '../layouts/Base.astro';
 import Masthead from '../components/Masthead.astro';
 
@@ -34,8 +35,8 @@ const parts = props.iframe
 
 const pageTitle = title ?? parts?.title ?? app?.name ?? 'Knowledge base';
 
-// The app's own crumb in the masthead is inert on the app index and a link deeper in.
-const atAppRoot = !props.fileRelDir;
+// The masthead marks the entry for the page being viewed as current.
+const currentPath = routeHref(BASE_PATH, slug, props.fileRelDir);
 ---
 
 <Base
@@ -46,7 +47,7 @@ const atAppRoot = !props.fileRelDir;
 >
   {parts && <Fragment slot="head" set:html={parts.headHtml} />}
 
-  <Masthead activeApp={app} base={BASE_PATH} appRoot={atAppRoot} />
+  <Masthead activeApp={app} base={BASE_PATH} currentPath={currentPath} />
 
   {props.iframe ? (
     <main style="display:flex;flex:1 1 auto;min-height:0">

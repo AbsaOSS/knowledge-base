@@ -123,6 +123,8 @@ test.describe('the knowledge base stylesheet travels with the page', () => {
 for (const [mode, open] of [['bound', gotoBoundFragment], ['unbound', gotoFragment]]) {
   test.describe(`Library → app → Library → app, ${mode} embedding`, () => {
     test('the catalog and the masthead are styled exactly as on first load after every hop', async ({ page }) => {
+      // Wide enough for the brand wordmark, which only shows where the gutter holds it.
+      await page.setViewportSize({ width: 1600, height: 900 });
       await open(page, '/knowledge-base/');
       await waitForCatalog(page);
       const catalog = await shellSnapshot(page);
@@ -141,7 +143,7 @@ for (const [mode, open] of [['bound', gotoBoundFragment], ['unbound', gotoFragme
       await waitForApp(page);
       await expect.poll(async () => (await shellSnapshot(page))['.kb-masthead-title'].display).toBe('none');
       const compact = masthead(await shellSnapshot(page));
-      expect(compact['.kb-masthead-brand'].display).toBe('block');
+      expect(compact['.kb-masthead-brand'].display).toBe('flex');
 
       // Back to the Library: the round trip that used to mangle the catalog.
       await clickInFragment(page, LIBRARY);

@@ -6,10 +6,11 @@
  *
  * The committed apps.json is this script's output; the Playwright webServer runs
  * it before every build so the registry stays in sync. It registers:
- *   • the vendored docs-example fixture, whose manifest declares two apps —
- *     `user-guide` (crawled) and `guide-mirror` (a `pages` manifest) — so the
- *     suite can exercise the landing catalog, cross-app navigation and both
- *     routing paths from one artifact,
+ *   • the vendored docs-example fixture, whose manifest declares three apps —
+ *     `user-guide` (crawled), `guide-mirror` (a `pages` manifest with one
+ *     section) and `handbook` (a `pages` manifest with two sections) — so the
+ *     suite can exercise the landing catalog, cross-app navigation, both
+ *     routing paths and the app-scoped masthead from one artifact,
  *   • an iframe entry (issue #10),
  *   • a markdown bundle holding two docs (issue #35).
  * No network, no GITHUB_TOKEN, no sibling repo or per-app build toolchain.
@@ -198,12 +199,12 @@ const bundleRoot = writeSinglePageBundle();
 
 // ── Registry ─────────────────────────────────────────────────────────────────
 
-// Two slugs from the same artifact: a primary app and a "mirror" so cross-app
-// navigation (clicking from one app's card to another) is testable.
+// Three slugs from the same artifact: a primary app and two "mirrors" so
+// cross-app navigation (clicking from one app's card to another) is testable.
 const apps = [
   {
-    // One artifact, two apps: `user-guide` (crawled) and `guide-mirror` (which
-    // carries a `pages` manifest). Their names, descriptions and slugs live in
+    // One artifact, three apps: `user-guide` (crawled), and `guide-mirror` and
+    // `handbook` (which carry `pages` manifests). Their names, descriptions and slugs live in
     // the artifact's kb-docs.json, not here — the registry only says where the
     // artifact comes from.
     prebuilt: artifact,

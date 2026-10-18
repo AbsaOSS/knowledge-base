@@ -83,10 +83,10 @@ title derived from the document.
 
 | Field | Required | Rules |
 |---|---|---|
-| `title` | ✅ | 1–128 characters. Shown in navigation. |
+| `title` | ✅ | 1–128 characters. Shown in the masthead while the app is viewed, after the app's name. |
 | `path` | ✅ | Path to the HTML file, relative to `<slug>/`. Must exist in the archive. |
 | `order` | ✅ | Integer ≥ 0. Lower sorts higher. |
-| `section` | ☐ | ≤ 64 characters. Group heading to display above this page. |
+| `section` | ☐ | ≤ 64 characters. Groups this page under one masthead dropdown of that name, placed where its first page falls; without it the page is a masthead link of its own. |
 
 ### Icon set
 
