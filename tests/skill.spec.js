@@ -73,6 +73,19 @@ test.describe('SKILL.md frontmatter satisfies the Agent Skills spec', () => {
     }
   });
 
+  test('top-level values are valid plain YAML scalars', () => {
+    // The parser above splits on the first colon, so it accepts what a real YAML
+    // parser rejects: a later ": " (mapping indicator) or " #" (comment), or a
+    // leading indicator character. Consumers parse the frontmatter as YAML.
+    for (const [key, value] of Object.entries(fields)) {
+      if (!value) continue; // a block mapping such as `metadata:`
+      expect(value, `${key}: ": " is a mapping indicator in a plain scalar`).not.toContain(': ');
+      expect(value, `${key}: " #" starts a comment in a plain scalar`).not.toContain(' #');
+      expect(value, `${key}: plain scalar must not end with ":"`).not.toMatch(/:$/);
+      expect(value, `${key}: leading indicator character`).not.toMatch(/^[-?:,[\]{}#&*!|>'"%@`]/);
+    }
+  });
+
   test('only portable frontmatter fields are used', () => {
     // `allowed-tools` is Claude-only and experimental; a skill installed into
     // .github/skills must not depend on it.
