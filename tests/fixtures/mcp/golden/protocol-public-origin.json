@@ -1,0 +1,361 @@
+{
+  "search: exact phrase": {
+    "status": 200,
+    "body": {
+      "result": {
+        "content": [
+          {
+            "type": "text",
+            "text": "{\"query\":\"release process\",\"total\":1,\"results\":[{\"uri\":\"kb://agentic-toolkit/skills/release-notes\",\"title\":\"Release notes writer\",\"app\":\"agentic-toolkit\",\"appName\":\"Agentic Toolkit\",\"route\":\"/knowledge-base/agentic-toolkit/skills/release-notes/\",\"url\":\"https://docs.example.com/knowledge-base/agentic-toolkit/skills/release-notes/\",\"section\":{\"heading\":\"Release notes writer\",\"anchor\":\"release-notes\"},\"excerpt\":\"# Release notes writer Draft release notes from merged pull requests and conventional commits.\",\"score\":15}]}"
+          },
+          {
+            "name": "agentic-toolkit/skills/release-notes",
+            "title": "Release notes writer",
+            "uri": "kb://agentic-toolkit/skills/release-notes",
+            "description": "# Release notes writer Draft release notes from merged pull requests and conventional commits.",
+            "mimeType": "text/markdown",
+            "type": "resource_link"
+          }
+        ],
+        "structuredContent": {
+          "query": "release process",
+          "total": 1,
+          "results": [
+            {
+              "uri": "kb://agentic-toolkit/skills/release-notes",
+              "title": "Release notes writer",
+              "app": "agentic-toolkit",
+              "appName": "Agentic Toolkit",
+              "route": "/knowledge-base/agentic-toolkit/skills/release-notes/",
+              "url": "https://docs.example.com/knowledge-base/agentic-toolkit/skills/release-notes/",
+              "section": {
+                "heading": "Release notes writer",
+                "anchor": "release-notes"
+              },
+              "excerpt": "# Release notes writer Draft release notes from merged pull requests and conventional commits.",
+              "score": 15
+            }
+          ]
+        }
+      },
+      "jsonrpc": "2.0",
+      "id": 1
+    }
+  },
+  "list: app": {
+    "status": 200,
+    "body": {
+      "result": {
+        "content": [
+          {
+            "type": "text",
+            "text": "{\"total\":2,\"documents\":[{\"uri\":\"kb://service-accounts/ops/handbook\",\"title\":\"Operations handbook\",\"app\":\"service-accounts\",\"appName\":\"Service Accounts\",\"route\":\"/knowledge-base/service-accounts/ops/handbook/\",\"url\":\"https://docs.example.com/knowledge-base/service-accounts/ops/handbook/\",\"description\":\"The operations handbook covers incident response and on-call rotation.\",\"tags\":[\"operations\"],\"mimeType\":\"text/markdown\",\"size\":91154},{\"uri\":\"kb://service-accounts/password-rotation\",\"title\":\"Rotating service account passwords\",\"app\":\"service-accounts\",\"appName\":\"Service Accounts\",\"route\":\"/knowledge-base/service-accounts/password-rotation/\",\"url\":\"https://docs.example.com/knowledge-base/service-accounts/password-rotation/\",\"description\":\"Rotate passwords for service accounts with a staged credential rollout.\",\"tags\":[\"identity\"],\"mimeType\":\"text/markdown\",\"size\":241}]}"
+          }
+        ],
+        "structuredContent": {
+          "total": 2,
+          "documents": [
+            {
+              "uri": "kb://service-accounts/ops/handbook",
+              "title": "Operations handbook",
+              "app": "service-accounts",
+              "appName": "Service Accounts",
+              "route": "/knowledge-base/service-accounts/ops/handbook/",
+              "url": "https://docs.example.com/knowledge-base/service-accounts/ops/handbook/",
+              "description": "The operations handbook covers incident response and on-call rotation.",
+              "tags": [
+                "operations"
+              ],
+              "mimeType": "text/markdown",
+              "size": 91154
+            },
+            {
+              "uri": "kb://service-accounts/password-rotation",
+              "title": "Rotating service account passwords",
+              "app": "service-accounts",
+              "appName": "Service Accounts",
+              "route": "/knowledge-base/service-accounts/password-rotation/",
+              "url": "https://docs.example.com/knowledge-base/service-accounts/password-rotation/",
+              "description": "Rotate passwords for service accounts with a staged credential rollout.",
+              "tags": [
+                "identity"
+              ],
+              "mimeType": "text/markdown",
+              "size": 241
+            }
+          ]
+        }
+      },
+      "jsonrpc": "2.0",
+      "id": 2
+    }
+  },
+  "read: default": {
+    "status": 200,
+    "body": {
+      "result": {
+        "content": [
+          {
+            "type": "text",
+            "text": "{\"uri\":\"kb://eventbus\",\"title\":\"Event Bus\",\"app\":\"eventbus\",\"appName\":\"Event Bus\",\"route\":\"/knowledge-base/eventbus/\",\"url\":\"https://docs.example.com/knowledge-base/eventbus/\",\"mimeType\":\"text/markdown\",\"offset\":0,\"totalChars\":238,\"text\":\"# Event Bus\\n\\nEventBus is the platform for publishing and consuming domain events.\\n\\n## Publishing\\n\\nPublish events with the producer client and a registered schema.\\n\\n## Consuming\\n\\nConsumers subscribe to topics and acknowledge each delivery.\",\"truncated\":false}"
+          }
+        ],
+        "structuredContent": {
+          "uri": "kb://eventbus",
+          "title": "Event Bus",
+          "app": "eventbus",
+          "appName": "Event Bus",
+          "route": "/knowledge-base/eventbus/",
+          "url": "https://docs.example.com/knowledge-base/eventbus/",
+          "mimeType": "text/markdown",
+          "offset": 0,
+          "totalChars": 238,
+          "text": "# Event Bus\n\nEventBus is the platform for publishing and consuming domain events.\n\n## Publishing\n\nPublish events with the producer client and a registered schema.\n\n## Consuming\n\nConsumers subscribe to topics and acknowledge each delivery.",
+          "truncated": false
+        }
+      },
+      "jsonrpc": "2.0",
+      "id": 3
+    }
+  },
+  "resources/list: page 1": {
+    "status": 200,
+    "body": {
+      "result": {
+        "resources": [
+          {
+            "uri": "kb://agentic-toolkit/skills/aquasec-suppress",
+            "name": "agentic-toolkit/skills/aquasec-suppress",
+            "title": "AquaSec suppress",
+            "description": "Generate an AquaSec suppression report from scan findings.",
+            "mimeType": "text/markdown",
+            "size": 225,
+            "annotations": {
+              "audience": [
+                "user",
+                "assistant"
+              ]
+            },
+            "_meta": {
+              "io.github.absaoss/knowledge-base": {
+                "app": "agentic-toolkit",
+                "appName": "Agentic Toolkit",
+                "route": "/knowledge-base/agentic-toolkit/skills/aquasec-suppress/",
+                "url": "https://docs.example.com/knowledge-base/agentic-toolkit/skills/aquasec-suppress/",
+                "tags": [
+                  "security",
+                  "automation"
+                ],
+                "sha256": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+                "sourceVersion": "v1.2.3",
+                "indexedAt": "2026-01-01T00:00:00.000Z"
+              }
+            }
+          },
+          {
+            "uri": "kb://agentic-toolkit/skills/release-notes",
+            "name": "agentic-toolkit/skills/release-notes",
+            "title": "Release notes writer",
+            "description": "Draft release notes from merged pull requests and conventional commits.",
+            "mimeType": "text/markdown",
+            "size": 172,
+            "annotations": {
+              "audience": [
+                "user",
+                "assistant"
+              ]
+            },
+            "_meta": {
+              "io.github.absaoss/knowledge-base": {
+                "app": "agentic-toolkit",
+                "appName": "Agentic Toolkit",
+                "route": "/knowledge-base/agentic-toolkit/skills/release-notes/",
+                "url": "https://docs.example.com/knowledge-base/agentic-toolkit/skills/release-notes/",
+                "tags": [
+                  "automation"
+                ],
+                "sha256": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+                "sourceVersion": "v1.2.3",
+                "indexedAt": "2026-01-01T00:00:00.000Z"
+              }
+            }
+          },
+          {
+            "uri": "kb://eventbus",
+            "name": "eventbus",
+            "title": "Event Bus",
+            "description": "EventBus is the platform for publishing and consuming domain events.",
+            "mimeType": "text/markdown",
+            "size": 238,
+            "annotations": {
+              "audience": [
+                "user",
+                "assistant"
+              ]
+            },
+            "_meta": {
+              "io.github.absaoss/knowledge-base": {
+                "app": "eventbus",
+                "appName": "Event Bus",
+                "route": "/knowledge-base/eventbus/",
+                "url": "https://docs.example.com/knowledge-base/eventbus/",
+                "tags": [
+                  "events"
+                ],
+                "sha256": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+                "sourceVersion": "v1.2.3",
+                "indexedAt": "2026-01-01T00:00:00.000Z"
+              }
+            }
+          },
+          {
+            "uri": "kb://eventbus/schemas",
+            "name": "eventbus/schemas",
+            "title": "Schema registry",
+            "description": "Register and evolve event schemas without breaking consumers.",
+            "mimeType": "text/markdown",
+            "size": 153,
+            "annotations": {
+              "audience": [
+                "user",
+                "assistant"
+              ]
+            },
+            "_meta": {
+              "io.github.absaoss/knowledge-base": {
+                "app": "eventbus",
+                "appName": "Event Bus",
+                "route": "/knowledge-base/eventbus/schemas/",
+                "url": "https://docs.example.com/knowledge-base/eventbus/schemas/",
+                "tags": [
+                  "events",
+                  "reference"
+                ],
+                "sha256": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+                "sourceVersion": "v1.2.3",
+                "indexedAt": "2026-01-01T00:00:00.000Z"
+              }
+            }
+          },
+          {
+            "uri": "kb://external",
+            "name": "external",
+            "title": "External Docs",
+            "description": "Hosted elsewhere.",
+            "mimeType": "text/markdown",
+            "size": 84,
+            "annotations": {
+              "audience": [
+                "user",
+                "assistant"
+              ]
+            },
+            "_meta": {
+              "io.github.absaoss/knowledge-base": {
+                "app": "external",
+                "appName": "External Docs",
+                "route": "/knowledge-base/external/",
+                "url": "https://docs.example.com/knowledge-base/external/",
+                "tags": [
+                  "external"
+                ],
+                "sha256": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+                "sourceVersion": "v1.2.3",
+                "indexedAt": "2026-01-01T00:00:00.000Z"
+              }
+            }
+          },
+          {
+            "uri": "kb://service-accounts/ops/handbook",
+            "name": "service-accounts/ops/handbook",
+            "title": "Operations handbook",
+            "description": "The operations handbook covers incident response and on-call rotation.",
+            "mimeType": "text/markdown",
+            "size": 91154,
+            "annotations": {
+              "audience": [
+                "user",
+                "assistant"
+              ]
+            },
+            "_meta": {
+              "io.github.absaoss/knowledge-base": {
+                "app": "service-accounts",
+                "appName": "Service Accounts",
+                "route": "/knowledge-base/service-accounts/ops/handbook/",
+                "url": "https://docs.example.com/knowledge-base/service-accounts/ops/handbook/",
+                "tags": [
+                  "operations"
+                ],
+                "sha256": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+                "sourceVersion": "v1.2.3",
+                "indexedAt": "2026-01-01T00:00:00.000Z"
+              }
+            }
+          },
+          {
+            "uri": "kb://service-accounts/password-rotation",
+            "name": "service-accounts/password-rotation",
+            "title": "Rotating service account passwords",
+            "description": "Rotate passwords for service accounts with a staged credential rollout.",
+            "mimeType": "text/markdown",
+            "size": 241,
+            "annotations": {
+              "audience": [
+                "user",
+                "assistant"
+              ]
+            },
+            "_meta": {
+              "io.github.absaoss/knowledge-base": {
+                "app": "service-accounts",
+                "appName": "Service Accounts",
+                "route": "/knowledge-base/service-accounts/password-rotation/",
+                "url": "https://docs.example.com/knowledge-base/service-accounts/password-rotation/",
+                "tags": [
+                  "identity"
+                ],
+                "sha256": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+                "sourceVersion": "v1.2.3",
+                "indexedAt": "2026-01-01T00:00:00.000Z"
+              }
+            }
+          }
+        ]
+      },
+      "jsonrpc": "2.0",
+      "id": 4
+    }
+  },
+  "resources/read: short": {
+    "status": 200,
+    "body": {
+      "result": {
+        "contents": [
+          {
+            "uri": "kb://eventbus/schemas",
+            "mimeType": "text/markdown",
+            "text": "Title: Schema registry\nApp: Event Bus (eventbus)\nLink: https://docs.example.com/knowledge-base/eventbus/schemas/\nSource version: v1.2.3\n---\n# Schema registry\n\nRegister and evolve event schemas without breaking consumers.\n\n## Compatibility\n\nBackward compatible changes add optional fields only.",
+            "_meta": {
+              "io.github.absaoss/knowledge-base": {
+                "app": "eventbus",
+                "appName": "Event Bus",
+                "route": "/knowledge-base/eventbus/schemas/",
+                "url": "https://docs.example.com/knowledge-base/eventbus/schemas/",
+                "tags": [
+                  "events",
+                  "reference"
+                ],
+                "sha256": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+                "sourceVersion": "v1.2.3",
+                "indexedAt": "2026-01-01T00:00:00.000Z"
+              }
+            }
+          }
+        ]
+      },
+      "jsonrpc": "2.0",
+      "id": 5
+    }
+  }
+}

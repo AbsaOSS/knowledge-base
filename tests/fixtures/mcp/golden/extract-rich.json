@@ -1,0 +1,36 @@
+{
+  "title": "Rich extraction fixture",
+  "description": "This paragraph is long enough to become the extracted description of the page.",
+  "text": "# Rich extraction fixture\n\nThis paragraph is long enough to become the extracted description of the page.\n\n## Lists\n\n1. First step\n2. Second step\n  - Nested bullet\n    1. Deep item\n\n## Code & tables\n\n```python\ndef main():\n    return 1\n```\n\n```mermaid\ngraph TD; A-->B\n```\n\n| Name | Value |\n| alpha | `1` units |\n| beta gamma | [chart] |\n\n### Inline `mixed` heading\n\nLoose text beside a link.\n\nBlock\n\nwith nested paragraph\n\ntail.",
+  "sections": [
+    {
+      "heading": "Rich extraction fixture",
+      "anchor": "rich",
+      "level": 1,
+      "start": 0,
+      "end": 107
+    },
+    {
+      "heading": "Lists",
+      "anchor": "lists",
+      "level": 2,
+      "start": 107,
+      "end": 182
+    },
+    {
+      "heading": "Code & tables",
+      "anchor": null,
+      "level": 2,
+      "start": 182,
+      "end": 337
+    },
+    {
+      "heading": "Inline `mixed` heading",
+      "anchor": null,
+      "level": 3,
+      "start": 337,
+      "end": 427
+    }
+  ],
+  "truncated": false
+}

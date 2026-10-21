@@ -1,0 +1,814 @@
+{
+  "schemaVersion": 1,
+  "generator": "knowledge-base@1.0.0",
+  "pathPrefix": "knowledge-base",
+  "contentHash": "c0f9ee3b5317578aaa76bc0992c032ff01ab0597466e84cec032a60b2f66966e",
+  "apps": [
+    {
+      "slug": "external-docs",
+      "name": "External Docs",
+      "description": "Iframe-onboarded external documentation site (temporary integration path).",
+      "tags": [
+        "external"
+      ],
+      "kind": "iframe",
+      "url": "https://example.com/docs",
+      "sourceVersion": null
+    },
+    {
+      "slug": "guide-mirror",
+      "name": "Guide Mirror",
+      "description": "Second app in the same artifact, with a pages manifest, for cross-app navigation tests.",
+      "tags": [
+        "mirror",
+        "cross-app"
+      ],
+      "kind": "artifact",
+      "url": null,
+      "sourceVersion": "prebuilt"
+    },
+    {
+      "slug": "platform-overview",
+      "name": "Platform Overview",
+      "description": "How the platform is wired together, endpoint by endpoint.",
+      "tags": [
+        "platform",
+        "reference"
+      ],
+      "kind": "artifact",
+      "url": null,
+      "sourceVersion": "prebuilt"
+    },
+    {
+      "slug": "release-process",
+      "name": "Release Process",
+      "description": "How a release is cut and how the docs bundle gets attached.",
+      "tags": [
+        "process"
+      ],
+      "kind": "artifact",
+      "url": null,
+      "sourceVersion": "prebuilt"
+    },
+    {
+      "slug": "user-guide",
+      "name": "User Guide",
+      "description": "Primary docs app — the vendored docs-example fixture used as the integration guinea pig.",
+      "tags": [
+        "guide",
+        "getting-started"
+      ],
+      "kind": "artifact",
+      "url": null,
+      "sourceVersion": "prebuilt"
+    }
+  ],
+  "documents": [
+    {
+      "uri": "kb://external-docs",
+      "app": "external-docs",
+      "route": "/knowledge-base/external-docs/",
+      "title": "External Docs",
+      "description": "Iframe-onboarded external documentation site (temporary integration path).",
+      "tags": [
+        "external"
+      ],
+      "section": null,
+      "mimeType": "text/markdown",
+      "sourceVersion": null,
+      "sha256": "a363bb149068d9903e23c7404858254941c1c2dfa95c2c80d97c4beb8564576f",
+      "size": 141,
+      "truncated": false,
+      "text": "# External Docs\n\nIframe-onboarded external documentation site (temporary integration path).\n\nExternal documentation: https://example.com/docs",
+      "sections": []
+    },
+    {
+      "uri": "kb://guide-mirror",
+      "app": "guide-mirror",
+      "route": "/knowledge-base/guide-mirror/",
+      "title": "Showcase",
+      "description": "A minimal, branded template. Clone it, write Markdown, tag a release — your documentation is live.",
+      "tags": [
+        "mirror",
+        "cross-app"
+      ],
+      "section": null,
+      "mimeType": "text/markdown",
+      "sourceVersion": "prebuilt",
+      "sha256": "c7dbcaee988949e8da756889d5a319328df6ac9f6be1e8c2041f3b07fa3e9e53",
+      "size": 2061,
+      "truncated": false,
+      "text": {
+        "$string": {
+          "length": 2051,
+          "sha256": "c7dbcaee988949e8da756889d5a319328df6ac9f6be1e8c2041f3b07fa3e9e53",
+          "head": "MkDocs Template\n\n# Publish your docs to the Knowledge Base\n\nA minimal, branded template. Clone it, write Markdown, tag a release — your documentation is live.\n\n",
+          "tail": "ady to publish your documentation?\n\nRead the template docs to get started, or visit the full user guide for setup and registration.\n\nGet Started\nFull User Guide"
+        }
+      },
+      "sections": [
+        {
+          "heading": "Publish your docs to the Knowledge Base",
+          "anchor": null,
+          "level": 1,
+          "start": 17,
+          "end": 209
+        },
+        {
+          "heading": "Everything you need, nothing you don't",
+          "anchor": null,
+          "level": 2,
+          "start": 209,
+          "end": 386
+        },
+        {
+          "heading": "Markdown-first content",
+          "anchor": null,
+          "level": 3,
+          "start": 386,
+          "end": 504
+        },
+        {
+          "heading": "Zero build setup",
+          "anchor": null,
+          "level": 3,
+          "start": 504,
+          "end": 642
+        },
+        {
+          "heading": "Branded theme",
+          "anchor": null,
+          "level": 3,
+          "start": 642,
+          "end": 755
+        },
+        {
+          "heading": "Headless & standalone modes",
+          "anchor": null,
+          "level": 3,
+          "start": 755,
+          "end": 888
+        },
+        {
+          "heading": "CI/CD pipeline included",
+          "anchor": null,
+          "level": 3,
+          "start": 888,
+          "end": 1018
+        },
+        {
+          "heading": "Expandable structure",
+          "anchor": null,
+          "level": 3,
+          "start": 1018,
+          "end": 1172
+        },
+        {
+          "heading": "From clone to live docs in three steps",
+          "anchor": null,
+          "level": 2,
+          "start": 1172,
+          "end": 1886
+        },
+        {
+          "heading": "Ready to publish your documentation?",
+          "anchor": null,
+          "level": 2,
+          "start": 1886,
+          "end": 2051
+        }
+      ]
+    },
+    {
+      "uri": "kb://guide-mirror/docs",
+      "app": "guide-mirror",
+      "route": "/knowledge-base/guide-mirror/docs/",
+      "title": "Overview",
+      "description": "A ready-to-use MkDocs template for publishing documentation to the Knowledge Base. Clone it, write Markdown, tag a release — your docs are live.",
+      "tags": [
+        "mirror",
+        "cross-app"
+      ],
+      "section": null,
+      "mimeType": "text/markdown",
+      "sourceVersion": "prebuilt",
+      "sha256": "a653582e8cc04af1af0651b352358a29982593ed37fd84159fa15b743bce6b7e",
+      "size": 1531,
+      "truncated": false,
+      "text": "# Knowledge Base Docs Example\n\nA ready-to-use MkDocs template for publishing documentation to the Knowledge Base. Clone it, write Markdown, tag a release — your docs are live.\n\n## What is included\n\n| File / Folder | Purpose |\n| `docs/*.md` | Your Markdown content — edit these |\n| `mkdocs.yml` | Site config — update `site_name` and `nav:` |\n| `showcase.html` | Product landing page — edit to match your tool |\n| `theme/` | Pre-built branded theme — no changes needed |\n| `requirements.txt` | Python dependencies — no changes needed |\n| `scripts/` | Build + package scripts — no changes needed |\n| `.github/workflows/release.yml` | CI/CD pipeline — no changes needed |\n\n## Quick start\n\n```\n# 1 — clone\ngit clone <your-repo-url> my-team-docs\ncd my-team-docs\n\n# 2 — install MkDocs (one time)\npip install -r requirements.txt\n\n# 3 — live preview at http://localhost:8000\nmkdocs serve\n```\n\n## What you need to change\n\nOnly three things need updating to make this template your own:\n\n1. `marketplace.json` — set your `slug`, `name`, and `description`\n2. `mkdocs.yml` — set `site_name` and update the `nav:` entries\n3. `docs/*.md` — replace the starter pages with your content\n\nThe build script, CSS, and CI pipeline work out of the box and never need to be touched.\n\n## Full documentation\n\nThe complete user guide — including tool setup for non-technical writers and the knowledge base registration process — is available in the knowledge base documentation.\n\nContinue reading: Customising · Adding Pages",
+      "sections": [
+        {
+          "heading": "Knowledge Base Docs Example",
+          "anchor": "knowledge-base-docs-example",
+          "level": 1,
+          "start": 0,
+          "end": 177
+        },
+        {
+          "heading": "What is included",
+          "anchor": "what-is-included",
+          "level": 2,
+          "start": 177,
+          "end": 670
+        },
+        {
+          "heading": "Quick start",
+          "anchor": "quick-start",
+          "level": 2,
+          "start": 670,
+          "end": 885
+        },
+        {
+          "heading": "What you need to change",
+          "anchor": "what-you-need-to-change",
+          "level": 2,
+          "start": 885,
+          "end": 1261
+        },
+        {
+          "heading": "Full documentation",
+          "anchor": "full-documentation",
+          "level": 2,
+          "start": 1261,
+          "end": 1498
+        }
+      ]
+    },
+    {
+      "uri": "kb://guide-mirror/docs/adding-pages",
+      "app": "guide-mirror",
+      "route": "/knowledge-base/guide-mirror/docs/adding-pages/",
+      "title": "Adding Pages",
+      "description": "Step 1 — Create a `.md` file in the `docs/` folder with frontmatter:",
+      "tags": [
+        "mirror",
+        "cross-app"
+      ],
+      "section": "Guide",
+      "mimeType": "text/markdown",
+      "sourceVersion": "prebuilt",
+      "sha256": "6660f5efc6e0f390c9155da34df9217c78c93fe6b30b1e4329ab97fb06845a80",
+      "size": 2973,
+      "truncated": false,
+      "text": {
+        "$string": {
+          "length": 2919,
+          "sha256": "6660f5efc6e0f390c9155da34df9217c78c93fe6b30b1e4329ab97fb06845a80",
+          "head": "# Adding Pages\n\n## Adding a Markdown page\n\nStep 1 — Create a `.md` file in the `docs/` folder with frontmatter:\n\n```\ndocs/\n├── index.md\n├── customising.md\n└── m",
+          "tail": "paths in the built output.\n\nNeed more? The full user guide covering tool setup and knowledge base registration is available in the knowledge base documentation."
+        }
+      },
+      "sections": [
+        {
+          "heading": "Adding Pages",
+          "anchor": "adding-pages",
+          "level": 1,
+          "start": 0,
+          "end": 16
+        },
+        {
+          "heading": "Adding a Markdown page",
+          "anchor": "adding-a-markdown-page",
+          "level": 2,
+          "start": 16,
+          "end": 443
+        },
+        {
+          "heading": "Adding a standalone HTML page",
+          "anchor": "adding-a-standalone-html-page",
+          "level": 2,
+          "start": 443,
+          "end": 1110
+        },
+        {
+          "heading": "Linking between docs and the showcase",
+          "anchor": "linking-between-docs-and-the-showcase",
+          "level": 2,
+          "start": 1110,
+          "end": 1344
+        },
+        {
+          "heading": "Embedding SharePoint videos",
+          "anchor": "embedding-sharepoint-videos",
+          "level": 2,
+          "start": 1344,
+          "end": 2204
+        },
+        {
+          "heading": "Adding images",
+          "anchor": "adding-images",
+          "level": 2,
+          "start": 2204,
+          "end": 2552
+        },
+        {
+          "heading": "Cross-linking between Markdown pages",
+          "anchor": "cross-linking-between-markdown-pages",
+          "level": 2,
+          "start": 2552,
+          "end": 2919
+        }
+      ]
+    },
+    {
+      "uri": "kb://guide-mirror/docs/customising",
+      "app": "guide-mirror",
+      "route": "/knowledge-base/guide-mirror/docs/customising/",
+      "title": "Customising",
+      "description": "Two files control everything a team needs to customise. The rest — theme, build script, CSS, CI pipeline — works out of the box.",
+      "tags": [
+        "mirror",
+        "cross-app"
+      ],
+      "section": "Guide",
+      "mimeType": "text/markdown",
+      "sourceVersion": "prebuilt",
+      "sha256": "6cbb2b29fee9d77da370c0fc55d912bcb82def09c91859175bb38b6d29becf7a",
+      "size": 2431,
+      "truncated": false,
+      "text": {
+        "$string": {
+          "length": 2419,
+          "sha256": "6cbb2b29fee9d77da370c0fc55d912bcb82def09c91859175bb38b6d29becf7a",
+          "head": "# Customising the Template\n\nTwo files control everything a team needs to customise. The rest — theme, build script, CSS, CI pipeline — works out of the box.\n\n##",
+          "tail": "\nFull user guide: For VS Code setup and the knowledge base registration process, see the complete guide in the knowledge base documentation.\n\nNext: Adding Pages"
+        }
+      },
+      "sections": [
+        {
+          "heading": "Customising the Template",
+          "anchor": "customising-the-template",
+          "level": 1,
+          "start": 0,
+          "end": 158
+        },
+        {
+          "heading": "`marketplace.json`",
+          "anchor": "marketplacejson",
+          "level": 2,
+          "start": 158,
+          "end": 1507
+        },
+        {
+          "heading": "`mkdocs.yml`",
+          "anchor": "mkdocsyml",
+          "level": 2,
+          "start": 1507,
+          "end": 1911
+        },
+        {
+          "heading": "Showcase landing page",
+          "anchor": "showcase-landing-page",
+          "level": 2,
+          "start": 1911,
+          "end": 2419
+        }
+      ]
+    },
+    {
+      "uri": "kb://platform-overview",
+      "app": "platform-overview",
+      "route": "/knowledge-base/platform-overview/",
+      "title": "Platform Overview",
+      "description": "The platform runs every service behind a single gateway. See\nthe handbook for the long version.",
+      "tags": [
+        "platform",
+        "reference"
+      ],
+      "section": null,
+      "mimeType": "text/markdown",
+      "sourceVersion": "prebuilt",
+      "sha256": "8b8204a927c3fa5a1492b91f554cb861a851c008dff8b57cd17f4433d5094ac2",
+      "size": 454,
+      "truncated": false,
+      "text": "# Platform Overview\n\nThe platform runs every service behind a single gateway. See\nthe handbook for the long version.\n\n## Endpoints\n\n| Endpoint | Method | Notes |\n| `/health` | GET | Liveness probe |\n| `/v1/items` | POST | Creates an item |\n\n## Configuration\n\n```\nexport const port = Number(process.env.PORT ?? 8080);\n```\n\n## Rollout status\n\n- Contract published\n- Load-tested\n\n## Request flow\n\n```mermaid\nflowchart LR\n  client --> gateway --> service\n```",
+      "sections": [
+        {
+          "heading": "Platform Overview",
+          "anchor": "platform-overview",
+          "level": 1,
+          "start": 0,
+          "end": 118
+        },
+        {
+          "heading": "Endpoints",
+          "anchor": "endpoints",
+          "level": 2,
+          "start": 118,
+          "end": 241
+        },
+        {
+          "heading": "Configuration",
+          "anchor": "configuration",
+          "level": 2,
+          "start": 241,
+          "end": 322
+        },
+        {
+          "heading": "Rollout status",
+          "anchor": "rollout-status",
+          "level": 2,
+          "start": 322,
+          "end": 377
+        },
+        {
+          "heading": "Request flow",
+          "anchor": "request-flow",
+          "level": 2,
+          "start": 377,
+          "end": 454
+        }
+      ]
+    },
+    {
+      "uri": "kb://release-process",
+      "app": "release-process",
+      "route": "/knowledge-base/release-process/",
+      "title": "Release Process",
+      "description": "Releases are cut from `master` on demand.",
+      "tags": [
+        "process"
+      ],
+      "section": null,
+      "mimeType": "text/markdown",
+      "sourceVersion": "prebuilt",
+      "sha256": "25ea5f3f467cb6882e90e031287ce663b3cec5aeaa86810f7d62ef7b5ff18ea8",
+      "size": 255,
+      "truncated": false,
+      "text": "# Release Process\n\nReleases are cut from `master` on demand.\n\nA release is only complete once the docs bundle is attached to it.\n\n## Steps\n\n1. Tag the commit.\n2. Publish the GitHub Release.\n3. The publish-single-page-docs action attaches `kb-docs.tar.gz`.",
+      "sections": [
+        {
+          "heading": "Release Process",
+          "anchor": "release-process",
+          "level": 1,
+          "start": 0,
+          "end": 130
+        },
+        {
+          "heading": "Steps",
+          "anchor": "steps",
+          "level": 2,
+          "start": 130,
+          "end": 255
+        }
+      ]
+    },
+    {
+      "uri": "kb://user-guide",
+      "app": "user-guide",
+      "route": "/knowledge-base/user-guide/",
+      "title": "Publish your docs to the\nKnowledge Base",
+      "description": "A minimal, branded template. Clone it, write Markdown, tag a release — your documentation is live.",
+      "tags": [
+        "guide",
+        "getting-started"
+      ],
+      "section": null,
+      "mimeType": "text/markdown",
+      "sourceVersion": "prebuilt",
+      "sha256": "c7dbcaee988949e8da756889d5a319328df6ac9f6be1e8c2041f3b07fa3e9e53",
+      "size": 2061,
+      "truncated": false,
+      "text": {
+        "$string": {
+          "length": 2051,
+          "sha256": "c7dbcaee988949e8da756889d5a319328df6ac9f6be1e8c2041f3b07fa3e9e53",
+          "head": "MkDocs Template\n\n# Publish your docs to the Knowledge Base\n\nA minimal, branded template. Clone it, write Markdown, tag a release — your documentation is live.\n\n",
+          "tail": "ady to publish your documentation?\n\nRead the template docs to get started, or visit the full user guide for setup and registration.\n\nGet Started\nFull User Guide"
+        }
+      },
+      "sections": [
+        {
+          "heading": "Publish your docs to the Knowledge Base",
+          "anchor": null,
+          "level": 1,
+          "start": 17,
+          "end": 209
+        },
+        {
+          "heading": "Everything you need, nothing you don't",
+          "anchor": null,
+          "level": 2,
+          "start": 209,
+          "end": 386
+        },
+        {
+          "heading": "Markdown-first content",
+          "anchor": null,
+          "level": 3,
+          "start": 386,
+          "end": 504
+        },
+        {
+          "heading": "Zero build setup",
+          "anchor": null,
+          "level": 3,
+          "start": 504,
+          "end": 642
+        },
+        {
+          "heading": "Branded theme",
+          "anchor": null,
+          "level": 3,
+          "start": 642,
+          "end": 755
+        },
+        {
+          "heading": "Headless & standalone modes",
+          "anchor": null,
+          "level": 3,
+          "start": 755,
+          "end": 888
+        },
+        {
+          "heading": "CI/CD pipeline included",
+          "anchor": null,
+          "level": 3,
+          "start": 888,
+          "end": 1018
+        },
+        {
+          "heading": "Expandable structure",
+          "anchor": null,
+          "level": 3,
+          "start": 1018,
+          "end": 1172
+        },
+        {
+          "heading": "From clone to live docs in three steps",
+          "anchor": null,
+          "level": 2,
+          "start": 1172,
+          "end": 1886
+        },
+        {
+          "heading": "Ready to publish your documentation?",
+          "anchor": null,
+          "level": 2,
+          "start": 1886,
+          "end": 2051
+        }
+      ]
+    },
+    {
+      "uri": "kb://user-guide/admin",
+      "app": "user-guide",
+      "route": "/knowledge-base/user-guide/admin/",
+      "title": "Content Manager",
+      "description": "Primary docs app — the vendored docs-example fixture used as the integration guinea pig.",
+      "tags": [
+        "guide",
+        "getting-started"
+      ],
+      "section": null,
+      "mimeType": "text/markdown",
+      "sourceVersion": "prebuilt",
+      "sha256": "c0e8831d5e47fc166fb99f325ca1b8df20c45dc1c35596557fc78c2e411a59f9",
+      "size": 109,
+      "truncated": false,
+      "text": "# Content Manager\n\nPrimary docs app — the vendored docs-example fixture used as the integration guinea pig.",
+      "sections": []
+    },
+    {
+      "uri": "kb://user-guide/docs",
+      "app": "user-guide",
+      "route": "/knowledge-base/user-guide/docs/",
+      "title": "Knowledge Base Docs Example",
+      "description": "A ready-to-use MkDocs template for publishing documentation to the Knowledge Base. Clone it, write Markdown, tag a release — your docs are live.",
+      "tags": [
+        "guide",
+        "getting-started"
+      ],
+      "section": null,
+      "mimeType": "text/markdown",
+      "sourceVersion": "prebuilt",
+      "sha256": "a653582e8cc04af1af0651b352358a29982593ed37fd84159fa15b743bce6b7e",
+      "size": 1531,
+      "truncated": false,
+      "text": "# Knowledge Base Docs Example\n\nA ready-to-use MkDocs template for publishing documentation to the Knowledge Base. Clone it, write Markdown, tag a release — your docs are live.\n\n## What is included\n\n| File / Folder | Purpose |\n| `docs/*.md` | Your Markdown content — edit these |\n| `mkdocs.yml` | Site config — update `site_name` and `nav:` |\n| `showcase.html` | Product landing page — edit to match your tool |\n| `theme/` | Pre-built branded theme — no changes needed |\n| `requirements.txt` | Python dependencies — no changes needed |\n| `scripts/` | Build + package scripts — no changes needed |\n| `.github/workflows/release.yml` | CI/CD pipeline — no changes needed |\n\n## Quick start\n\n```\n# 1 — clone\ngit clone <your-repo-url> my-team-docs\ncd my-team-docs\n\n# 2 — install MkDocs (one time)\npip install -r requirements.txt\n\n# 3 — live preview at http://localhost:8000\nmkdocs serve\n```\n\n## What you need to change\n\nOnly three things need updating to make this template your own:\n\n1. `marketplace.json` — set your `slug`, `name`, and `description`\n2. `mkdocs.yml` — set `site_name` and update the `nav:` entries\n3. `docs/*.md` — replace the starter pages with your content\n\nThe build script, CSS, and CI pipeline work out of the box and never need to be touched.\n\n## Full documentation\n\nThe complete user guide — including tool setup for non-technical writers and the knowledge base registration process — is available in the knowledge base documentation.\n\nContinue reading: Customising · Adding Pages",
+      "sections": [
+        {
+          "heading": "Knowledge Base Docs Example",
+          "anchor": "knowledge-base-docs-example",
+          "level": 1,
+          "start": 0,
+          "end": 177
+        },
+        {
+          "heading": "What is included",
+          "anchor": "what-is-included",
+          "level": 2,
+          "start": 177,
+          "end": 670
+        },
+        {
+          "heading": "Quick start",
+          "anchor": "quick-start",
+          "level": 2,
+          "start": 670,
+          "end": 885
+        },
+        {
+          "heading": "What you need to change",
+          "anchor": "what-you-need-to-change",
+          "level": 2,
+          "start": 885,
+          "end": 1261
+        },
+        {
+          "heading": "Full documentation",
+          "anchor": "full-documentation",
+          "level": 2,
+          "start": 1261,
+          "end": 1498
+        }
+      ]
+    },
+    {
+      "uri": "kb://user-guide/docs/adding-pages",
+      "app": "user-guide",
+      "route": "/knowledge-base/user-guide/docs/adding-pages/",
+      "title": "Adding Pages",
+      "description": "Step 1 — Create a `.md` file in the `docs/` folder with frontmatter:",
+      "tags": [
+        "guide",
+        "getting-started"
+      ],
+      "section": null,
+      "mimeType": "text/markdown",
+      "sourceVersion": "prebuilt",
+      "sha256": "6660f5efc6e0f390c9155da34df9217c78c93fe6b30b1e4329ab97fb06845a80",
+      "size": 2973,
+      "truncated": false,
+      "text": {
+        "$string": {
+          "length": 2919,
+          "sha256": "6660f5efc6e0f390c9155da34df9217c78c93fe6b30b1e4329ab97fb06845a80",
+          "head": "# Adding Pages\n\n## Adding a Markdown page\n\nStep 1 — Create a `.md` file in the `docs/` folder with frontmatter:\n\n```\ndocs/\n├── index.md\n├── customising.md\n└── m",
+          "tail": "paths in the built output.\n\nNeed more? The full user guide covering tool setup and knowledge base registration is available in the knowledge base documentation."
+        }
+      },
+      "sections": [
+        {
+          "heading": "Adding Pages",
+          "anchor": "adding-pages",
+          "level": 1,
+          "start": 0,
+          "end": 16
+        },
+        {
+          "heading": "Adding a Markdown page",
+          "anchor": "adding-a-markdown-page",
+          "level": 2,
+          "start": 16,
+          "end": 443
+        },
+        {
+          "heading": "Adding a standalone HTML page",
+          "anchor": "adding-a-standalone-html-page",
+          "level": 2,
+          "start": 443,
+          "end": 1110
+        },
+        {
+          "heading": "Linking between docs and the showcase",
+          "anchor": "linking-between-docs-and-the-showcase",
+          "level": 2,
+          "start": 1110,
+          "end": 1344
+        },
+        {
+          "heading": "Embedding SharePoint videos",
+          "anchor": "embedding-sharepoint-videos",
+          "level": 2,
+          "start": 1344,
+          "end": 2204
+        },
+        {
+          "heading": "Adding images",
+          "anchor": "adding-images",
+          "level": 2,
+          "start": 2204,
+          "end": 2552
+        },
+        {
+          "heading": "Cross-linking between Markdown pages",
+          "anchor": "cross-linking-between-markdown-pages",
+          "level": 2,
+          "start": 2552,
+          "end": 2919
+        }
+      ]
+    },
+    {
+      "uri": "kb://user-guide/docs/customising",
+      "app": "user-guide",
+      "route": "/knowledge-base/user-guide/docs/customising/",
+      "title": "Customising the Template",
+      "description": "Two files control everything a team needs to customise. The rest — theme, build script, CSS, CI pipeline — works out of the box.",
+      "tags": [
+        "guide",
+        "getting-started"
+      ],
+      "section": null,
+      "mimeType": "text/markdown",
+      "sourceVersion": "prebuilt",
+      "sha256": "6cbb2b29fee9d77da370c0fc55d912bcb82def09c91859175bb38b6d29becf7a",
+      "size": 2431,
+      "truncated": false,
+      "text": {
+        "$string": {
+          "length": 2419,
+          "sha256": "6cbb2b29fee9d77da370c0fc55d912bcb82def09c91859175bb38b6d29becf7a",
+          "head": "# Customising the Template\n\nTwo files control everything a team needs to customise. The rest — theme, build script, CSS, CI pipeline — works out of the box.\n\n##",
+          "tail": "\nFull user guide: For VS Code setup and the knowledge base registration process, see the complete guide in the knowledge base documentation.\n\nNext: Adding Pages"
+        }
+      },
+      "sections": [
+        {
+          "heading": "Customising the Template",
+          "anchor": "customising-the-template",
+          "level": 1,
+          "start": 0,
+          "end": 158
+        },
+        {
+          "heading": "`marketplace.json`",
+          "anchor": "marketplacejson",
+          "level": 2,
+          "start": 158,
+          "end": 1507
+        },
+        {
+          "heading": "`mkdocs.yml`",
+          "anchor": "mkdocsyml",
+          "level": 2,
+          "start": 1507,
+          "end": 1911
+        },
+        {
+          "heading": "Showcase landing page",
+          "anchor": "showcase-landing-page",
+          "level": 2,
+          "start": 1911,
+          "end": 2419
+        }
+      ]
+    },
+    {
+      "uri": "kb://user-guide/docs/some-new-page",
+      "app": "user-guide",
+      "route": "/knowledge-base/user-guide/docs/some-new-page/",
+      "title": "Adding Pages",
+      "description": "Step 1 — Create a `.md` file in the `docs/` folder:",
+      "tags": [
+        "guide",
+        "getting-started"
+      ],
+      "section": null,
+      "mimeType": "text/markdown",
+      "sourceVersion": "prebuilt",
+      "sha256": "066066c58fd536b754381a2424f02fe38bf00b6ec06d11e388856f67d374d4e8",
+      "size": 1722,
+      "truncated": false,
+      "text": "# Adding Pages\n\n## Adding a Markdown page\n\nStep 1 — Create a `.md` file in the `docs/` folder:\n\n```\ndocs/\n├── index.md\n├── customising.md\n└── my-new-page.md   ← new file\n```\n\nStep 2 — Add it to the `nav:` section in `mkdocs.yml`:\n\n```\nnav:\n  - Overview: index.md\n  - Customising: customising.md\n  - My New Page: my-new-page.md   # ← add this line\n```\n\nStep 3 — Run `mkdocs serve` to preview the change.\n\n## Adding a standalone HTML page\n\nStandalone HTML pages (like `showcase.html`) are copied into `dist/` by the build script — they live alongside the MkDocs output.\n\nStep 1 — Create your HTML file at the repo root:\n\n```\nknowledge-base-docs-example/\n├── showcase.html\n└── calculator.html   ← new standalone page\n```\n\nStep 2 — In `scripts/pack.py`, add a copy line in the section that handles showcase assets:\n\n```\ncp calculator.html dist/calculator.html\n```\n\nStep 3 — Link to it from any Markdown page using a root-relative path:\n\n```\n[Open the calculator](../calculator.html)\n```\n\nOr from another HTML page:\n\n```\n<a href=\"calculator.html\">Open the calculator</a>\n```\n\n## Linking between docs and the showcase\n\nFrom Markdown, link to the showcase landing page:\n\n```\n[Back to overview](../index.html)\n```\n\nFrom the showcase HTML, link into the docs:\n\n```\n<a href=\"docs/index.html\">Read the docs</a>\n```\n\n## Cross-linking between Markdown pages\n\nUse relative paths without the `.md` extension in links:\n\n```\nSee [Customising](customising.md) for config options.\n```\n\nMkDocs resolves these to the correct `.html` paths in the built output.\n\nNeed more? The full user guide covering tool setup and knowledge base registration is available in the knowledge base documentation.",
+      "sections": [
+        {
+          "heading": "Adding Pages",
+          "anchor": "adding-pages",
+          "level": 1,
+          "start": 0,
+          "end": 16
+        },
+        {
+          "heading": "Adding a Markdown page",
+          "anchor": "adding-a-markdown-page",
+          "level": 2,
+          "start": 16,
+          "end": 404
+        },
+        {
+          "heading": "Adding a standalone HTML page",
+          "anchor": "adding-a-standalone-html-page",
+          "level": 2,
+          "start": 404,
+          "end": 1071
+        },
+        {
+          "heading": "Linking between docs and the showcase",
+          "anchor": "linking-between-docs-and-the-showcase",
+          "level": 2,
+          "start": 1071,
+          "end": 1305
+        },
+        {
+          "heading": "Cross-linking between Markdown pages",
+          "anchor": "cross-linking-between-markdown-pages",
+          "level": 2,
+          "start": 1305,
+          "end": 1672
+        }
+      ]
+    }
+  ]
+}
