@@ -161,6 +161,28 @@ test.describe('nginx.conf header inheritance', () => {
     }
   });
 
+  test('all nginx 404s use internal no-store not-found page', () => {
+    expect(uncomment(CONF)).toContain('error_page 404 /__kb-not-found;');
+    const page = locationBlocks(uncomment(CONF)).find((b) => b.selector === '= /__kb-not-found');
+    expect(page, 'internal 404 page location block').toBeTruthy();
+    expect(page.body).toContain('internal;');
+    expect(page.body).toContain('try_files /_error/not-found.html =500;');
+    expect(page.body).toMatch(/add_header\s+Cache-Control\s+"no-store"\s+always/);
+    // Without the guard a build that forgot the page would turn every 404 into a 500.
+    expect(readFileSync(join(ROOT, 'Dockerfile'), 'utf8')).toContain('test -f /usr/share/nginx/html/_error/not-found.html');
+  });
+
+  test('the static OPTIONS shortcut leaves the MCP preflight to Node', () => {
+    const conf = uncomment(CONF);
+    expect(conf).not.toMatch(/if\s*\(\$request_method\s*=\s*OPTIONS\)/);
+    expect(conf).toMatch(/if\s*\(\$kb_static_preflight\)\s*\{\s*return 204;/);
+    const pattern = conf.match(/"~(\^OPTIONS:[^"]+)"\s+1;/)[1];
+    const preflight = new RegExp(pattern);
+    expect(preflight.test('OPTIONS:/knowledge-base/')).toBe(true);
+    expect(preflight.test('OPTIONS:/knowledge-base/mcp/other')).toBe(true);
+    expect(preflight.test('OPTIONS:/knowledge-base/mcp')).toBe(false);
+  });
+
   test('healthz sets its content type with default_type, not a post-return add_header', () => {
     const healthz = locationBlocks(uncomment(CONF)).find((b) => b.selector === '= /healthz');
     expect(healthz, '/healthz location block').toBeTruthy();
@@ -172,11 +194,15 @@ test.describe('nginx.conf header inheritance', () => {
 test.describe('Dockerfile', () => {
   const DOCKERFILE = readFileSync(join(ROOT, 'Dockerfile'), 'utf8');
 
-  test('runs an unprivileged nginx pinned by digest', () => {
-    const from = DOCKERFILE.split('\n').find((l) => l.startsWith('FROM '));
-    expect(from).toContain('nginx-unprivileged');
-    expect(from, 'base image must be pinned by digest, like the GitHub Actions are')
-      .toMatch(/@sha256:[a-f0-9]{64}/);
+  test('runs a digest-pinned Node donor and unprivileged nginx runtime', () => {
+    const from = DOCKERFILE.split('\n').filter((l) => l.startsWith('FROM '));
+    expect(from).toHaveLength(2);
+    expect(from[0]).toContain('node:24-alpine');
+    expect(from[1]).toContain('nginx-unprivileged');
+    for (const image of from) {
+      expect(image, 'every base image must be pinned by digest, like the GitHub Actions are')
+        .toMatch(/@sha256:[a-f0-9]{64}/);
+    }
   });
 
   test('ships the shared header snippet the config includes', () => {

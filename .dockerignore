@@ -26,7 +26,3 @@ vite.config.js
 tsconfig.json
 package-lock.json
 apps.json
-
-# The MCP search index is runtime data for the MCP server, not public static
-# content: keep it out of the nginx web root.
-dist/_mcp
