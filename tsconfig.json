@@ -3,5 +3,5 @@
   "compilerOptions": {
     "types": ["node"]
   },
-  "exclude": ["dist", "tmp", "apps", "public", "tests/fixtures", "actions/node_modules"]
+  "exclude": ["dist", "tmp", "apps", "public", "tests/fixtures", "actions/node_modules", "mcp"]
 }
