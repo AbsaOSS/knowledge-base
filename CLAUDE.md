@@ -8,6 +8,9 @@ Build-time aggregator that downloads pre-built static doc sites from GitHub Rele
 
 ## Commands
 
+`make help` lists the same tasks as make targets (`make lint`, `make test-mcp`, `make prod`, …); each
+delegates to an npm script, so everything below also works without make.
+
 ```bash
 # Install
 npm install                          # Node >= 24 required
@@ -25,10 +28,19 @@ npm run dev:fetch                    # fetch artifacts then start dev
 # Preview
 npm run preview                      # serve the built dist/ (astro preview, :4321)
 
+# MCP server (from source — Node strips the types; needs a build's dist/_mcp/search-index.json)
+npm run mcp:dev                      # HTTP on :8081, restarts on change
+npm run mcp:stdio                    # stdio
+
+# Lint (mcp/ only: tsc --noEmit, ESLint strictTypeChecked, Prettier)
+npm run lint
+npm run format
+
 # Test (Playwright E2E — self-contained; auto-starts its own servers)
 npm test                             # embedded web-fragment harness
 npx playwright test --config=playwright.config.ci.js   # standalone fragment server
 npm run test:container               # real nginx image (needs Docker)
+npm run test:mcp                     # MCP suites only, over an existing dist/ (fast loop)
 npm run test:ui                      # Playwright UI
 npm run test:headed                  # visible browser
 npm run test:debug                   # debug mode
@@ -49,6 +61,7 @@ apps.json (registry)
   → [3] astro build: [...path].astro enumerates all HTML via getStaticPaths
          → transformSubAppHtml() rewrites URLs + splits the document,
            which Base.astro then re-hosts (masthead + head/body)
+  → [3b] buildMcpArtifacts() extracts plain-text search index + bundles MCP server → dist/_mcp/
   → dist/
 ```
 
@@ -80,7 +93,12 @@ Orchestrator: `scripts/build-vite.js`. Flags: `--local`, `--headless`.
 - `src/scripts/embedded-transitions.js` — Loaded by the layout; inert standalone. Inside a web fragment it runs Astro's view transition on the host document (the iframe's is never painted) and replaces Astro's swap with one that targets reframed's `wf-html`/`wf-head`/`wf-body`, because the default swap nests a new `wf-html` per navigation and leaks every stylesheet. Its head diff never moves a reused node: on a pierced page a `<link>` already moved once by reframed's portal falls out of the applied stylesheets when moved again. It also imports the fetched head and body into the host document before swapping them in: reframed routes a script into its iframe only through host-realm DOM methods, and the router's page is parsed in the iframe, so Astro's `script.replaceWith()` re-run would otherwise execute every swapped-in sub-app script in the host window
 - `src/utils/config.js` — `PATH_PREFIX`/`BASE_PATH`, `isHeadlessBuild()` and `REGISTRY_FILE` — the build-wide constants
 - `src/utils/registry.js` — Registry validation, manifest reading/validation, expansion map. Shared by the build and by Astro so both resolve the same registry
-- `scripts/build-vite.js` — Build orchestrator (4 steps: prepare, hoist, copy assets, astro build)
+- `scripts/build-vite.js` — Build orchestrator; step 3b generates MCP search index and self-contained runtime bundle
+- `mcp/` — the MCP server, in TypeScript that Node runs as-is (`mcp/tsconfig.json` allows only erasable syntax; relative imports spell `.ts`). Linted on its own (`eslint.config.js`). Three parts, kept apart by an ESLint import boundary:
+  - `mcp/search-index/schema.ts` — the search index file format and `validateSearchIndex()`, the one thing build and runtime share
+  - `mcp/build/` — build time only: `extract.ts` (untrusted HTML → bounded markdown-like text, parse5), `index-builder.ts`, `bundle.ts` (the esbuild config: minified, English-only zod locales, the SDK's `_shims` aliased to `src/sdk-shims.ts` to drop Ajv)
+  - `mcp/src/` — the runtime. `ports.ts` declares `DocumentRepository` and `SearchBackend` (async, adapter-owned opaque cursors); `knowledge-base.ts` is the facade the protocol layer talks to (public shapes, links, bounded reads); `adapters/memory/` implements both ports over the search index (lexical search: stemmed term frequency, title boost, compound split, fuzzy match); `compose.ts` wires adapters to the facade; `protocol/` registers one tool per file plus `kb://` resources on the official SDK v2 `McpServer`; `transport/` is the stateless HTTP handler (Origin, body cap, per-client and global rate limits, in-flight cap, timeout) and listener; `config.ts` is the only reader of argv/env. A new backend (OpenSearch) is a new `adapters/<name>/` pair plus a branch in `compose.ts`, and must pass `tests/support/backend-contract.js`
+- `scripts/build-mcp.js` — Emits `dist/_mcp/search-index.json` and bundled `server.mjs`
 - `scripts/fetch-apps.js` — GitHub Release artifact downloader. Only *obtains* an artifact; installing it is one shared path in `build-vite.js`
 - `scripts/artifacts.js` — Safe tarball extraction + tree copy, shared by both fetch paths. Validates archive members (no traversal, no absolute paths, no symlinks) before anything is written, and replaces the old `cp -r`/`tar` shell-outs so the build runs on Windows
 - `scripts/check-artifact.js` — Runs the publish action's contract checker (`actions/lib/check.js`) on every installed artifact, before hoisting; logs findings grouped by rule, and fails a strict build on an error. `check.js` resolves its parsers from `actions/node_modules` or the root, which pins the same versions
@@ -163,7 +181,9 @@ Self-contained Playwright E2E — `npm test` auto-starts everything (no external
    second time drops out of the applied stylesheets; see `embedded-transitions.js`).
 
 Every embedded test runs twice, as Playwright projects `chromium` (:4201) and
-`chromium-pierced` (:4202). Suites (`tests/`), all four commands listed in `AGENTS.md`:
+`chromium-pierced` (:4202). The `mcp-*.spec.js` suites need no browser; `playwright.config.mcp.js`
+runs them alone (`npm run test:mcp`) against an existing `dist/`, starting only the `:3000`
+fragment server. Suites (`tests/`), all commands listed in `AGENTS.md`:
 - `build-integrity.spec.js` — `dist/` output: both apps enumerated, absolute URL rewriting,
   headless markup and the per-app `"headless"` override, the knowledge base stylesheet
   inlined into every body (no page links one from its head) plus its stable `dist/style.css`
@@ -206,6 +226,20 @@ Every embedded test runs twice, as Playwright projects `chromium` (:4201) and
   (name ↔ directory, portable fields only), no scripts shipped, every referenced file exists,
   `examples/` are byte-identical to the contract's code blocks, and the docs carry the install
   command.
+- `mcp-golden.spec.js` — byte-exact pins: every protocol case over the synthetic search index
+  (`tests/fixtures/mcp/synthetic-index.js`; cases in `support/mcp-cases.js`), the same with a
+  public origin, the extraction of `fixtures/mcp/extract-rich.html`, and the search index the fixture
+  build generates. Files in `fixtures/mcp/golden/`; long strings are pinned by length and hash.
+  A deliberate change regenerates them with `UPDATE_GOLDEN=1`.
+- `mcp-backend-contract.spec.js` — the memory adapters against `support/backend-contract.js`:
+  canonical order, complete paging, filters, cursor binding, typed errors, deterministic
+  best-first ranking (ranking itself is not pinned, so a vector backend can pass it).
+- `mcp-bundle.spec.js` — the built `dist/_mcp/server.mjs` answers every protocol case exactly
+  like the source, and stays within its size budget (`make size`).
+- `mcp-server.spec.js`, `mcp-search.spec.js`, `mcp-extract.spec.js`, `mcp-index-builder.spec.js`,
+  `mcp-error-page.spec.js` — HTTP guards and rate limits, ranking examples, extraction,
+  search index edge cases, browser error pages. `support/mcp.js` builds the runtime for tests (in
+  process, or the bundle as a child process).
 - `standalone.spec.js` — the `:3000` fragment server directly (`playwright.config.ci.js`).
 - `container.spec.js` — the real nginx image (`playwright.config.docker.js`, needs Docker).
 - `support/fragment.js` — shadow-DOM traversal + reframed-body wait/query helpers.
@@ -229,6 +263,7 @@ in the committed `apps.json` without breaking CI, which only has this repo.
 - `KB_STRICT` — `true` rejects `prebuilt`/`localPath`/`optional` entries, an empty registry, any entry that yields no apps, and any artifact with an `error` finding from the contract checker (`scripts/check-artifact.js`; every build logs the findings, grouped by rule, strict or not). Production builds only; this repo's own registry is a fixture and fails it by design.
 - `KB_HEADLESS` — `true` produces web-fragment output; **anything else, including unset, means standalone**. `scripts/build-vite.js` always exports an explicit value, so the default only applies when `astro build`/`astro dev` runs directly. Read it through `isHeadlessBuild()`, never inline. A per-app `"headless"` in `apps.json` overrides it in either direction.
 - `AWS_REGION`, `ECR_REPOSITORY`, `ECS_CLUSTER`, `ECS_SERVICE` — deployment config
+- `KB_MCP_*` — the MCP server's runtime settings (`SEARCH_INDEX`, `HOST`, `PORT`, `PUBLIC_ORIGIN`, `ALLOWED_ORIGINS`, `TRUSTED_PROXIES`, `BACKEND` — `memory`, the only backend today). Parsed and validated in `mcp/src/config.ts` only; documented in `docs/mcp.md` (developer guide: `docs/mcp-development.md`)
 - `KB_EXAMPLE_ARTIFACT` — overrides the packaged artifact `scripts/setup-test-apps.mjs` registers
 - `KB_CONTAINER_PORT`, `KB_SKIP_BUILD` — container-suite harness (`tests/container/serve.mjs`); CI sets `KB_SKIP_BUILD` because its image job already built the image
 

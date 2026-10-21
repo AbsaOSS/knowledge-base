@@ -84,14 +84,18 @@ test.describe('routing', () => {
     expect(res.headers()['content-type']).toContain('text/css');
   });
 
-  test('an unknown sub-app path is a 404, not the landing page', async ({ request }) => {
+  test('an unknown sub-app path is a designed 404, not the landing page', async ({ request }) => {
     const res = await request.get('/knowledge-base/no-such-app/');
     expect(res.status()).toBe(404);
+    expect(res.headers()['content-type']).toContain('text/html');
+    expect(await res.text()).toContain('This page is not available.');
   });
 
-  test('an unknown top-level path is a 404', async ({ request }) => {
+  test('an unknown top-level path is a designed 404', async ({ request }) => {
     const res = await request.get('/no-such-thing');
     expect(res.status()).toBe(404);
+    expect(res.headers()['content-type']).toContain('text/html');
+    expect(await res.text()).toContain('This page is not available.');
   });
 
   test('OPTIONS preflight is answered without hitting try_files', async ({ request }) => {

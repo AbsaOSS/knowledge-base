@@ -58,6 +58,7 @@ One paragraph on what changed and why.
 ## Verification
 
 - `npm run build:headless` — green
+- `npm run lint` — green
 - `npm test` — green
 - `npx playwright test --config=playwright.config.ci.js` — green
 
@@ -76,13 +77,19 @@ characters and explain *why* in the body when it is not obvious from the diff.
 
 ## Before opening a PR
 
-All three must pass locally — CI runs the same three:
+All four must pass locally — CI runs the same four (`make help` has them as targets):
 
 ```bash
 npm run build:headless                                  # hermetic build
+npm run lint                                            # MCP server: tsc, ESLint, Prettier
 npm test                                                # embedded web-fragment E2E
 npx playwright test --config=playwright.config.ci.js    # standalone fragment layer
 ```
+
+While working on `mcp/`, `npm run test:mcp` runs only the MCP suites, over the
+`dist/` the build left behind, in seconds. A deliberate change to what the
+server answers regenerates the goldens: `UPDATE_GOLDEN=1 npm run test:mcp`;
+review the diff in `tests/fixtures/mcp/golden/` like code.
 
 The build and both suites are hermetic: they use the committed
 `tests/fixtures/` artifacts via `apps.json`, so no `GITHUB_TOKEN`, no network and
