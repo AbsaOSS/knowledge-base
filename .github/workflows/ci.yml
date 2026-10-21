@@ -6,7 +6,7 @@
 #
 # Jobs:
 #   typecheck  — astro check (TypeScript / Astro type errors)
-#   lint       — MCP server: tsc, ESLint, Prettier (npm run lint)
+#   lint       — MCP server: tsc, ESLint, Prettier (make lint)
 #   build      — headless build from the vendored fixture; uploads dist/
 #   e2e        — Playwright: embedded web-fragment harness + standalone layer
 #   image      — docker build + container integration tests against real nginx + Trivy scan
@@ -60,7 +60,7 @@ jobs:
           node-version: '24'
           cache: npm
       - run: npm ci
-      - run: npm run lint
+      - run: make lint
 
   # ── 2. Build (headless, hermetic) ──────────────────────────────────────────
   build:

@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <title>Document title fallback</title>
+  <meta name="description" content="ignored">
+  <style>body { color: red; }</style>
+  <script>window.leak = 'script text';</script>
+</head>
+<body>
+  <header>Site header decoy</header>
+  <nav><a href="/">Navigation decoy</a></nav>
+  <aside class="sidebar">Sidebar decoy</aside>
+  <main>
+    <article>
+      <header><p>Article header kept because it is not the page header.</p></header>
+      <h1 id="rich">Rich&#x200B; extraction&#x202E; fixture</h1>
+      <p>This paragraph is long enough to become the extracted description of the page.</p>
+      <p hidden>Hidden paragraph decoy</p>
+      <p aria-hidden="true">Aria hidden decoy</p>
+      <h2 id="lists">Lists <a class="headerlink" href="#lists">¶</a></h2>
+      <ol>
+        <li>First <strong>step</strong></li>
+        <li>Second step
+          <ul>
+            <li>Nested bullet<ol><li>Deep item</li></ol></li>
+          </ul>
+        </li>
+        <li hidden>Hidden item</li>
+      </ol>
+      <h2 id="2-bad-anchor">Code &amp; tables</h2>
+      <pre class="language-python"><code><span class="k">def</span> <span class="nf">main</span>():
+    <span class="k">return</span> <span class="mi">1</span>
+</code></pre>
+      <pre class="mermaid">graph TD; A--&gt;B</pre>
+      <table>
+        <thead><tr><th>Name</th><th>Value</th></tr></thead>
+        <tbody>
+          <tr><td>alpha</td><td><code>1</code> <em>units</em></td></tr>
+          <tr hidden><td>hidden</td><td>row</td></tr>
+          <tr><td>beta<br>gamma</td><td><img alt="chart"></td></tr>
+        </tbody>
+      </table>
+      <h3>Inline <code>mixed</code> heading</h3>
+      Loose text <span>beside</span> <a href="#">a link</a>.
+      <div>Block <p>with nested paragraph</p> tail.</div>
+      <form><input value="form decoy"><button>Button decoy</button></form>
+      <template><p>Template decoy</p></template>
+      <svg><text>SVG decoy</text></svg>
+      <hr>
+      <footer>Article footer decoy</footer>
+    </article>
+  </main>
+  <footer>Site footer decoy</footer>
+</body>
+</html>

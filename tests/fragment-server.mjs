@@ -19,7 +19,12 @@
 import express from 'express';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
+import { validateSearchIndex } from '../mcp/search-index/schema.ts';
+import { memoryKnowledgeBase, versionOf } from '../mcp/src/compose.ts';
+import { createServerFactory } from '../mcp/src/protocol/server.ts';
+import { createMcpHttpHandler } from '../mcp/src/transport/http.ts';
+import { sendBrowserError } from '../mcp/src/transport/error-page.ts';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(__dirname, '..');
@@ -31,6 +36,13 @@ if (!existsSync(DIST)) {
   console.error(`✗ dist/ not found at ${DIST} — run "npm run build:headless" first.`);
   process.exit(1);
 }
+const MCP_SEARCH_INDEX = join(DIST, '_mcp', 'search-index.json');
+if (!existsSync(MCP_SEARCH_INDEX)) {
+  console.error(`✗ ${MCP_SEARCH_INDEX} missing — build step 3b did not run.`);
+  process.exit(1);
+}
+const mcpIndex = validateSearchIndex(JSON.parse(readFileSync(MCP_SEARCH_INDEX, 'utf8')));
+const mcpHandler = createMcpHttpHandler(createServerFactory(memoryKnowledgeBase(mcpIndex), { version: versionOf(mcpIndex) }));
 
 /**
  * Kept byte-identical to the policy in nginx.headers.conf.
@@ -67,6 +79,12 @@ const cacheControl = (requestUri) =>
 
 const app = express();
 
+// nginx: MCP routes; shared Node handler keeps protocol guard parity.
+app.all(`/${PREFIX}/mcp`, (req, res) => mcpHandler(req, res));
+app.all(new RegExp(`^/${PREFIX}/mcp/`), (req, res) => {
+  if (req.method === 'GET' || req.method === 'HEAD') return sendBrowserError(req, res, 404);
+  return res.sendStatus(404);
+});
 // nginx: include /etc/nginx/kb-headers.conf — the shared CORS + security set.
 // Applied to every response, which is what the nginx config does now that each
 // location declaring an add_header re-includes the snippet. Kept in sync with
@@ -91,6 +109,12 @@ app.use((req, res, next) => {
     res.set('Cache-Control', cacheControl(req.url));
   }
   next();
+});
+
+// _mcp is runtime-only and must never be served by either static path.
+app.use((req, res, next) => {
+  if (!/^\/(__wf\/)?knowledge-base\/_mcp(?:\/|$)/.test(req.path)) return next();
+  return res.status(404).sendFile(join(DIST, '_error', 'not-found.html'), { cacheControl: false });
 });
 
 // nginx: location ^~ /__wf/knowledge-base/ { rewrite ^/__wf/knowledge-base/(.*)$ /$1 }
@@ -139,6 +163,9 @@ app.use(`/${PREFIX}`, (req, res, next) => {
 });
 
 app.get('/healthz', (_req, res) => res.type('text/plain').send('ok'));
+
+// nginx: error_page 404 /__kb-not-found; all missing browser routes share page.
+app.use((_req, res) => res.status(404).sendFile(join(DIST, '_error', 'not-found.html'), { cacheControl: false }));
 
 app.listen(PORT, () => {
   console.log(`▶ knowledge-base fragment server → http://localhost:${PORT}/${PREFIX}/  (dist/, nginx-mirror)`);
