@@ -2,7 +2,7 @@
  * tests/build-integrity.spec.js
  *
  * Static checks on the built `dist/` output (no browser). Validates that the
- * build pipeline integrated both apps, enumerated every sub-app page, rewrote
+ * build pipeline integrated every fixture app, enumerated every sub-app page, rewrote
  * URLs to absolute /{prefix}/{slug}/ paths, marked pages headless, and emitted
  * the knowledge base stylesheet at the stable name the sub-app pages reference.
  *
@@ -322,34 +322,120 @@ test.describe('Masthead', () => {
     }
   });
 
-  test('on the catalog, Library is the active crumb and no app crumb is shown', () => {
-    const n = nav(read('index.html'));
-    expect(n).toContain('aria-current="page"');
-    expect(n).toContain('Library');
-    // Library is inert here — no self-link back to the page you are on.
-    expect(n).not.toMatch(/<a\b/);
+  /** The wide bar: Library, the current app and its entries. */
+  const bar = (html) => html.match(/<ul class="kb-nav-bar"[\s\S]*?<\/ul><div class="kb-nav-compact"/)?.[0] ?? '';
+  /** The compact menu sheet, empty when the page has none. */
+  const sheet = (html) => html.match(/<div id="kb-nav-menu"[\s\S]*?<\/nav>/)?.[0] ?? '';
+  /** Every element carrying aria-current, as `value → text`. */
+  const current = (html) => [...html.matchAll(/<(a|summary)\b[^>]*aria-current="([^"]+)"[^>]*>([\s\S]*?)<\/\1>/g)]
+    .map(([, , value, text]) => `${value} → ${text.replace(/<svg[\s\S]*?<\/svg>|<[^>]+>/g, '').trim()}`);
+  /** Positions of `>name<` in html, -1 for a missing name. */
+  const positions = (html, names) => names.map((name) => html.indexOf(`>${name}<`));
+  const APPS = ['User Guide', 'Guide Mirror', 'Handbook', 'External Docs', 'Platform Overview', 'Release Process'];
+  const PAGES = [
+    'index.html', 'user-guide/index.html', 'user-guide/docs/index.html', 'guide-mirror/index.html',
+    'guide-mirror/docs/index.html', 'guide-mirror/docs/adding-pages/index.html', 'external-docs/index.html',
+    'platform-overview/index.html',
+  ];
+
+  test('on the catalog the bar holds the Library alone: the catalog is the way to an app', () => {
+    const html = read('index.html');
+    expect(positions(bar(html), APPS).every((i) => i < 0), 'an app is listed on the catalog').toBe(true);
+    expect(bar(html)).toContain('>Library<');
+    expect(html).not.toContain('class="kb-nav-toggle"');
+    expect(sheet(html)).toBe('');
   });
 
-  test('inside an app, Library links to the catalog and the app is the active crumb', () => {
-    const n = nav(read('user-guide/docs/index.html'));
-    expect(n).toContain('href="/knowledge-base/"');
-    expect(n).toContain('User Guide');
-    // Deeper than the app index → the app crumb links back to the app root.
-    expect(n).toContain('href="/knowledge-base/user-guide/"');
+  test('an app page shows Library, the app, then only that app\'s entries, in manifest order', () => {
+    for (const p of ['guide-mirror/index.html', 'guide-mirror/docs/index.html', 'guide-mirror/docs/adding-pages/index.html']) {
+      const html = bar(read(p));
+      const at = positions(html, ['Library', 'Guide Mirror', 'Showcase', 'Overview', 'Guide']);
+      expect(at.every((i) => i >= 0), `an entry is missing on ${p}: ${at}`).toBe(true);
+      expect([...at].sort((a, b) => a - b), `entries out of order on ${p}`).toEqual(at);
+      const others = positions(html, APPS.filter((name) => name !== 'Guide Mirror'));
+      expect(others.every((i) => i < 0), `another app is listed on ${p}`).toBe(true);
+    }
   });
 
-  test('on an app index the app crumb is inert', () => {
-    const n = nav(read('user-guide/index.html'));
-    expect(n).toContain('href="/knowledge-base/"');       // Library still a link
-    expect(n).not.toContain('href="/knowledge-base/user-guide/"');
-    expect(n).toMatch(/aria-current="page"[\s\S]*User Guide/);
+  test('a section is a dropdown of its pages; a page without one is a plain link', () => {
+    const html = bar(read('guide-mirror/index.html'));
+    const dropdowns = html.match(/<details class="kb-nav-dropdown"[\s\S]*?<\/details>/g) ?? [];
+    expect(dropdowns).toHaveLength(1);
+    expect(dropdowns[0]).toMatch(/<summary[^>]*>\s*<span>Guide<\/span>/);
+    const pages = [...dropdowns[0].matchAll(/<a class="kb-nav-page[^"]*" href="([^"]+)"[^>]*>([^<]+)</g)].map(([, h, t]) => `${t} ${h}`);
+    expect(pages).toEqual([
+      'Adding Pages /knowledge-base/guide-mirror/docs/adding-pages/',
+      'Customising /knowledge-base/guide-mirror/docs/customising/',
+    ]);
+    const links = [...html.matchAll(/<li class="kb-nav-item"><a class="kb-masthead-link[^"]*" href="([^"]+)"[^>]*>([^<]+)</g)].map(([, h, t]) => `${t} ${h}`);
+    expect(links).toEqual(['Showcase /knowledge-base/guide-mirror/', 'Overview /knowledge-base/guide-mirror/docs/']);
   });
 
-  test('the crumb tracks the app being viewed', () => {
-    expect(nav(read('guide-mirror/docs/index.html'))).toContain('Guide Mirror');
-    expect(nav(read('external-docs/index.html'))).toContain('External Docs');
+  test('each section of a manifest is its own dropdown, and the entries are the app\'s own', () => {
+    const html = bar(read('handbook/docs/adding-pages/index.html'));
+    const at = positions(html, ['Library', 'Handbook', 'Showcase', 'Getting started', 'Authoring']);
+    expect(at.every((i) => i >= 0), `an entry is missing: ${at}`).toBe(true);
+    expect([...at].sort((a, b) => a - b), 'entries out of order').toEqual(at);
+    expect(positions(html, ['Guide Mirror', 'Guide']).every((i) => i < 0), 'another app\'s entries leaked in').toBe(true);
+
+    const dropdowns = html.match(/<details class="kb-nav-dropdown"[\s\S]*?<\/details>/g) ?? [];
+    const pages = dropdowns.map((d) => [...d.matchAll(/<a class="kb-nav-page[^"]*" href="([^"]+)"[^>]*>([^<]+)</g)].map(([, h, t]) => `${t} ${h}`));
+    expect(pages).toEqual([
+      ['Overview /knowledge-base/handbook/docs/', 'Customising /knowledge-base/handbook/docs/customising/'],
+      ['Adding Pages /knowledge-base/handbook/docs/adding-pages/', 'New Page /knowledge-base/handbook/docs/some-new-page/'],
+    ]);
+    expect(current(html)).toEqual(['true → Handbook', 'true → Authoring', 'page → Adding Pages']);
+  });
+
+  test('an app without a manifest shows its name and nothing after it', () => {
+    for (const p of ['user-guide/docs/index.html', 'external-docs/index.html', 'platform-overview/index.html']) {
+      const html = read(p);
+      expect(bar(html), p).not.toContain('kb-nav-item');
+      expect(bar(html), p).not.toContain('kb-nav-scope-mark');
+      expect(html, p).not.toContain('class="kb-nav-toggle"');
+      expect(sheet(html), p).toBe('');
+    }
+  });
+
+  test('every menu link resolves to a built page', () => {
+    const hrefs = new Set(PAGES.flatMap((p) => [...read(p).matchAll(/<a class="kb-(?:masthead-link|nav-page)[^"]*" href="([^"]+)"/g)].map((m) => m[1])));
+    expect(hrefs.size).toBeGreaterThan(APPS.length);
+    for (const h of hrefs) {
+      const rel = h.replace(/^\/knowledge-base\//, '');
+      expect(existsSync(join(DIST, rel, 'index.html')), `${h} has no page`).toBe(true);
+    }
+  });
+
+  test('on the catalog, Library is the current page', () => {
+    expect(current(bar(read('index.html')))).toEqual(['page → Library']);
+  });
+
+  test('on a manifest page, the page is current and the app and section holding it are marked', () => {
+    const html = read('guide-mirror/docs/adding-pages/index.html');
+    expect(current(bar(html))).toEqual(['true → Guide Mirror', 'true → Guide', 'page → Adding Pages']);
+    expect(current(sheet(html))).toEqual(['page → Adding Pages']);
+    expect(bar(html)).not.toMatch(/<details[^>]*\bopen\b/);
+    // The app root is a manifest page here, so that entry is the current one, not the app.
+    expect(current(bar(read('guide-mirror/index.html')))).toEqual(['true → Guide Mirror', 'page → Showcase']);
+  });
+
+  test('without a manifest, the app is the current page at its root and holds it deeper in', () => {
+    expect(current(bar(read('user-guide/index.html')))).toEqual(['page → User Guide']);
+    expect(current(bar(read('user-guide/docs/index.html')))).toEqual(['true → User Guide']);
+    expect(current(bar(read('external-docs/index.html')))).toEqual(['page → External Docs']);
     // Expanded single-page docs are ordinary apps as far as the masthead cares.
-    expect(nav(read('platform-overview/index.html'))).toContain('Platform Overview');
+    expect(current(bar(read('platform-overview/index.html')))).toEqual(['page → Platform Overview']);
+  });
+
+  test('the compact bar names the current app and opens a menu of its pages', () => {
+    const html = read('guide-mirror/docs/index.html');
+    const compact = html.match(/<div class="kb-nav-compact"[\s\S]*?<\/div>/)?.[0] ?? '';
+    expect(compact).toContain('Guide Mirror');
+    expect(compact).toMatch(/<button type="button" class="kb-nav-toggle" popovertarget="kb-nav-menu" aria-label="Guide Mirror pages"/);
+    expect(html).toMatch(/<div id="kb-nav-menu" class="kb-nav-sheet" popover>/);
+    const menu = sheet(html);
+    expect(positions(menu, ['Showcase', 'Overview', 'Guide', 'Adding Pages', 'Customising']).every((i) => i >= 0)).toBe(true);
+    expect(positions(menu, APPS.filter((name) => name !== 'Guide Mirror')).every((i) => i < 0)).toBe(true);
   });
 
   test('all masthead links are absolute /knowledge-base/ paths', () => {
