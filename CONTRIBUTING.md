@@ -7,7 +7,15 @@ Thanks for your interest in improving **knowledge-base**.
 ```bash
 npm install            # Node >= 24
 npm run build:headless # hermetic build from the vendored fixture (tests/fixtures/)
+npm run lint           # MCP server: tsc, ESLint, Prettier
 npm test               # embedded web-fragment E2E (Playwright)
+```
+
+With GNU make installed (on Windows: `winget install ezwinports.make`, run from
+Git Bash), `make help` lists the same tasks as targets.
+
+```bash
+make fixture-build && make test-mcp   # MCP suites only, the fast loop for mcp/
 ```
 
 The build and tests are fully hermetic — they use the committed
@@ -33,6 +41,7 @@ opening your first PR, and required reading for automated contributors.
 | `npm test` | Embedded web-fragment harness (`playwright.config.js`) — host gateway proxies/embeds the fragment on `:4201`. |
 | `npx playwright test --config=playwright.config.ci.js` | Standalone fragment-server layer (`:3000`) — headers, headless contract, asset routing, #297. |
 | `npm run test:container` | Integration tests against the real nginx image. **Needs Docker**, so it is not part of `npm test`. Run it when changing `nginx.conf`, `nginx.headers.conf` or the `Dockerfile`. |
+| `npm run test:mcp` | The MCP suites alone (`playwright.config.mcp.js`) over an existing `dist/`. Part of `npm test` too. |
 
 Both run in CI (`.github/workflows/ci.yml`). Please make sure both pass before
 opening a PR.
@@ -41,8 +50,8 @@ opening a PR.
 
 1. Branch off `master`.
 2. Keep changes focused; update docs/tests alongside code.
-3. Ensure `npm run build:headless`, `npm test`, and the standalone suite pass.
-4. CI (type-check, build, E2E, audit) must be green.
+3. Ensure `npm run build:headless`, `npm run lint`, `npm test`, and the standalone suite pass.
+4. CI (type-check, lint, build, E2E, audit) must be green.
 
 ## Reporting security issues
 
