@@ -2,3 +2,6 @@
 # Windows (core.autocrlf=true, the Git for Windows default) would put a `\r` at
 # the end of every line, which bash reports as a command not found.
 *.sh text eol=lf
+
+# Golden outputs are compared byte for byte.
+tests/fixtures/mcp/golden/*.json text eol=lf

@@ -35,6 +35,9 @@ function filesWithExt(dir, ext, acc = []) {
 /** Every .html file under dist/, recursively. */
 const htmlFiles = (dir) => filesWithExt(dir, '.html');
 
+/** The pages Base.astro renders: every HTML file but nginx's self-contained 404 page. */
+const layoutPages = (dir) => htmlFiles(dir).filter((file) => relative(dir, file) !== join('_error', 'not-found.html'));
+
 /**
  * The knowledge base stylesheet a page carries. Base.astro inlines it into the
  * body of every page — inside a web fragment a head <link> is exactly the node
@@ -470,7 +473,7 @@ test.describe('stylesheet emission', () => {
     // would then render unstyled. The stylesheet travels in the body instead,
     // where it is replaced together with the page it styles. The only <link
     // rel="stylesheet"> left are the sub-apps' own, which are layered instead.
-    for (const file of htmlFiles(DIST)) {
+    for (const file of layoutPages(DIST)) {
       const html = readFileSync(file, 'utf8');
       const rel = relative(DIST, file);
       const kbLinks = [...html.matchAll(/<link\b[^>]*\brel="stylesheet"[^>]*>/gi)]
@@ -495,7 +498,7 @@ test.describe('stylesheet emission', () => {
   test('the layout declares the cascade layer order before anything else in the head', () => {
     // Layer priority is fixed by the first statement naming the layers, so
     // this must precede every sub-app <link>/<style> the head slot brings in.
-    for (const file of htmlFiles(DIST)) {
+    for (const file of layoutPages(DIST)) {
       const html = readFileSync(file, 'utf8');
       const head = html.slice(html.indexOf('<head>'), html.indexOf('</head>'));
       const first = head.search(/<(style|link)\b/i);
