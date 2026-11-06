@@ -1,4 +1,5 @@
-# Dependabot keeps npm dependencies and pinned GitHub Actions up to date.
+# Dependabot keeps npm dependencies, pinned GitHub Actions and the Docker base
+# image up to date.
 # Action updates land as SHA bumps with the human-readable tag in a comment.
 version: 2
 updates:
@@ -13,6 +14,13 @@ updates:
         dependency-type: development
 
   - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+
+  # The Dockerfile pins nginx-unprivileged by tag and digest; this bumps both.
+  - package-ecosystem: docker
     directory: /
     schedule:
       interval: weekly
