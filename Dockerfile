@@ -14,8 +14,22 @@ FROM nginxinc/nginx-unprivileged:1.31-alpine@sha256:b5047b9b76845eac124358373c68
 # digest pin keeps nginx itself fixed, but upstream rebuilds only every few
 # weeks, and a CVE fixed in an Alpine package fails the Trivy scan until then.
 # The image runs as UID 101, so switch to root for the upgrade and back after.
+#
+#
+# Behind a TLS-intercepting proxy apk fails with "server certificate not
+# trusted". Drop the proxy's CA (PEM, *.pem or *.crt) into trusted_certs/, or
+# point TRUSTED_SSL_CERTS at another directory in the build context
+# (`docker build --build-arg TRUSTED_SSL_CERTS=./my-certs .`); every file there
+# is appended to the system CA bundle before apk runs. The committed directory
+# is empty, so a build without one trusts the public CAs only.
+ARG TRUSTED_SSL_CERTS=./trusted_certs
+COPY $TRUSTED_SSL_CERTS /opt/certs/
 USER root
-RUN apk upgrade --no-cache
+RUN for CERT_PATH in /opt/certs/*.pem /opt/certs/*.crt; do \
+      [ -e "$CERT_PATH" ] || continue; \
+      { cat "$CERT_PATH"; echo; } >> /etc/ssl/certs/ca-certificates.crt; \
+    done \
+    && apk upgrade --no-cache
 USER 101
 
 # Overwrite the stock config rather than `RUN rm`-ing it: this image drops to a
