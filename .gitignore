@@ -11,3 +11,7 @@ test-results/
 public/
 # Copied from node_modules by scripts/setup-test-apps.mjs on every run.
 tests/fixtures/single-page-bundle/*/assets/mermaid.min.js
+
+# Local CA certificates for the image build (see Dockerfile); never committed.
+trusted_certs/*
+!trusted_certs/.gitkeep

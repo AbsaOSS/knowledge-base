@@ -92,13 +92,16 @@ test.describe('the private-registry inputs exist on every shared CI piece', () =
     for (const input of ['runs-on', 'npm-registry', 'node-mirror']) {
       expect(text).toContain(`\n      ${input}:\n`);
     }
-    for (const secret of ['npm-token', 'node-mirror-token']) {
+    for (const secret of ['npm-token', 'node-mirror-token', 'ca-certificates']) {
       expect(text).toContain(`\n      ${secret}:\n`);
     }
     expect(text).toContain('KB_NPM_REGISTRY: ${{ inputs.npm-registry }}');
     expect(text.split('KB_NPM_TOKEN: ${{ secrets.npm-token }}').length - 1).toBe(2);
     expect(text).toContain('mirror: ${{ inputs.node-mirror }}');
     expect(text).toContain('mirror-token: ${{ secrets.node-mirror-token }}');
+    // The proxy CA reaches the Dockerfile's apk step through trusted_certs/.
+    expect(text).toContain('> trusted_certs/ca-certificates.pem');
+    expect(read('Dockerfile')).toContain('ARG TRUSTED_SSL_CERTS=./trusted_certs');
     expect(text).toMatch(/runs-on: \$\{\{ .*fromJSON\(inputs\.runs-on\).*inputs\.runs-on \}\}/);
     // The workflow inlines the script's logic; keep the two token lines identical
     // so a fix to one cannot silently miss the other.

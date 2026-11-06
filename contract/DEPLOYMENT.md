@@ -178,6 +178,7 @@ three more things and changes nothing else:
       npm-token: ${{ secrets.ARTIFACTORY_TOKEN }}
       registry-username: ${{ secrets.ARTIFACTORY_USER }}
       registry-password: ${{ secrets.ARTIFACTORY_TOKEN }}
+      ca-certificates: ${{ secrets.CORP_CA_PEM }}   # behind a TLS-intercepting proxy
 ```
 
 | Input | What it covers |
@@ -185,6 +186,7 @@ three more things and changes nothing else:
 | `runs-on` | A single label as it is; a JSON array or object for several labels or a runner group. Default `ubuntu-latest`. |
 | `npm-registry`, `npm-token` (secret) | The `npm ci` of the build's own dependencies. Empty means whatever npm resolves on the runner. |
 | `node-mirror`, `node-mirror-token` (secret) | Where `setup-node` downloads Node when it can reach neither the github.com release assets it tries first nor nodejs.org. A mirror of `https://nodejs.org` — an Artifactory generic remote. Not needed when the runner image carries Node 24 in its tool cache. |
+| `ca-certificates` (secret) | Extra CA certificates (PEM) for the image build's `apk upgrade`, which otherwise fails behind a TLS-intercepting proxy with `TLS: server certificate not trusted` (exit 99): the base image trusts public CAs only. Written to `trusted_certs/` before `docker build`; the Dockerfile appends every `*.pem`/`*.crt` there to the system CA bundle. A pipeline running `docker build` itself drops the files into `trusted_certs/`, or passes `--build-arg TRUSTED_SSL_CERTS=<dir>`. The certificates stay in the image. |
 
 The publishing actions take the same four inputs, so docs repos on the same
 runners publish the same way (`actions/publish-docs/README.md`,

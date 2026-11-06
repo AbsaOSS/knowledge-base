@@ -108,6 +108,12 @@ on:
       node-mirror-token:
         description: Authorization header value for `node-mirror`.
         required: false
+      ca-certificates:
+        description: >-
+          Extra CA certificates (PEM) the image build trusts while `apk upgrade`
+          fetches Alpine fixes — a TLS-intercepting proxy's CA, say. Written
+          to trusted_certs/ before `docker build`; see the Dockerfile.
+        required: false
     outputs:
       image:
         description: 'The first pushed image reference, when one was pushed.'
@@ -251,8 +257,14 @@ jobs:
           KB_IMAGE: ${{ inputs.image-name }}
           KB_TAGS: ${{ inputs.image-tags }}
           KB_SHA: ${{ github.sha }}
+          KB_CA_CERTIFICATES: ${{ secrets.ca-certificates }}
         run: |
           set -euo pipefail
+
+          # The Dockerfile trusts every *.pem in trusted_certs/ for its apk step.
+          if [ -n "${KB_CA_CERTIFICATES:-}" ]; then
+            printf '%s\n' "$KB_CA_CERTIFICATES" > trusted_certs/ca-certificates.pem
+          fi
 
           tags="${KB_TAGS:-$KB_SHA}"
           # Accept either separator; normalise to one tag per line.
