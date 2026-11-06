@@ -124,7 +124,14 @@ body { margin: 0; font-family: var(--font-sans); color: var(--text-body); }
 /* ── Flow ─────────────────────────────────────────────────────────────────── */
 .kb-doc p  { margin: 0 0 1.25rem; }
 .kb-doc ul, .kb-doc ol { margin: 0 0 1.25rem; padding-left: 1.5rem; }
+/* Markers are declared, not inherited from the browser default: inside the
+   knowledge base Tailwind's Preflight sets list-style: none on every list. */
+.kb-doc ul { list-style-type: disc; }
+.kb-doc ul ul { list-style-type: circle; }
+.kb-doc ul ul ul { list-style-type: square; }
+.kb-doc ol { list-style-type: decimal; }
 .kb-doc li { margin: 0.375rem 0; }
+.kb-doc li::marker { color: var(--text-muted); }
 .kb-doc li > ul, .kb-doc li > ol { margin: 0.375rem 0; }
 .kb-doc hr { border: 0; border-top: 1px solid var(--border); margin: 2.5rem 0; }
 .kb-doc img, .kb-doc video { max-width: 100%; height: auto; border-radius: var(--radius-md); }

@@ -268,6 +268,8 @@ test.describe('single-page onboarding', () => {
     const html = read('platform-overview/index.html');
     expect(html).toContain('data-kb-headless="true"');
     expect(kbInlineStylesheet(html)).toContain('.kb-single-page');
+    // Fallback markers for bundles whose doc.css predates its own list rules.
+    expect(kbInlineStylesheet(html)).toMatch(/\.kb-single-page ul\s*\{\s*list-style-type:\s*disc/);
     expect(html.match(/<html\b/gi) ?? []).toHaveLength(1);
     expect(html.match(/<head\b/gi) ?? []).toHaveLength(1);
     expect(html.match(/<body\b/gi) ?? []).toHaveLength(1);

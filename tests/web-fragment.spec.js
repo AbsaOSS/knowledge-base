@@ -223,6 +223,46 @@ test.describe('Single-page docs', () => {
     expect(await queryInShadow(page, 'nav#sidebar'), 'single-page doc must not render a sidebar').toBeNull();
     expect(await queryInShadow(page, '#kb-masthead'), 'masthead missing').not.toBeNull();
   });
+
+  // Preflight sets list-style: none on every list; doc.css has to put the
+  // markers back, and a task list has to stay marker-free.
+  test('lists keep their bullets and numbers; task lists stay unmarked', async ({ page }) => {
+    const markers = (path, selectors) => gotoFragment(page, path)
+      .then(() => waitForFragmentText(page, /./))
+      .then(() => page.evaluate((sels) => {
+        function search(root, sel) {
+          const el = root.querySelector(sel);
+          if (el) return el;
+          for (const child of root.querySelectorAll('*')) {
+            if (child.shadowRoot) {
+              const found = search(child.shadowRoot, sel);
+              if (found) return found;
+            }
+          }
+          return null;
+        }
+        return Object.fromEntries(sels.map((sel) => {
+          const el = search(document, sel);
+          return [sel, el ? getComputedStyle(el).listStyleType : null];
+        }));
+      }, selectors));
+
+    expect(await markers('/knowledge-base/release-process/', [
+      'main.kb-single-page ol',
+      'main.kb-single-page ul',
+      'main.kb-single-page ul ul',
+      'main.kb-single-page ul ul ul',
+    ])).toEqual({
+      'main.kb-single-page ol':       'decimal',
+      'main.kb-single-page ul':       'disc',
+      'main.kb-single-page ul ul':    'circle',
+      'main.kb-single-page ul ul ul': 'square',
+    });
+
+    expect(await markers('/knowledge-base/platform-overview/', [
+      'main.kb-single-page ul.contains-task-list',
+    ])).toEqual({ 'main.kb-single-page ul.contains-task-list': 'none' });
+  });
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
