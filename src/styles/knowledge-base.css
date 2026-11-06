@@ -350,6 +350,18 @@ a.kb-masthead-link:hover { color: var(--text-heading); }
   .kb-single-page { padding: 2rem 1.25rem 3.5rem; }
 }
 
+/* List markers for bundles published before the action's doc.css declared
+   them. Preflight sets list-style: none on every list, and doc.css used to set
+   only margin and padding, so bullets and numbers vanished. In `base` — after
+   Preflight, above it on specificity, below `kb-app` — so any marker the doc's
+   own stylesheet declares (a task list's none, a newer doc.css) still wins. */
+@layer base {
+  .kb-single-page ul { list-style-type: disc; }
+  .kb-single-page ul ul { list-style-type: circle; }
+  .kb-single-page ul ul ul { list-style-type: square; }
+  .kb-single-page ol { list-style-type: decimal; }
+}
+
 /* ── Tag pills ───────────────────────────────────────────────────────────── */
 .kb-tag {
   display: inline-flex;

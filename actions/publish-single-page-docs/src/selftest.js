@@ -208,6 +208,9 @@ try {
     const css = readFileSync(join(stage, 'my-service', 'assets', 'doc.css'), 'utf8');
     assert.match(css, /--color-kb-500: #af144b;/);
     assert.match(css, /\.kb-doc\b/);
+    // The knowledge base's Preflight strips list markers; the doc must restore them.
+    assert.match(css, /\.kb-doc ul \{ list-style-type: disc; \}/);
+    assert.match(css, /\.kb-doc ol \{ list-style-type: decimal; \}/);
   });
 
   check('packs a tarball with kb-docs.json at the root', () => {
