@@ -224,8 +224,10 @@ test.describe('Single-page docs', () => {
     expect(await queryInShadow(page, '#kb-masthead'), 'masthead missing').not.toBeNull();
   });
 
-  // Preflight sets list-style: none on every list; doc.css has to put the
-  // markers back, and a task list has to stay marker-free.
+  // Preflight sets list-style: none on every list, so the markers have to be
+  // put back, and a task list has to stay marker-free. release-process ships a
+  // doc.css from before the action declared markers, so its markers come from
+  // the knowledge base's fallback alone; platform-overview ships the current one.
   test('lists keep their bullets and numbers; task lists stay unmarked', async ({ page }) => {
     const markers = (path, selectors) => gotoFragment(page, path)
       .then(() => waitForFragmentText(page, /./))
@@ -252,11 +254,13 @@ test.describe('Single-page docs', () => {
       'main.kb-single-page ul',
       'main.kb-single-page ul ul',
       'main.kb-single-page ul ul ul',
+      'main.kb-single-page ul.contains-task-list',
     ])).toEqual({
-      'main.kb-single-page ol':       'decimal',
-      'main.kb-single-page ul':       'disc',
-      'main.kb-single-page ul ul':    'circle',
-      'main.kb-single-page ul ul ul': 'square',
+      'main.kb-single-page ol':                   'decimal',
+      'main.kb-single-page ul':                   'disc',
+      'main.kb-single-page ul ul':                'circle',
+      'main.kb-single-page ul ul ul':             'square',
+      'main.kb-single-page ul.contains-task-list': 'none',
     });
 
     expect(await markers('/knowledge-base/platform-overview/', [
