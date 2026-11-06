@@ -9,9 +9,21 @@ updates:
       interval: weekly
     open-pull-requests-limit: 5
     groups:
-      # Batch low-risk dev tooling into a single PR.
+      # Batch low-risk dev tooling into a single PR. Majors stay out of the
+      # group: each gets a PR of its own, so one breaking bump cannot hold
+      # every minor and patch update back with it.
       dev-dependencies:
         dependency-type: development
+        update-types: [minor, patch]
+    ignore:
+      # Pinned exactly to the version actions/package.json vendors into the
+      # single-page bundles (tests/artifact-checks.spec.js enforces the match),
+      # so a root-only bump always fails. Bump both files together, by hand.
+      - dependency-name: mermaid
+      # @astrojs/check peers typescript ^5 || ^6; a major beyond that fails
+      # `npm ci` with ERESOLVE. Lift once @astrojs/check accepts the next major.
+      - dependency-name: typescript
+        update-types: [version-update:semver-major]
 
   - package-ecosystem: github-actions
     directory: /
