@@ -8,7 +8,15 @@
 # Pinned by digest, matching how every GitHub Action in .github/workflows is
 # pinned. Dependabot bumps the tag; the digest keeps the deployment from moving
 # underneath it in the meantime.
-FROM nginxinc/nginx-unprivileged:1.29-alpine@sha256:0c79d56aee561a1d81c63f00eee5fb5fe29279560cdc55e91425133104c7fbe6 AS runtime
+FROM nginxinc/nginx-unprivileged:1.31-alpine@sha256:b5047b9b76845eac124358373c6852377c52e4b05834a47647e955dd91cb8f1e AS runtime
+
+# Apply Alpine security fixes released since the base image was built. The
+# digest pin keeps nginx itself fixed, but upstream rebuilds only every few
+# weeks, and a CVE fixed in an Alpine package fails the Trivy scan until then.
+# The image runs as UID 101, so switch to root for the upgrade and back after.
+USER root
+RUN apk upgrade --no-cache
+USER 101
 
 # Overwrite the stock config rather than `RUN rm`-ing it: this image drops to a
 # non-root user, which cannot delete files under /etc/nginx.
