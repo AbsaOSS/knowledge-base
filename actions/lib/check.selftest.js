@@ -229,7 +229,9 @@ check('reports a broken manifest as KB-MAN-001 instead of crashing', () => {
 console.log('\nCatalogue');
 
 check('contract/RULES.md and rules.js list the same rules, titles and severities', () => {
-  const md = readFileSync(RULES_MD, 'utf8');
+  // A Windows checkout may carry CRLF, which the line-anchored patterns below
+  // would otherwise not match at all.
+  const md = readFileSync(RULES_MD, 'utf8').replace(/\r\n/g, '\n');
   const documented = {};
   for (const m of md.matchAll(/^### (KB-[A-Z]+-\d{3}) — (.+)\n\n\*\*Severity:\*\* (error|warning)$/gm)) {
     documented[m[1]] = { severity: m[3], title: m[2].replace(/`/g, '') };
