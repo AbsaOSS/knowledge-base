@@ -78,6 +78,64 @@ test.describe('Shadow-DOM isolation', () => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
+// The masthead menu inside the fragment. Its script runs in reframed's iframe
+// while the markup lives in the host's shadow tree; the popover and <details>
+// must still work there, after a router swap as much as on first load, and the
+// entries must follow the app the swap brought in.
+test.describe('Masthead menu, embedded', () => {
+  const SHOWCASE = '/knowledge-base/guide-mirror/';
+
+  test('a section dropdown opens, closes on Escape and outside clicks, and navigates — before and after a swap', async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await gotoFragment(page, SHOWCASE);
+    await waitForFragmentText(page, /Guide Mirror/);
+    const summary = page.locator('.kb-nav-bar summary', { hasText: 'Guide' });
+    const details = page.locator('.kb-nav-bar details.kb-nav-dropdown');
+
+    for (const round of ['first load', 'after a swap']) {
+      await summary.click();
+      await expect(details, round).toHaveAttribute('open', '');
+      await page.keyboard.press('Escape');
+      await expect(details, `${round}: Escape`).not.toHaveAttribute('open', '');
+      await expect(summary, `${round}: focus returns to the toggle`).toBeFocused();
+
+      await summary.click();
+      await page.locator('#host-shell-header').click();
+      await expect(details, `${round}: outside click`).not.toHaveAttribute('open', '');
+
+      if (round === 'first load') {
+        // Library, then back into the app: the masthead is swapped twice.
+        await clickFragmentLink(page, '#kb-masthead .kb-nav-bar a[href="/knowledge-base/"]');
+        await expect(page.locator('.kb-nav-bar > li')).toHaveCount(1);
+        await clickFragmentLink(page, `a.kb-card[href="${SHOWCASE}"]`);
+        await expect(summary).toBeVisible();
+      }
+    }
+
+    await summary.click();
+    await page.locator('.kb-nav-panel a', { hasText: 'Adding Pages' }).click();
+    await expect.poll(async () => page.locator('.kb-nav-bar summary[aria-current="true"]').textContent()).toContain('Guide');
+    expect(await hostStillAlive(page)).toBe(true);
+  });
+
+  test('the compact menu opens over the page with the app\'s pages and navigates', async ({ page }) => {
+    await page.setViewportSize({ width: 600, height: 800 });
+    await gotoFragment(page, SHOWCASE);
+    await waitForFragmentText(page, /Guide Mirror/);
+    await page.locator('.kb-nav-toggle').click();
+    const sheet = page.locator('#kb-nav-menu');
+    await expect(sheet).toBeVisible();
+    const box = await sheet.boundingBox();
+    expect(box.x + box.width).toBeLessThanOrEqual(600.5);
+    await expect(sheet.getByRole('link', { name: 'User Guide', exact: true })).toHaveCount(0);
+    await sheet.getByRole('link', { name: 'Overview', exact: true }).click();
+    await expect.poll(async () => page.locator('#kb-nav-menu a[aria-current="page"]').textContent()).toBe('Overview');
+    await expect(page.locator('.kb-nav-compact .kb-nav-crumb')).toContainText('Guide Mirror');
+    await expect(sheet).toBeHidden();
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
 test.describe('Landing catalog', () => {
   test.beforeEach(async ({ page }) => { await gotoFragment(page, '/knowledge-base/'); });
 

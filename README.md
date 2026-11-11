@@ -14,8 +14,9 @@ build time it:
 1. Obtains each registered app's built output (`dist/`) — from a **GitHub Release
    artifact** (`kb-docs.tar.gz`), a **local repo**, or a **prebuilt** tarball/dir.
 2. Rewrites every page's URLs to absolute `/knowledge-base/{slug}/…` paths and
-   re-hosts each document under a persistent **masthead** (branding + Library /
-   current-app navigation), the same in both modes.
+   re-hosts each document under a persistent **masthead** (branding + navigation to
+   the Library and, inside an app, every page its `kb-docs.json` lists, collapsing
+   to a Menu button below tablet width), the same in both modes.
 3. Generates a **catalog landing page** listing all registered apps.
 4. Produces a single `dist/` served by **nginx** in Docker, or embedded into a
    host app as a **web fragment**.
@@ -203,7 +204,7 @@ then open <http://localhost:4321/knowledge-base/>. The committed `apps.json`
 already registers it as an `optional` entry, so nothing breaks when it is absent.
 
 The repo ships an `apps.json` that registers the **vendored docs-example fixture**
-twice (`user-guide`, `guide-mirror`), an iframe entry, a **single-page bundle
+three times (`user-guide`, `guide-mirror`, `handbook`), an iframe entry, a **single-page bundle
 fixture** (`platform-overview`, `release-process`), and the optional example repo
 above — so the build and tests are hermetic out of the box. Replace it with your
 own apps for a real deployment.

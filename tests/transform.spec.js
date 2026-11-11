@@ -12,7 +12,7 @@
  */
 
 import { test, expect } from '@playwright/test';
-import { transformSubAppHtml, isThemeBootstrap, rewriteCssUrls } from '../src/utils/transform.js';
+import { transformSubAppHtml, isThemeBootstrap, rewriteCssUrls, encodePath } from '../src/utils/transform.js';
 import { layerSubAppCss, LAYER_ORDER, SUB_APP_LAYER } from '../src/utils/css-layers.js';
 
 const PREFIX = 'knowledge-base';
@@ -158,6 +158,29 @@ test.describe('URL rewriting', () => {
     expect(css).toContain('url(#m)');
     expect(css).toContain('url(https://cdn.example.com/y.png)');
     expect(css).toContain('url(//cdn.example.com/z.png)');
+  });
+
+  test('a URL delimiter in the page directory stays in the path, not in a fragment or query', () => {
+    // Unencoded, `new URL('page/', '…/topics#faq/')` resolves against …/topics:
+    // the directory name ends at the '#'.
+    const { bodyHtml, headHtml } = run(doc(
+      '<a href="page/">a</a><img src="../img/x.png" srcset="y.png 2x">',
+      "<style>.h{background:url('bg.png')}</style>",
+    ), 'docs/topics#faq');
+    expect(bodyHtml).toContain('href="/knowledge-base/demo/docs/topics%23faq/page/"');
+    expect(bodyHtml).toContain('src="/knowledge-base/demo/docs/img/x.png"');
+    expect(bodyHtml).toContain('srcset="/knowledge-base/demo/docs/topics%23faq/y.png 2x"');
+    expect(headHtml).toContain("url('/knowledge-base/demo/docs/topics%23faq/bg.png')");
+    expect(run(doc('<a href="p">p</a>'), 'a?b/50%').bodyHtml).toContain('href="/knowledge-base/demo/a%3Fb/50%25/p"');
+  });
+
+  test('encodePath encodes each segment and keeps the separators', () => {
+    expect(encodePath('docs/topics#faq/site.css')).toBe('docs/topics%23faq/site.css');
+    expect(encodePath('a b/c?d/e%f')).toBe('a%20b/c%3Fd/e%25f');
+    expect(encodePath('plain/path.css')).toBe('plain/path.css');
+    // As copyAssets uses it: a stylesheet in such a directory resolves its own url()s there.
+    const css = rewriteCssUrls("url('img/x.png')", `/knowledge-base/demo/${encodePath('topics#faq/site.css')}`, PREFIX, SLUG);
+    expect(css).toBe("url('/knowledge-base/demo/topics%23faq/img/x.png')");
   });
 });
 
