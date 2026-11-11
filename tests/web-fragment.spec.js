@@ -285,11 +285,31 @@ test.describe('Mermaid diagrams', () => {
     await expect(diagram).not.toContainText('-->');
   }
 
-  /** Fails the test on any page or fragment-frame error thrown while it runs. */
+  /**
+   * Console errors the browser itself raises about a deprecated API that
+   * third-party code still uses, not a failure of ours. Newer Chromium reports
+   * every `unload` listener as a permissions-policy violation, and reframed
+   * (web-fragments) registers one on its iframe window to abort the fragment's
+   * pending work. The diagram renders either way, which the tests assert.
+   */
+  const BROWSER_DEPRECATION_NOISE = [
+    /^Permissions policy violation: unload is not allowed in this document\.?$/,
+  ];
+
+  /**
+   * Fails the test on any page or fragment-frame error thrown while it runs.
+   * An uncaught exception always counts; a console error counts unless it is
+   * known browser deprecation noise.
+   */
   function collectErrors(page) {
     const errors = [];
     page.on('pageerror', (e) => errors.push(String(e)));
-    page.on('console', (msg) => { if (msg.type() === 'error') errors.push(msg.text()); });
+    page.on('console', (msg) => {
+      if (msg.type() !== 'error') return;
+      const text = msg.text();
+      if (BROWSER_DEPRECATION_NOISE.some((re) => re.test(text))) return;
+      errors.push(text);
+    });
     return errors;
   }
 
