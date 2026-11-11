@@ -16,14 +16,23 @@ updates:
         dependency-type: development
         update-types: [minor, patch]
     ignore:
-      # Pinned exactly to the version actions/package.json vendors into the
-      # single-page bundles (tests/artifact-checks.spec.js enforces the match),
-      # so a root-only bump always fails. Bump both files together, by hand.
-      - dependency-name: mermaid
       # @astrojs/check peers typescript ^5 || ^6; a major beyond that fails
       # `npm ci` with ERESOLVE. Lift once @astrojs/check accepts the next major.
       - dependency-name: typescript
         update-types: [version-update:semver-major]
+
+  # actions/ has its own lockfile and ships to every docs repo that calls the
+  # publishing actions. Its htmlparser2/postcss may differ from the root's: the
+  # checker self-test runs against both trees (the actions job in ci.yml, and
+  # tests/artifact-checks.spec.js for the root).
+  - package-ecosystem: npm
+    directory: /actions
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      actions-dependencies:
+        update-types: [minor, patch]
 
   - package-ecosystem: github-actions
     directory: /

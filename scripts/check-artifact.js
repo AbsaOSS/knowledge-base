@@ -11,10 +11,10 @@
  * repo to chase, and for what.
  *
  * check.js resolves its parsers from actions/node_modules when that tree is
- * installed and from the root node_modules otherwise. The root package.json
- * pins htmlparser2 and postcss to the versions actions/package.json pins, so
- * either way the build and the action parse the same way
- * (tests/artifact-checks.spec.js holds the two in step).
+ * installed and from the root node_modules otherwise. The two package.json
+ * files may pin different versions of htmlparser2 and postcss;
+ * tests/artifact-checks.spec.js runs the checker's self-test against the
+ * parsers the build resolves, so they cannot parse differently.
  */
 
 import { summarise } from '../actions/lib/check.js';
