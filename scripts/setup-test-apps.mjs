@@ -140,12 +140,13 @@ if (/list-style-type/.test(LEGACY_DOC_CSS) || !/contains-task-list/.test(LEGACY_
 }
 
 /**
- * The mermaid bundle the action vendors — the real one, so the suites can
- * assert a diagram actually renders inside the fragment rather than only that
- * the script reference resolves. Pinned in the root package.json to the
- * version actions/package.json pins (tests/artifact-checks.spec.js keeps them
- * equal). Copied here on every run and gitignored: 2.5 MB of minified JS is
- * not worth committing when node_modules already has it.
+ * A real mermaid bundle, standing in for the one the action vendors, so the
+ * suites can assert a diagram actually renders inside the fragment rather than
+ * only that the script reference resolves. It comes from the root
+ * devDependency, which Dependabot bumps independently of actions/package.json:
+ * the rendering tests, not a version match, are what hold it to working.
+ * Copied here on every run and gitignored: 2.5 MB of minified JS is not worth
+ * committing when node_modules already has it.
  */
 const MERMAID_BUNDLE = createRequire(import.meta.url).resolve('mermaid/dist/mermaid.min.js');
 

@@ -4,19 +4,21 @@
  * The build runs the publish action's contract checker on every artifact it
  * installs (scripts/check-artifact.js). Two things keep that honest:
  *
- *   1. The build and the action parse with the same code at the same versions.
- *      check.js resolves htmlparser2/postcss from actions/node_modules when that
- *      tree is installed and from the root otherwise — CI's E2E job installs
- *      only the root — so the two package.json files must pin the same versions.
+ *   1. The build and the action parse the same way. check.js resolves
+ *      htmlparser2/postcss from actions/node_modules when that tree is
+ *      installed and from the root otherwise (CI's E2E job installs only the
+ *      root), so the checker's own self-test runs here as well, against
+ *      whichever parsers the build resolves. The two package.json files may
+ *      pin different versions; they may not parse differently.
  *   2. The reporting contract: grouped warnings in an ordinary build, and a
  *      strict (production) build that refuses an artifact with an error finding.
  *
- * No browser and no build: the checker's rules themselves are pinned by
- * actions/lib/check.selftest.js.
+ * No browser and no build.
  */
 
 import { test, expect } from '@playwright/test';
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -24,7 +26,6 @@ import { fileURLToPath } from 'node:url';
 import { checkApp, reportFindings, summarise } from '../scripts/check-artifact.js';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
-const pkg = (rel) => JSON.parse(readFileSync(join(ROOT, rel), 'utf8'));
 
 /** A minimal app directory with the given files. */
 function app(files) {
@@ -42,22 +43,16 @@ const page = (html = 'data-kb-headless="true"', body = '') =>
 const ENTRY = { slug: 'demo', entryPoint: 'index.html', pages: null };
 
 test.describe('the build and the action parse the same way', () => {
-  test('root package.json pins the parsers at the versions actions/package.json pins', () => {
-    const root = pkg('package.json').dependencies;
-    const actions = pkg('actions/package.json').dependencies;
-    for (const name of ['htmlparser2', 'postcss']) {
-      expect(actions[name], `actions/package.json must pin ${name}`).toMatch(/^\d+\.\d+\.\d+$/);
-      expect(root[name], `package.json must pin ${name} exactly as actions/ does`).toBe(actions[name]);
-    }
-  });
-
-  // scripts/setup-test-apps.mjs vendors the root copy into the single-page
-  // fixture, standing in for the one the action vendors into published docs.
-  test('the fixture mermaid bundle is the version the action vendors', () => {
-    const root = pkg('package.json').devDependencies.mermaid;
-    const actions = pkg('actions/package.json').dependencies.mermaid;
-    expect(actions, 'actions/package.json must pin mermaid').toMatch(/^\d+\.\d+\.\d+$/);
-    expect(root, 'package.json must pin mermaid exactly as actions/ does').toBe(actions);
+  // The self-test pins every rule's findings on clean sites, violations and
+  // look-alikes. Run from here it resolves the parsers the build resolves, so
+  // a root htmlparser2 or postcss that parses differently from the action's
+  // fails it, while a bump that changes nothing is free to land on its own.
+  test("the checker self-test passes with the build's parsers", () => {
+    const run = spawnSync(process.execPath, [join(ROOT, 'actions', 'lib', 'check.selftest.js')], {
+      cwd: ROOT,
+      encoding: 'utf8',
+    });
+    expect(run.status, `${run.stdout}\n${run.stderr}`).toBe(0);
   });
 });
 
