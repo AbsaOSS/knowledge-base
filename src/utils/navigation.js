@@ -16,6 +16,7 @@
 
 import { posix } from 'node:path';
 import { isIframe } from './registry.js';
+import { encodePath } from './transform.js';
 
 /**
  * The route directory of a manifest page, relative to its app: '' for a file at
@@ -40,7 +41,7 @@ export function pageRelDir(path) {
  * @param {string} routePath - the route's path below the base, as getStaticPaths emits it
  */
 export function routePathHref(base, routePath) {
-  return `${base}/${routePath.split('/').filter(Boolean).map(encodeURIComponent).join('/')}/`;
+  return `${base}/${encodePath(routePath.split('/').filter(Boolean).join('/'))}/`;
 }
 
 /** Absolute URL of an app-relative route directory. Always ends in '/'. */

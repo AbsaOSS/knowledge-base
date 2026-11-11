@@ -27,7 +27,7 @@ import { HOIST_DIR, hoistAppInlineScripts } from './hoist-inline-scripts.js';
 import { collectHtmlFiles } from '../src/utils/apps.js';
 import { PATH_PREFIX, REGISTRY_FILE } from '../src/utils/config.js';
 import { layerSubAppCss } from '../src/utils/css-layers.js';
-import { rewriteCssUrls } from '../src/utils/transform.js';
+import { encodePath, rewriteCssUrls } from '../src/utils/transform.js';
 import { checkApp, reportFindings } from './check-artifact.js';
 import { buildMcpArtifacts } from './build-mcp.js';
 import {
@@ -395,7 +395,7 @@ async function build() {
         const css = readFileSync(d, 'utf8');
         // url(/path) → url(/{prefix}/{slug}/path); url(path) → resolved against
         // this file's URL. External, protocol-relative, data: and #ref are kept.
-        const fileUrl = '/' + PATH_PREFIX + '/' + slug + '/' + rel + entry.name;
+        const fileUrl = '/' + PATH_PREFIX + '/' + slug + '/' + encodePath(rel + entry.name);
         const rewritten = rewriteCssUrls(css, fileUrl, PATH_PREFIX, slug);
         // Then wrap the whole sheet in the sub-app cascade layer, so that a
         // sheet which outlives its page inside a web fragment cannot restyle
