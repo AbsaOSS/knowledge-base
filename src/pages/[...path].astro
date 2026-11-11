@@ -15,7 +15,7 @@ import { readFileSync } from 'node:fs';
 import { getAppPages } from '../utils/apps.js';
 import { BASE_PATH, PATH_PREFIX, isHeadlessBuild } from '../utils/config.js';
 import { transformSubAppHtml } from '../utils/transform.js';
-import { routeHref } from '../utils/navigation.js';
+import { routePathHref } from '../utils/navigation.js';
 import Base from '../layouts/Base.astro';
 import Masthead from '../components/Masthead.astro';
 
@@ -35,8 +35,10 @@ const parts = props.iframe
 
 const pageTitle = title ?? parts?.title ?? app?.name ?? 'Knowledge base';
 
-// The masthead marks the entry for the page being viewed as current.
-const currentPath = routeHref(BASE_PATH, slug, props.fileRelDir);
+// The masthead marks the entry for the page being viewed as current. Taken from
+// the generated route, not the source file: an entry point the manifest leaves
+// out is served at the app root whatever directory its file sits in.
+const currentPath = routePathHref(BASE_PATH, Astro.params.path ?? slug);
 ---
 
 <Base

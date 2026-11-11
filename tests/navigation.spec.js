@@ -8,7 +8,7 @@
  */
 
 import { test, expect } from '@playwright/test';
-import { buildNavigation, navigationFor, pageRelDir, routeHref } from '../src/utils/navigation.js';
+import { buildNavigation, navigationFor, pageRelDir, routeHref, routePathHref } from '../src/utils/navigation.js';
 
 const BASE = '/knowledge-base';
 
@@ -19,6 +19,23 @@ test.describe('pageRelDir / routeHref', () => {
     expect(pageRelDir('docs\\guide\\index.html')).toBe('docs/guide');
     expect(routeHref(BASE, 'app')).toBe('/knowledge-base/app/');
     expect(routeHref(BASE, 'app', 'docs/guide')).toBe('/knowledge-base/app/docs/guide/');
+  });
+
+  test('path segments are percent-encoded, so a URL delimiter in a manifest path stays in the path', () => {
+    expect(routeHref(BASE, 'demo', pageRelDir('topics#faq/index.html'))).toBe('/knowledge-base/demo/topics%23faq/');
+    expect(routeHref(BASE, 'demo', 'a?b/c d/50%')).toBe('/knowledge-base/demo/a%3Fb/c%20d/50%25/');
+  });
+
+  test('the current page is named by its route, the same way the menu names it', () => {
+    // An omitted entry point is routed at the app root whatever directory its
+    // file sits in, so its route path is just the slug: the app's own href.
+    const [app] = buildNavigation([{
+      slug: 'app', name: 'App', entryPoint: 'docs/start/index.html',
+      pages: [{ title: 'Start notes', path: 'docs/start/notes.html', order: 0 }],
+    }], BASE);
+    expect(routePathHref(BASE, 'app')).toBe(app.href);
+    expect(routePathHref(BASE, 'app/docs/start')).toBe(app.items[0].href);
+    expect(routePathHref(BASE, 'demo/topics#faq')).toBe('/knowledge-base/demo/topics%23faq/');
   });
 });
 

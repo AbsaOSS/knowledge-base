@@ -409,6 +409,36 @@ test.describe('Masthead menu', () => {
     });
   }
 
+  // The schema's longest values, with no space to wrap at: a 128-character page
+  // title and section, a 64-character app name. Written into the rendered
+  // masthead rather than the fixture, which keeps realistic names.
+  const TITLE = 'W'.repeat(128);
+  const NAME = 'N'.repeat(64);
+
+  for (const width of [1024, 1280]) {
+    test(`${width}px: a maximum-length title or app name wraps inside the bar`, async ({ page }) => {
+      await page.setViewportSize({ width, height: 800 });
+      await page.goto(SHOWCASE);
+      await page.evaluate(({ TITLE, NAME }) => {
+        document.querySelector('.kb-nav-bar .kb-nav-item > a').textContent = TITLE;
+        document.querySelector('.kb-nav-bar .kb-nav-dropdown > summary > span').textContent = TITLE;
+        document.querySelector('.kb-nav-bar .kb-nav-app-link > span').textContent = NAME;
+      }, { TITLE, NAME });
+      expect(await overflow(page)).toEqual({ scroll: 0, clipped: [] });
+    });
+  }
+
+  test('320px: a maximum-length app name keeps the sheet\'s Close button in view', async ({ page }) => {
+    await page.setViewportSize({ width: 320, height: 800 });
+    await page.goto(SHOWCASE);
+    await page.evaluate((NAME) => { document.querySelector('.kb-nav-sheet-title').textContent = NAME; }, NAME);
+    await page.locator('.kb-nav-toggle').click();
+    const sheet = await page.locator('#kb-nav-menu').boundingBox();
+    const close = await page.getByRole('button', { name: 'Close menu' }).boundingBox();
+    expect(close.x).toBeGreaterThanOrEqual(sheet.x);
+    expect(close.x + close.width).toBeLessThanOrEqual(sheet.x + sheet.width + 0.5);
+  });
+
   test('the links sit where they do on the catalog; the brand never moves or covers them', async ({ page }) => {
     const layout = () => page.evaluate(() => {
       const library = [...document.querySelectorAll('#kb-masthead .kb-masthead-nav a')].find((a) => a.getClientRects().length);
@@ -437,7 +467,8 @@ test.describe('Masthead menu', () => {
     await page.setViewportSize({ width: 375, height: 800 });
     await page.goto(SHOWCASE);
     const toggle = page.locator('.kb-nav-toggle');
-    await expect(toggle).toHaveAccessibleName('Guide Mirror pages');
+    // The accessible name starts with the visible label (WCAG 2.5.3 label in name).
+    await expect(toggle).toHaveAccessibleName('Menu, Guide Mirror pages');
     await toggle.click();
     const sheet = page.locator('#kb-nav-menu');
     await expect(sheet).toBeVisible();

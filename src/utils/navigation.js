@@ -30,9 +30,22 @@ export function pageRelDir(path) {
   return posix.dirname(path.replace(/\\/g, '/')).replace(/^\.$/, '');
 }
 
+/**
+ * Absolute URL of a route path ('slug' or 'slug/docs/guide'). Always ends in
+ * '/'. Each segment is percent-encoded: a manifest path may hold URL
+ * delimiters, and `topics#faq/index.html` must link to /…/topics%23faq/, not
+ * to /…/topics with a fragment. Attribute escaping does not do this.
+ *
+ * @param {string} base      - URL base, e.g. '/knowledge-base'
+ * @param {string} routePath - the route's path below the base, as getStaticPaths emits it
+ */
+export function routePathHref(base, routePath) {
+  return `${base}/${routePath.split('/').filter(Boolean).map(encodeURIComponent).join('/')}/`;
+}
+
 /** Absolute URL of an app-relative route directory. Always ends in '/'. */
 export function routeHref(base, slug, relDir = '') {
-  return `${base}/${slug}/${relDir ? `${relDir}/` : ''}`;
+  return routePathHref(base, relDir ? `${slug}/${relDir}` : slug);
 }
 
 /**

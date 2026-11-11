@@ -412,7 +412,7 @@ test.describe('Masthead', () => {
     const hrefs = new Set(PAGES.flatMap((p) => [...read(p).matchAll(/<a class="kb-(?:masthead-link|nav-page)[^"]*" href="([^"]+)"/g)].map((m) => m[1])));
     expect(hrefs.size).toBeGreaterThan(APPS.length);
     for (const h of hrefs) {
-      const rel = h.replace(/^\/knowledge-base\//, '');
+      const rel = decodeURIComponent(h.replace(/^\/knowledge-base\//, ''));
       expect(existsSync(join(DIST, rel, 'index.html')), `${h} has no page`).toBe(true);
     }
   });
@@ -442,7 +442,7 @@ test.describe('Masthead', () => {
     const html = read('guide-mirror/docs/index.html');
     const compact = html.match(/<div class="kb-nav-compact"[\s\S]*?<\/div>/)?.[0] ?? '';
     expect(compact).toContain('Guide Mirror');
-    expect(compact).toMatch(/<button type="button" class="kb-nav-toggle" popovertarget="kb-nav-menu" aria-label="Guide Mirror pages"/);
+    expect(compact).toMatch(/<button type="button" class="kb-nav-toggle" popovertarget="kb-nav-menu" aria-label="Menu, Guide Mirror pages"/);
     expect(html).toMatch(/<div id="kb-nav-menu" class="kb-nav-sheet" popover>/);
     const menu = sheet(html);
     expect(positions(menu, ['Showcase', 'Overview', 'Guide', 'Adding Pages', 'Customising']).every((i) => i >= 0)).toBe(true);

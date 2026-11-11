@@ -55,6 +55,8 @@ const holdsCurrent = (item: (typeof items)[number]) =>
 /** The app's own link is the current page only when no entry below it is. */
 const appIsPage = !!app && app.href === currentPath && !items.some(holdsCurrent);
 const menuLabel = app ? `${app.name} pages` : undefined;
+/** Starts with the visible "Menu", so a speech command naming what is on screen finds the button. */
+const toggleLabel = app ? `Menu, ${menuLabel}` : undefined;
 ---
 
 {/* `kb-shell` is the fence in knowledge-base.css: a sub-app stylesheet that
@@ -132,7 +134,7 @@ const menuLabel = app ? `${app.name} pages` : undefined;
           </a>
         )}
         {items.length > 0 && (
-          <button type="button" class="kb-nav-toggle" popovertarget="kb-nav-menu" aria-label={menuLabel}>
+          <button type="button" class="kb-nav-toggle" popovertarget="kb-nav-menu" aria-label={toggleLabel}>
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
             <span>Menu</span>
           </button>
