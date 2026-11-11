@@ -40,9 +40,45 @@ function hostDocument() {
   }
 }
 
+/**
+ * Resolves once every stylesheet now in the document has loaded (or failed), or
+ * a short timeout elapses. A <link rel="stylesheet"> exposes a non-null `.sheet`
+ * only after its CSS has loaded; errored sheets settle via the error event and
+ * the timeout caps anything stuck, so this never hangs a navigation.
+ */
+function stylesheetsLoaded(timeoutMs = 2000) {
+  const pending = [...document.querySelectorAll('link[rel~="stylesheet"][href]')].filter((l) => !l.sheet);
+  if (pending.length === 0) return Promise.resolve();
+  const settle = (link) =>
+    new Promise((resolve) => {
+      if (link.sheet) return resolve();
+      const done = () => {
+        link.removeEventListener('load', done);
+        link.removeEventListener('error', done);
+        resolve();
+      };
+      link.addEventListener('load', done);
+      link.addEventListener('error', done);
+    });
+  return Promise.race([
+    Promise.all(pending.map(settle)),
+    new Promise((resolve) => setTimeout(resolve, timeoutMs)),
+  ]);
+}
+
 const host = hostDocument();
 if (host) {
-  document.startViewTransition = (update) => host.startViewTransition(update);
+  // Hold the host's view transition on its old frame until the swapped-in page's
+  // stylesheets have loaded, then let it capture the new state. A sub-app's CSS
+  // is an external <link>; without this wait the swap reveals the new body before
+  // that sheet applies — the FOUC seen only on in-fragment navigation, never on a
+  // hard load (a document parse render-blocks on the link) or the native
+  // standalone swap (Astro awaits the new styles itself).
+  document.startViewTransition = (update) =>
+    host.startViewTransition(async () => {
+      await update();
+      await stylesheetsLoaded();
+    });
 }
 
 /** The reframed element, or what Astro would use when the document is not reframed. */

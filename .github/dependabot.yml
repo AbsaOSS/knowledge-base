@@ -1,4 +1,5 @@
-# Dependabot keeps npm dependencies and pinned GitHub Actions up to date.
+# Dependabot keeps npm dependencies, pinned GitHub Actions and the Docker base
+# image up to date.
 # Action updates land as SHA bumps with the human-readable tag in a comment.
 version: 2
 updates:
@@ -8,11 +9,49 @@ updates:
       interval: weekly
     open-pull-requests-limit: 5
     groups:
-      # Batch low-risk dev tooling into a single PR.
+      # Batch low-risk dev tooling into a single PR. Majors stay out of the
+      # group: each gets a PR of its own, so one breaking bump cannot hold
+      # every minor and patch update back with it.
       dev-dependencies:
         dependency-type: development
+        update-types: [minor, patch]
+      # Same for runtime dependencies (parse5, postcss, htmlparser2, …): one
+      # PR and one CI run a week instead of one each.
+      production-dependencies:
+        dependency-type: production
+        update-types: [minor, patch]
+    ignore:
+      # @astrojs/check peers typescript ^5 || ^6; a major beyond that fails
+      # `npm ci` with ERESOLVE. Lift once @astrojs/check accepts the next major.
+      - dependency-name: typescript
+        update-types: [version-update:semver-major]
+
+  # actions/ has its own lockfile and ships to every docs repo that calls the
+  # publishing actions. Its htmlparser2/postcss may differ from the root's: the
+  # checker self-test runs against both trees (the actions job in ci.yml, and
+  # tests/artifact-checks.spec.js for the root).
+  - package-ecosystem: npm
+    directory: /actions
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      actions-dependencies:
+        update-types: [minor, patch]
 
   - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      # Pinned action bumps are SHA swaps; a weekly batch needs one CI run.
+      # A major still gets a PR of its own.
+      github-actions:
+        update-types: [minor, patch]
+
+  # The Dockerfile pins nginx-unprivileged by tag and digest; this bumps both.
+  - package-ecosystem: docker
     directory: /
     schedule:
       interval: weekly

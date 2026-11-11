@@ -281,6 +281,50 @@ test.describe('Single-page docs', () => {
     expect(await queryInShadow(page, 'nav#sidebar'), 'single-page doc must not render a sidebar').toBeNull();
     expect(await queryInShadow(page, '#kb-masthead'), 'masthead missing').not.toBeNull();
   });
+
+  // Preflight sets list-style: none on every list, so the markers have to be
+  // put back, and a task list has to stay marker-free. release-process ships a
+  // doc.css from before the action declared markers, so its markers come from
+  // the knowledge base's fallback alone; platform-overview ships the current one.
+  test('lists keep their bullets and numbers; task lists stay unmarked', async ({ page }) => {
+    const markers = (path, selectors) => gotoFragment(page, path)
+      .then(() => waitForFragmentText(page, /./))
+      .then(() => page.evaluate((sels) => {
+        function search(root, sel) {
+          const el = root.querySelector(sel);
+          if (el) return el;
+          for (const child of root.querySelectorAll('*')) {
+            if (child.shadowRoot) {
+              const found = search(child.shadowRoot, sel);
+              if (found) return found;
+            }
+          }
+          return null;
+        }
+        return Object.fromEntries(sels.map((sel) => {
+          const el = search(document, sel);
+          return [sel, el ? getComputedStyle(el).listStyleType : null];
+        }));
+      }, selectors));
+
+    expect(await markers('/knowledge-base/release-process/', [
+      'main.kb-single-page ol',
+      'main.kb-single-page ul',
+      'main.kb-single-page ul ul',
+      'main.kb-single-page ul ul ul',
+      'main.kb-single-page ul.contains-task-list',
+    ])).toEqual({
+      'main.kb-single-page ol':                   'decimal',
+      'main.kb-single-page ul':                   'disc',
+      'main.kb-single-page ul ul':                'circle',
+      'main.kb-single-page ul ul ul':             'square',
+      'main.kb-single-page ul.contains-task-list': 'none',
+    });
+
+    expect(await markers('/knowledge-base/platform-overview/', [
+      'main.kb-single-page ul.contains-task-list',
+    ])).toEqual({ 'main.kb-single-page ul.contains-task-list': 'none' });
+  });
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -299,11 +343,31 @@ test.describe('Mermaid diagrams', () => {
     await expect(diagram).not.toContainText('-->');
   }
 
-  /** Fails the test on any page or fragment-frame error thrown while it runs. */
+  /**
+   * Console errors the browser itself raises about a deprecated API that
+   * third-party code still uses, not a failure of ours. Newer Chromium reports
+   * every `unload` listener as a permissions-policy violation, and reframed
+   * (web-fragments) registers one on its iframe window to abort the fragment's
+   * pending work. The diagram renders either way, which the tests assert.
+   */
+  const BROWSER_DEPRECATION_NOISE = [
+    /^Permissions policy violation: unload is not allowed in this document\.?$/,
+  ];
+
+  /**
+   * Fails the test on any page or fragment-frame error thrown while it runs.
+   * An uncaught exception always counts; a console error counts unless it is
+   * known browser deprecation noise.
+   */
   function collectErrors(page) {
     const errors = [];
     page.on('pageerror', (e) => errors.push(String(e)));
-    page.on('console', (msg) => { if (msg.type() === 'error') errors.push(msg.text()); });
+    page.on('console', (msg) => {
+      if (msg.type() !== 'error') return;
+      const text = msg.text();
+      if (BROWSER_DEPRECATION_NOISE.some((re) => re.test(text))) return;
+      errors.push(text);
+    });
     return errors;
   }
 

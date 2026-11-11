@@ -268,6 +268,17 @@ test.describe('single-page onboarding', () => {
     const html = read('platform-overview/index.html');
     expect(html).toContain('data-kb-headless="true"');
     expect(kbInlineStylesheet(html)).toContain('.kb-single-page');
+    // Fallback markers for bundles whose doc.css predates its own list rules.
+    for (const [sel, type] of [
+      ['ul', 'disc'], ['ul ul', 'circle'], ['ul ul ul', 'square'], ['ol', 'decimal'],
+    ]) {
+      const rule = new RegExp(`\\.kb-single-page ${sel}\\s*\\{\\s*list-style-type:\\s*${type}`);
+      expect(kbInlineStylesheet(html), `fallback for ${sel}`).toMatch(rule);
+    }
+    // The fixture that exercises that fallback really is a pre-marker doc.css.
+    const legacy = read('release-process/assets/doc.css');
+    expect(legacy).not.toContain('list-style-type');
+    expect(legacy).toContain('.contains-task-list');
     expect(html.match(/<html\b/gi) ?? []).toHaveLength(1);
     expect(html.match(/<head\b/gi) ?? []).toHaveLength(1);
     expect(html.match(/<body\b/gi) ?? []).toHaveLength(1);

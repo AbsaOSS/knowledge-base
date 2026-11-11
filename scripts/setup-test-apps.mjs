@@ -95,7 +95,7 @@ const PLATFORM_OVERVIEW_BODY = `<h1 id="platform-overview" tabindex="-1">Platfor
 <pre class="mermaid">flowchart LR
   client --&gt; gateway --&gt; service</pre>`;
 
-/** Body of doc 2 — a second doc in the same bundle, proving expansion. */
+/** Body of doc 2 — a second doc in the same bundle, proving expansion; nested lists and a task list for the marker fallback. */
 const RELEASE_PROCESS_BODY = `<h1 id="release-process" tabindex="-1">Release Process <a class="kb-anchor" href="#release-process">#</a></h1>
 <p>Releases are cut from <code>master</code> on demand.</p>
 <blockquote>
@@ -106,15 +106,48 @@ const RELEASE_PROCESS_BODY = `<h1 id="release-process" tabindex="-1">Release Pro
 <li>Tag the commit.</li>
 <li>Publish the GitHub Release.</li>
 <li>The publish-single-page-docs action attaches <code>kb-docs.tar.gz</code>.</li>
-</ol>`;
+</ol>
+<h2 id="checklist" tabindex="-1">Checklist <a class="kb-anchor" href="#checklist">#</a></h2>
+<ul>
+<li>Changelog updated
+<ul>
+<li>Breaking changes called out
+<ul>
+<li>Migration notes linked</li>
+</ul>
+</li>
+</ul>
+</li>
+<li>Docs bundle attached</li>
+</ul>
+<h2 id="sign-off" tabindex="-1">Sign-off <a class="kb-anchor" href="#sign-off">#</a></h2>
+<ul class="contains-task-list">
+<li class="task-list-item"><input class="task-list-item-checkbox" checked disabled type="checkbox"> Release notes reviewed</li>
+<li class="task-list-item"><input class="task-list-item-checkbox" disabled type="checkbox"> Announcement sent</li>
+</ul>`;
 
 /**
- * The mermaid bundle the action vendors — the real one, so the suites can
- * assert a diagram actually renders inside the fragment rather than only that
- * the script reference resolves. Pinned in the root package.json to the
- * version actions/package.json pins (tests/artifact-checks.spec.js keeps them
- * equal). Copied here on every run and gitignored: 2.5 MB of minified JS is
- * not worth committing when node_modules already has it.
+ * doc.css as the action published it before it declared list markers: the same
+ * stylesheet minus that block, task-list rules included. Doc 2 ships it, so its
+ * computed markers come from the knowledge base's own fallback — the current
+ * doc.css would win over that fallback and hide whether it works.
+ */
+const LEGACY_DOC_CSS = DOC_CSS.replace(
+  /\/\* Markers are declared[\s\S]*?\.kb-doc ol \{ list-style-type: decimal; \}\n/,
+  '',
+).replace(/\.kb-doc li::marker \{[^}]*\}\n/, '');
+if (/list-style-type/.test(LEGACY_DOC_CSS) || !/contains-task-list/.test(LEGACY_DOC_CSS)) {
+  throw new Error('setup-test-apps: could not derive the legacy doc.css from DOC_CSS — update LEGACY_DOC_CSS');
+}
+
+/**
+ * A real mermaid bundle, standing in for the one the action vendors, so the
+ * suites can assert a diagram actually renders inside the fragment rather than
+ * only that the script reference resolves. It comes from the root
+ * devDependency, which Dependabot bumps independently of actions/package.json:
+ * the rendering tests, not a version match, are what hold it to working.
+ * Copied here on every run and gitignored: 2.5 MB of minified JS is not worth
+ * committing when node_modules already has it.
  */
 const MERMAID_BUNDLE = createRequire(import.meta.url).resolve('mermaid/dist/mermaid.min.js');
 
@@ -156,6 +189,7 @@ const bundleDocs = [
     tags: ['process'],
     body: RELEASE_PROCESS_BODY,
     usesMermaid: false,
+    legacyCss: true,
   },
 ];
 
@@ -174,7 +208,7 @@ function writeSinglePageBundle() {
       usesMermaid: doc.usesMermaid,
       hasHeading:  true,
     }));
-    writeFileSync(join(docDir, CSS_PATH), DOC_CSS);
+    writeFileSync(join(docDir, CSS_PATH), doc.legacyCss ? LEGACY_DOC_CSS : DOC_CSS);
     if (doc.depthFixture) writeFileSync(join(docDir, dirname(CSS_PATH), 'depth-check.css'), DEPTH_CHECK_CSS);
     if (doc.usesMermaid) {
       copyFileSync(MERMAID_BUNDLE, join(docDir, MERMAID_PATH));

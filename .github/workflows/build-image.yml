@@ -108,6 +108,12 @@ on:
       node-mirror-token:
         description: Authorization header value for `node-mirror`.
         required: false
+      ca-certificates:
+        description: >-
+          Extra CA certificates (PEM) the image build trusts while `apk upgrade`
+          fetches Alpine fixes — a TLS-intercepting proxy's CA, say. Written
+          to trusted_certs/ before `docker build`; see the Dockerfile.
+        required: false
     outputs:
       image:
         description: 'The first pushed image reference, when one was pushed.'
@@ -140,7 +146,7 @@ jobs:
           ref: ${{ inputs.kb-ref }}
           path: knowledge-base
 
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: '24'
           cache: npm
@@ -222,7 +228,7 @@ jobs:
       # the output, push nothing.
       - name: Upload dist
         if: ${{ inputs.image-name == '' }}
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: dist
           path: knowledge-base/dist/
@@ -230,7 +236,7 @@ jobs:
 
       - name: Log in to the container registry
         if: ${{ inputs.image-name != '' }}
-        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4.8.0
         with:
           registry: ${{ inputs.registry-host }}
           username: ${{ secrets.registry-username || github.actor }}
@@ -251,8 +257,14 @@ jobs:
           KB_IMAGE: ${{ inputs.image-name }}
           KB_TAGS: ${{ inputs.image-tags }}
           KB_SHA: ${{ github.sha }}
+          KB_CA_CERTIFICATES: ${{ secrets.ca-certificates }}
         run: |
           set -euo pipefail
+
+          # The Dockerfile trusts every *.pem in trusted_certs/ for its apk step.
+          if [ -n "${KB_CA_CERTIFICATES:-}" ]; then
+            printf '%s\n' "$KB_CA_CERTIFICATES" > trusted_certs/ca-certificates.pem
+          fi
 
           tags="${KB_TAGS:-$KB_SHA}"
           # Accept either separator; normalise to one tag per line.
@@ -279,7 +291,7 @@ jobs:
       # answerable question.
       - name: Upload the build provenance
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: kb-build-provenance
           path: knowledge-base/dist/kb-build.json

@@ -9,6 +9,10 @@ on:
   # layer needs the same hygiene checks as the one that reaches master.
   pull_request:
     types: [opened, synchronize, reopened, edited, labeled, unlabeled]
+  # A required check must report on the merge queue's commits too, or the queue
+  # waits for it forever. Title, body and branch were already checked on the
+  # pull request, and a merge group has none of its own, so it passes there.
+  merge_group:
 
 # Least privilege: read PR metadata only.
 permissions:
@@ -20,12 +24,17 @@ jobs:
     name: PR Requirements
     runs-on: ubuntu-latest
     steps:
+      - name: Merge queue
+        if: github.event_name == 'merge_group'
+        run: echo "Checked on the pull request; nothing to check on a merge group."
+
       # A stacked PR targets the layer below it rather than master, so a fixed
       # allow-list of `master` fails every layer but the bottom one. Allow the
       # base branch as well when it is itself a convention-named branch — that
       # still rejects a PR aimed at some unrelated branch, which is what the
       # check is for, while letting a stack be reviewed layer by layer.
       - name: Resolve allowed target branches
+        if: github.event_name == 'pull_request'
         id: targets
         env:
           KB_BASE_REF: ${{ github.event.pull_request.base.ref }}
@@ -40,7 +49,8 @@ jobs:
           fi
 
       - name: Check PR requirements
-        uses: AbsaOSS/check-pr-requirements@adb22f6d88c93fd801e787a63d948d6fbbdd4af3 # v0.2.0
+        if: github.event_name == 'pull_request'
+        uses: AbsaOSS/check-pr-requirements@0d4f326fcf798afc702480a68281ab5694236a57 # v0.3.0
         with:
           pr-title: ${{ github.event.pull_request.title }}
           pr-body: ${{ github.event.pull_request.body }}

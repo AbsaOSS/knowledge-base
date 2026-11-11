@@ -84,7 +84,7 @@ Orchestrator: `scripts/build-vite.js`. Flags: `--local`, `--headless`.
 - `scripts/build-vite.js` — Build orchestrator (4 steps: prepare, hoist, copy assets, astro build)
 - `scripts/fetch-apps.js` — GitHub Release artifact downloader. Only *obtains* an artifact; installing it is one shared path in `build-vite.js`
 - `scripts/artifacts.js` — Safe tarball extraction + tree copy, shared by both fetch paths. Validates archive members (no traversal, no absolute paths, no symlinks) before anything is written, and replaces the old `cp -r`/`tar` shell-outs so the build runs on Windows
-- `scripts/check-artifact.js` — Runs the publish action's contract checker (`actions/lib/check.js`) on every installed artifact, before hoisting; logs findings grouped by rule, and fails a strict build on an error. `check.js` resolves its parsers from `actions/node_modules` or the root, which pins the same versions
+- `scripts/check-artifact.js` — Runs the publish action's contract checker (`actions/lib/check.js`) on every installed artifact, before hoisting; logs findings grouped by rule, and fails a strict build on an error. `check.js` resolves its parsers from `actions/node_modules` or the root; the two may pin different versions, and `tests/artifact-checks.spec.js` runs the checker self-test against whichever the build resolves
 - `scripts/hoist-inline-scripts.js` — Moves inline `<script>` bodies in sub-app HTML into files before the Astro build, so the deployment can serve `script-src 'self'`. Needed because bundles published before the action stopped emitting an inline mermaid bootstrap still contain one. A sub-app's dark-mode bootstrap is deleted here rather than hoisted — light only, and hoisting would put it beyond the reach of `transform.js`
 - `actions/check-docs/` — Reusable GitHub Action for docs repo pull requests: runs `checkWorkspace()` from `actions/lib/check.js` on the built headless output, one annotation per rule, every finding in the job summary; errors fail it (warnings too with `strict: true`). Never packs or uploads
 - `actions/publish-single-page-docs/` — Reusable GitHub Action that turns a repo's markdown into a single-page bundle
@@ -149,8 +149,7 @@ Self-contained Playwright E2E — `npm test` auto-starts everything (no external
    (slugs `user-guide` crawled, `guide-mirror` + `handbook` with `pages` manifests — one
    section and two — for cross-app nav and the app-scoped masthead), an iframe entry pinned
    `"headless": false`, and the generated single-page bundle fixture — with the real
-   mermaid bundle, copied from the root `mermaid` devDependency (pinned to the version
-   `actions/` vendors) and gitignored. `build:headless` builds it;
+   mermaid bundle, copied from the root `mermaid` devDependency and gitignored. `build:headless` builds it;
    `tests/fragment-server.mjs` serves `dist/` mirroring the production **nginx** rewrites
    (`/__wf/knowledge-base/*` → `/knowledge-base/*`). NB: `astro preview` is NOT used — its
    Vite `configurePreviewServer` rewrite hook does not run for static output, so the
@@ -200,7 +199,7 @@ Every embedded test runs twice, as Playwright projects `chromium` (:4201) and
   route; a narrow route tears the fragment down) — and what "smooth" means: no host reload,
   the reframed iframe survives, one `astro:after-swap` and one host-document view transition
   per hop, one `wf-html`, no duplicated stylesheet across a → b → c → a.
-- `artifact-checks.spec.js` — the build-side checker: root and `actions/` pin the same parser versions, findings are grouped by rule, a strict build refuses an error finding.
+- `artifact-checks.spec.js` — the build-side checker: the checker self-test passes with the parsers the build resolves (behaviour, not a version match with `actions/`), findings are grouped by rule, a strict build refuses an error finding.
 - `artifact-safety.spec.js` — tarball extraction guards (traversal, absolute paths, symlinks).
 - `nginx-config.spec.js` — static assertions on `nginx.conf`/`nginx.headers.conf`, including
   that the CSP the Express mirror serves is byte-identical to nginx's.
