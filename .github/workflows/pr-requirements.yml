@@ -40,7 +40,7 @@ jobs:
           fi
 
       - name: Check PR requirements
-        uses: AbsaOSS/check-pr-requirements@adb22f6d88c93fd801e787a63d948d6fbbdd4af3 # v0.2.0
+        uses: AbsaOSS/check-pr-requirements@0d4f326fcf798afc702480a68281ab5694236a57 # v0.3.0
         with:
           pr-title: ${{ github.event.pull_request.title }}
           pr-body: ${{ github.event.pull_request.body }}
