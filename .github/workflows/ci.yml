@@ -21,6 +21,10 @@ on:
   # skip each layer of a stacked PR except the bottom one, which is exactly the
   # work that most needs checking before it reaches master.
   pull_request:
+  # The merge queue tests each queued PR (or batch of PRs) merged on top of
+  # master and everything ahead of it, so a PR never has to be updated and
+  # re-run by hand after another one lands.
+  merge_group:
 
 # Least privilege: jobs only read the repo. Override per-job if more is needed.
 permissions:

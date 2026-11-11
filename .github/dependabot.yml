@@ -15,6 +15,11 @@ updates:
       dev-dependencies:
         dependency-type: development
         update-types: [minor, patch]
+      # Same for runtime dependencies (parse5, postcss, htmlparser2, …): one
+      # PR and one CI run a week instead of one each.
+      production-dependencies:
+        dependency-type: production
+        update-types: [minor, patch]
     ignore:
       # @astrojs/check peers typescript ^5 || ^6; a major beyond that fails
       # `npm ci` with ERESOLVE. Lift once @astrojs/check accepts the next major.
@@ -39,6 +44,11 @@ updates:
     schedule:
       interval: weekly
     open-pull-requests-limit: 5
+    groups:
+      # Pinned action bumps are SHA swaps; a weekly batch needs one CI run.
+      # A major still gets a PR of its own.
+      github-actions:
+        update-types: [minor, patch]
 
   # The Dockerfile pins nginx-unprivileged by tag and digest; this bumps both.
   - package-ecosystem: docker
