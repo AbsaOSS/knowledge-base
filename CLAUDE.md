@@ -28,7 +28,7 @@ npm run preview                      # serve the built dist/ (astro preview, :43
 # Test (Playwright E2E — self-contained; auto-starts its own servers)
 npm test                             # embedded web-fragment harness
 npx playwright test --config=playwright.config.ci.js   # standalone fragment server
-npm run test:container               # real nginx image (needs Docker)
+npm run test:container               # real nginx + MCP images (needs Docker)
 npm run test:ui                      # Playwright UI
 npm run test:headed                  # visible browser
 npm run test:debug                   # debug mode
@@ -36,6 +36,7 @@ npm run test:debug                   # debug mode
 # Docker
 docker build -t knowledge-base .
 docker run -p 8080:8080 knowledge-base
+docker build -f mcp-server/Dockerfile -t knowledge-base-mcp .   # MCP image, same dist/
 
 # MCP server (Python, mcp-server/; needs uv) — run from mcp-server/
 uv sync --all-extras                                   # runtime + indexer + dev tools
@@ -89,7 +90,7 @@ Orchestrator: `scripts/build-vite.js`. Flags: `--local`, `--headless`.
 - `src/utils/registry.js` — Registry validation, manifest reading/validation, expansion map. Shared by the build and by Astro so both resolve the same registry
 - `scripts/build-vite.js` — Build orchestrator (4 steps: prepare, hoist, copy assets, astro build)
 - `scripts/page-manifest.js` — Build step 3b: writes `dist/_kb/pages.json` (shape: `scripts/page-manifest.schema.json`), the pages Astro published with their app's name, description, tags, kind and source version. It and the HTML under `dist/` are the whole interface for consumers that do not run Node (the MCP indexer); they never read the registry. `.dockerignore` keeps `dist/_kb` out of the nginx image
-- `mcp-server/` — the MCP server: a self-contained Python project (uv, `src/kb_mcp`, pytest) on the official MCP SDK. It shares no code with the site; it reads `dist/_kb/pages.json` and the HTML under `dist/`. `kb-mcp index` builds a SQLite FTS5 index, `kb-mcp serve` serves it over stateless Streamable HTTP. Layering (ports and adapters, the indexer never imported at run time) is enforced by import-linter. See `docs/mcp-development.md` and `docs/adr/0001-mcp-server.md`
+- `mcp-server/` — the MCP server: a self-contained Python project (uv, `src/kb_mcp`, pytest) on the official MCP SDK. It shares no code with the site; it reads `dist/_kb/pages.json` and the HTML under `dist/`. `kb-mcp index` builds a SQLite FTS5 index, `kb-mcp serve` serves it over stateless Streamable HTTP. Layering (ports and adapters, the indexer never imported at run time) is enforced by import-linter. Shipped as a second image (`mcp-server/Dockerfile`, build context the repo root, index built in) that runs beside the site image in one task; nginx proxies `/knowledge-base/mcp` to it on `127.0.0.1:8081` (`contract/DEPLOYMENT.md`). See `docs/mcp.md`, `docs/mcp-development.md` and `docs/adr/0001-mcp-server.md`
 - `scripts/fetch-apps.js` — GitHub Release artifact downloader. Only *obtains* an artifact; installing it is one shared path in `build-vite.js`
 - `scripts/artifacts.js` — Safe tarball extraction + tree copy, shared by both fetch paths. Validates archive members (no traversal, no absolute paths, no symlinks) before anything is written, and replaces the old `cp -r`/`tar` shell-outs so the build runs on Windows
 - `scripts/check-artifact.js` — Runs the publish action's contract checker (`actions/lib/check.js`) on every installed artifact, before hoisting; logs findings grouped by rule, and fails a strict build on an error. `check.js` resolves its parsers from `actions/node_modules` or the root; the two may pin different versions, and `tests/artifact-checks.spec.js` runs the checker self-test against whichever the build resolves
@@ -203,19 +204,30 @@ Every embedded test runs twice, as Playwright projects `chromium` (:4201) and
   per hop, one `wf-html`, no duplicated stylesheet across a → b → c → a.
 - `artifact-checks.spec.js` — the build-side checker: the checker self-test passes with the parsers the build resolves (behaviour, not a version match with `actions/`), findings are grouped by rule, a strict build refuses an error finding.
 - `artifact-safety.spec.js` — tarball extraction guards (traversal, absolute paths, symlinks).
-- `nginx-config.spec.js` — static assertions on `nginx.conf`/`nginx.headers.conf`, including
-  that the CSP the Express mirror serves is byte-identical to nginx's.
+- `nginx-config.spec.js` — static assertions on `nginx.conf`/`nginx.headers.conf`/
+  `nginx.security-headers.conf`, including that the CSP the Express mirror serves is
+  byte-identical to nginx's, and the MCP location (exact match, loopback upstream with its own
+  Host, security headers without CORS, rate and body limits, its preflight not short-circuited).
+  The site's static locations include `nginx.headers.conf` (CORS + the security file); the MCP
+  location includes only the security file, because the MCP server answers CORS itself.
 - `private-registry.spec.js` — both lockfiles name no registry (no `resolved` URL, an
   integrity hash on every package; the committed `.npmrc` sets
   `omit-lockfile-registry-resolved`), the `npm-registry`/`npm-token`/`node-mirror` inputs
   exist on both actions and `build-image.yml`, and `actions/lib/npm-registry.sh` appends to
-  the project `.npmrc` without ever putting the token on disk.
+  the project `.npmrc` without ever putting the token on disk. The MCP image's `python-index`
+  reaches `docker build` as a BuildKit secret and installs hash-pinned requirements.
 - `skill.spec.js` — `skills/kb-docs-add/`: frontmatter satisfies the Agent Skills spec
   (name ↔ directory, portable fields only), no scripts shipped, every referenced file exists,
   `examples/` are byte-identical to the contract's code blocks, and the docs carry the install
   command.
 - `standalone.spec.js` — the `:3000` fragment server directly (`playwright.config.ci.js`).
-- `container.spec.js` — the real nginx image (`playwright.config.docker.js`, needs Docker).
+- `container.spec.js` — the real images (`playwright.config.docker.js`, needs Docker): the MCP
+  container owns the network namespace and the port, nginx joins it once the MCP container is
+  healthy — a task's shape. MCP through nginx: initialize, search links on the public origin,
+  the browser page, CORS from the server alone, Origin refusal, 413, 429 — and the same calls
+  through the reference web-fragments host (`tests/host/server.mjs` on :8098), which proxies
+  `/knowledge-base/mcp` itself, ahead of the gateway: the gateway's Node middleware cannot forward
+  a request body.
 - `support/fragment.js` — shadow-DOM traversal + reframed-body wait/query helpers.
 
 Two build-pipeline pieces support this: `apps.json` entries may carry a `prebuilt` path
@@ -238,6 +250,7 @@ in the committed `apps.json` without breaking CI, which only has this repo.
 - `KB_HEADLESS` — `true` produces web-fragment output; **anything else, including unset, means standalone**. `scripts/build-vite.js` always exports an explicit value, so the default only applies when `astro build`/`astro dev` runs directly. Read it through `isHeadlessBuild()`, never inline. A per-app `"headless"` in `apps.json` overrides it in either direction.
 - `AWS_REGION`, `ECR_REPOSITORY`, `ECS_CLUSTER`, `ECS_SERVICE` — deployment config
 - `KB_EXAMPLE_ARTIFACT` — overrides the packaged artifact `scripts/setup-test-apps.mjs` registers
-- `KB_CONTAINER_PORT`, `KB_SKIP_BUILD` — container-suite harness (`tests/container/serve.mjs`); CI sets `KB_SKIP_BUILD` because its image job already built the image
+- `KB_CONTAINER_PORT`, `KB_SKIP_BUILD`, `KB_IMAGE`, `KB_MCP_IMAGE` — container-suite harness (`tests/container/serve.mjs`); CI sets `KB_SKIP_BUILD` because its image job already built both images
+- `KB_MCP_*` — the MCP server's settings (`mcp-server/src/kb_mcp/config.py`); the deployable ones are listed in `contract/DEPLOYMENT.md`
 
 The URL prefix is **not** an environment variable: it is the `PATH_PREFIX` constant in `src/utils/config.js`. `nginx.conf`, `tests/fragment-server.mjs` and the gateway's route patterns hard-code the same string, so changing it means changing all of them together.

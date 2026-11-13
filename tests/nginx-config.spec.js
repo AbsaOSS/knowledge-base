@@ -22,8 +22,11 @@ import { dirname, join } from 'node:path';
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const CONF = readFileSync(join(ROOT, 'nginx.conf'), 'utf8');
 const HEADERS_CONF = readFileSync(join(ROOT, 'nginx.headers.conf'), 'utf8');
+const SECURITY_CONF = readFileSync(join(ROOT, 'nginx.security-headers.conf'), 'utf8');
 
 const INCLUDE = 'include /etc/nginx/kb-headers.conf;';
+const SECURITY_INCLUDE = 'include /etc/nginx/kb-security-headers.conf;';
+const MCP_LOCATION = '= /knowledge-base/mcp';
 
 /**
  * Splits nginx.conf into its `location` blocks by brace depth.
@@ -55,19 +58,19 @@ const uncomment = (text) =>
   text.split('\n').map((l) => l.replace(/\r$/, '').replace(/#.*$/, '')).join('\n');
 
 test.describe('nginx.conf header inheritance', () => {
-  test('the shared header set is defined once, in nginx.headers.conf', () => {
-    const shared = uncomment(HEADERS_CONF);
-    for (const header of [
-      'Access-Control-Allow-Origin',
-      'Access-Control-Allow-Methods',
-      'Access-Control-Allow-Headers',
-      'X-Content-Type-Options',
-      'X-Frame-Options',
-      'Referrer-Policy',
-    ]) {
-      expect(shared, `${header} must be in the shared snippet`).toContain(header);
-      expect(uncomment(CONF), `${header} must not be redeclared in nginx.conf`).not.toContain(header);
+  test('the shared header set is defined once, across the two snippets', () => {
+    const snippets = [
+      [HEADERS_CONF, ['Access-Control-Allow-Origin', 'Access-Control-Allow-Methods', 'Access-Control-Allow-Headers']],
+      [SECURITY_CONF, ['X-Content-Type-Options', 'X-Frame-Options', 'Referrer-Policy', 'Content-Security-Policy']],
+    ];
+    for (const [snippet, headers] of snippets) {
+      for (const header of headers) {
+        expect(uncomment(snippet), `${header} must be in its snippet`).toContain(header);
+        expect(uncomment(CONF), `${header} must not be redeclared in nginx.conf`).not.toContain(header);
+      }
     }
+    expect(uncomment(HEADERS_CONF), 'the shared set includes the security half')
+      .toContain(SECURITY_INCLUDE);
   });
 
   test('the server block includes the shared headers', () => {
@@ -76,6 +79,7 @@ test.describe('nginx.conf header inheritance', () => {
 
   test('every location that declares add_header also includes the shared headers', () => {
     const offenders = locationBlocks(uncomment(CONF))
+      .filter((block) => block.selector !== MCP_LOCATION)
       .filter((block) => /\badd_header\b/.test(block.body))
       .filter((block) => !block.body.includes(INCLUDE))
       .map((block) => block.selector);
@@ -88,17 +92,17 @@ test.describe('nginx.conf header inheritance', () => {
   });
 
   test('X-Frame-Options is not DENY — it would block the web-fragments iframe', () => {
-    expect(uncomment(HEADERS_CONF)).toMatch(/X-Frame-Options\s+"SAMEORIGIN"/);
+    expect(uncomment(SECURITY_CONF)).toMatch(/X-Frame-Options\s+"SAMEORIGIN"/);
   });
 
   test('the deprecated X-XSS-Protection header is not set', () => {
-    expect(uncomment(CONF) + uncomment(HEADERS_CONF)).not.toContain('X-XSS-Protection');
+    expect(uncomment(CONF) + uncomment(HEADERS_CONF) + uncomment(SECURITY_CONF)).not.toContain('X-XSS-Protection');
   });
 
   test('style-src and font-src allow no third-party origin', () => {
     // Inter is served from this origin (#54), so neither directive needs a host
     // allowlisted. Re-adding a CDN font would quietly widen the policy again.
-    const csp = uncomment(HEADERS_CONF).match(/add_header\s+Content-Security-Policy\s+"([^"]+)"/)?.[1] ?? '';
+    const csp = uncomment(SECURITY_CONF).match(/add_header\s+Content-Security-Policy\s+"([^"]+)"/)?.[1] ?? '';
     for (const directive of ['style-src', 'font-src']) {
       const value = csp.split(';').map((d) => d.trim()).find((d) => d.startsWith(directive + ' ')) ?? '';
       expect(value, `no ${directive} in the policy`).toBeTruthy();
@@ -109,10 +113,10 @@ test.describe('nginx.conf header inheritance', () => {
   // The Express mirror serves the same policy so the embedded harness exercises
   // it through the gateway. Two copies means they can drift, so the drift is
   // what gets asserted.
-  test('the CSP in nginx.headers.conf matches the one the test mirror serves', () => {
-    const nginxCsp = uncomment(HEADERS_CONF)
+  test('the CSP in nginx.security-headers.conf matches the one the test mirror serves', () => {
+    const nginxCsp = uncomment(SECURITY_CONF)
       .match(/add_header\s+Content-Security-Policy\s+"([^"]+)"/)?.[1];
-    expect(nginxCsp, 'no CSP in nginx.headers.conf').toBeTruthy();
+    expect(nginxCsp, 'no CSP in nginx.security-headers.conf').toBeTruthy();
 
     const mirror = readFileSync(join(ROOT, 'tests', 'fragment-server.mjs'), 'utf8');
     const mirrorCsp = mirror
@@ -169,6 +173,46 @@ test.describe('nginx.conf header inheritance', () => {
   });
 });
 
+test.describe('nginx.conf MCP endpoint', () => {
+  const mcp = () => locationBlocks(uncomment(CONF)).find((b) => b.selector === MCP_LOCATION);
+
+  test('is an exact location, so it wins over the ^~ static prefix', () => {
+    expect(mcp(), `${MCP_LOCATION} location block`).toBeTruthy();
+  });
+
+  test('proxies to the MCP container on loopback, keeping the upstream Host', () => {
+    // The server's DNS-rebinding check allows only loopback Host headers;
+    // forwarding the client's Host would turn every call into a 421.
+    expect(mcp().body).toMatch(/proxy_pass\s+http:\/\/127\.0\.0\.1:8081\/mcp;/);
+    expect(mcp().body).not.toMatch(/proxy_set_header\s+Host\b/);
+  });
+
+  test('sends security headers but leaves CORS to the MCP server', () => {
+    // A second Access-Control-Allow-Origin next to the server's own makes
+    // browsers reject the response.
+    expect(mcp().body).toContain(SECURITY_INCLUDE);
+    expect(mcp().body).not.toContain(INCLUDE);
+    expect(mcp().body).toMatch(/add_header\s+Cache-Control\s+"no-store"\s+always;/);
+  });
+
+  test('is rate limited per client and globally, with a bounded body', () => {
+    const body = mcp().body;
+    expect(body).toMatch(/limit_req\s+zone=kb_mcp_client\b/);
+    expect(body).toMatch(/limit_req\s+zone=kb_mcp_global\b/);
+    expect(body).toMatch(/limit_req_status\s+429;/);
+    expect(body).toMatch(/client_max_body_size\s+64k;/);
+    expect(uncomment(CONF)).toMatch(/limit_req_zone\s+\$binary_remote_addr\s+zone=kb_mcp_client:/);
+  });
+
+  test('its OPTIONS preflight reaches the MCP server instead of the static 204', () => {
+    const conf = uncomment(CONF);
+    expect(conf, 'the server-level 204 must not key on the method alone')
+      .not.toMatch(/if\s*\(\$request_method\s*=\s*OPTIONS\)/);
+    const exclusion = conf.match(/"~\^OPTIONS:\(\?!([^)]+)\)"\s+1;/)?.[1];
+    expect(exclusion, 'the preflight map must exclude the MCP path').toBe('/knowledge-base/mcp$');
+  });
+});
+
 test.describe('Dockerfile', () => {
   const DOCKERFILE = readFileSync(join(ROOT, 'Dockerfile'), 'utf8');
 
@@ -179,7 +223,15 @@ test.describe('Dockerfile', () => {
       .toMatch(/@sha256:[a-f0-9]{64}/);
   });
 
+  test('the MCP image beside it pins every base image by digest', () => {
+    const froms = readFileSync(join(ROOT, 'mcp-server', 'Dockerfile'), 'utf8')
+      .split('\n').filter((l) => /^FROM \S+:/.test(l));
+    expect(froms.length).toBeGreaterThan(0);
+    for (const from of froms) expect(from).toMatch(/@sha256:[a-f0-9]{64}/);
+  });
+
   test('ships the shared header snippet the config includes', () => {
     expect(DOCKERFILE).toContain('nginx.headers.conf /etc/nginx/kb-headers.conf');
+    expect(DOCKERFILE).toContain('nginx.security-headers.conf /etc/nginx/kb-security-headers.conf');
   });
 });

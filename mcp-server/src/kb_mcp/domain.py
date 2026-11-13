@@ -53,6 +53,8 @@ class IndexInfo:
     content_hash: str
     indexed_at: str
     generator: str
+    path_prefix: str
+    """The site's URL prefix, e.g. `knowledge-base`: every page route starts with `/{path_prefix}/`."""
 
 
 @dataclass(frozen=True, slots=True)

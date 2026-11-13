@@ -40,6 +40,8 @@ COPY nginx.conf /etc/nginx/conf.d/default.conf
 # conf.d/ because nginx loads conf.d/*.conf as top-level server configuration
 # and this is a fragment, not a server block.
 COPY nginx.headers.conf /etc/nginx/kb-headers.conf
+# The security half of that set, which the MCP location includes on its own.
+COPY nginx.security-headers.conf /etc/nginx/kb-security-headers.conf
 
 # `dist/` is built outside the image (npm run build / build:headless) and is not
 # reproducible from this Dockerfile alone — see README. Fail loudly here rather
