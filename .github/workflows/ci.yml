@@ -209,8 +209,8 @@ jobs:
       runs-on: '["ubuntu-latest"]'
   # ── 5. Container image ─────────────────────────────────────────────────────
   #
-  # Builds the runtime image from the dist/ the build job produced, then scans
-  # it. `npm audit` below covers JS dependencies only — nothing else in CI looks
+  # Builds both runtime images (the site and the MCP server) from the dist/ the
+  # build job produced, runs them as a deployment's task does, then scans them. `npm audit` below covers JS dependencies only — nothing else in CI looks
   # at the nginx base image, which is what the digest pin in the Dockerfile
   # exists to control. CRITICAL-only so a routine base-image CVE does not block
   # unrelated PRs; the fix is to bump the pinned digest.
@@ -233,6 +233,8 @@ jobs:
       # Also proves the Dockerfile's dist/ sanity checks pass on a real build.
       - name: Build image
         run: docker build -t knowledge-base:ci .
+      - name: Build MCP image
+        run: docker build -f mcp-server/Dockerfile -t knowledge-base-mcp:ci .
       # The CSP checks in the container suite need a real browser: a policy that
       # blocks something the page needs fails silently, and only a browser
       # reports the violation.
@@ -246,11 +248,20 @@ jobs:
         run: npm run test:container
         env:
           KB_IMAGE: knowledge-base:ci
+          KB_MCP_IMAGE: knowledge-base-mcp:ci
           KB_SKIP_BUILD: 'true'
       - name: Scan image
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
           image-ref: knowledge-base:ci
+          format: table
+          exit-code: '1'
+          ignore-unfixed: true
+          severity: CRITICAL
+      - name: Scan MCP image
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: knowledge-base-mcp:ci
           format: table
           exit-code: '1'
           ignore-unfixed: true

@@ -1,0 +1,10 @@
+# Build context for mcp-server/Dockerfile (the repository root). BuildKit reads
+# this file instead of the root .dockerignore, which keeps dist/_kb out of the
+# site image; this image needs exactly that.
+*
+!dist
+!mcp-server/pyproject.toml
+!mcp-server/uv.lock
+!mcp-server/src
+!trusted_certs
+mcp-server/src/**/__pycache__

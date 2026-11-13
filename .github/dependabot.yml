@@ -68,3 +68,10 @@ updates:
     schedule:
       interval: weekly
     open-pull-requests-limit: 5
+
+  # mcp-server/Dockerfile pins python and uv by tag and digest.
+  - package-ecosystem: docker
+    directory: /mcp-server
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5

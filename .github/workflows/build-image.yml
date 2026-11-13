@@ -10,6 +10,7 @@
 #       with:
 #         registry: apps.json          # in the CALLING repo
 #         image-name: ghcr.io/org/knowledge-base
+#         mcp-image-name: ghcr.io/org/knowledge-base-mcp   # optional: the MCP server
 #       secrets:
 #         docs-token: ${{ steps.app-token.outputs.token }}
 #
@@ -50,6 +51,24 @@ on:
           Image to build and push, e.g. ghcr.io/org/knowledge-base. When empty,
           dist/ is uploaded as a workflow artifact and nothing is pushed — which
           is what a dry run wants.
+        type: string
+        required: false
+        default: ''
+      mcp-image-name:
+        description: >-
+          MCP server image to build and push from the same dist/ and with the
+          same tags, e.g. ghcr.io/org/knowledge-base-mcp. It runs beside the
+          site image in one task; see contract/DEPLOYMENT.md. Empty builds no
+          MCP image. Ignored without image-name.
+        type: string
+        required: false
+        default: ''
+      python-index:
+        description: >-
+          Python package index for the MCP image's dependencies, for runners
+          that cannot reach pypi.org — an Artifactory PyPI remote, say. Empty
+          means PyPI. The lockfile needs no change: the image installs from
+          hash-pinned requirements exported from it, which name no index.
         type: string
         required: false
         default: ''
@@ -108,6 +127,14 @@ on:
       node-mirror-token:
         description: Authorization header value for `node-mirror`.
         required: false
+      python-index-username:
+        description: User name for `python-index`, when it needs credentials.
+        required: false
+      python-index-token:
+        description: >-
+          Password or token for `python-index`. Reaches the image build as a
+          BuildKit secret, never as a build argument or a layer.
+        required: false
       ca-certificates:
         description: >-
           Extra CA certificates (PEM) the image build trusts while `apk upgrade`
@@ -118,6 +145,9 @@ on:
       image:
         description: 'The first pushed image reference, when one was pushed.'
         value: ${{ jobs.build.outputs.image }}
+      mcp-image:
+        description: 'The first pushed MCP image reference, when one was pushed.'
+        value: ${{ jobs.build.outputs.mcp-image }}
 
 permissions:
   contents: read
@@ -131,6 +161,7 @@ jobs:
     runs-on: ${{ (startsWith(inputs.runs-on, '[') || startsWith(inputs.runs-on, '{')) && fromJSON(inputs.runs-on) || inputs.runs-on }}
     outputs:
       image: ${{ steps.push.outputs.image }}
+      mcp-image: ${{ steps.push.outputs.mcp-image }}
     steps:
       # The caller's repo holds the registry; this repo holds the build. They are
       # checked out side by side, and the build runs from this one.
@@ -249,19 +280,24 @@ jobs:
           # Force the plain `docker login` path instead.
           ecr: 'false'
 
-      - name: Build and push the image
+      - name: Build and push the images
         id: push
         if: ${{ inputs.image-name != '' }}
         working-directory: knowledge-base
         env:
           KB_IMAGE: ${{ inputs.image-name }}
+          KB_MCP_IMAGE: ${{ inputs.mcp-image-name }}
           KB_TAGS: ${{ inputs.image-tags }}
           KB_SHA: ${{ github.sha }}
           KB_CA_CERTIFICATES: ${{ secrets.ca-certificates }}
+          KB_PYTHON_INDEX: ${{ inputs.python-index }}
+          KB_PYTHON_INDEX_USERNAME: ${{ secrets.python-index-username }}
+          KB_PYTHON_INDEX_TOKEN: ${{ secrets.python-index-token }}
         run: |
           set -euo pipefail
 
-          # The Dockerfile trusts every *.pem in trusted_certs/ for its apk step.
+          # Both Dockerfiles trust every *.pem in trusted_certs/ for their
+          # package downloads.
           if [ -n "${KB_CA_CERTIFICATES:-}" ]; then
             printf '%s\n' "$KB_CA_CERTIFICATES" > trusted_certs/ca-certificates.pem
           fi
@@ -270,21 +306,56 @@ jobs:
           # Accept either separator; normalise to one tag per line.
           tags="$(printf '%s' "$tags" | tr ',' '\n' | sed '/^[[:space:]]*$/d')"
 
-          args=()
-          first=''
-          while IFS= read -r tag; do
-            ref="$KB_IMAGE:$tag"
-            args+=(-t "$ref")
-            [ -z "$first" ] && first="$ref"
-          done <<< "$tags"
+          # Builds $1 from Dockerfile $2 under every tag, pushes it, prints the first ref.
+          build_and_push() {
+            local image="$1" dockerfile="$2" first='' args=()
+            shift 2
+            while IFS= read -r tag; do
+              args+=(-t "$image:$tag")
+              [ -z "$first" ] && first="$image:$tag"
+            done <<< "$tags"
+            docker build -f "$dockerfile" "${args[@]}" "$@" . >&2
+            while IFS= read -r tag; do
+              docker push "$image:$tag" >&2
+            done <<< "$tags"
+            printf '%s' "$first"
+          }
 
-          docker build "${args[@]}" .
-          while IFS= read -r tag; do
-            docker push "$KB_IMAGE:$tag"
-          done <<< "$tags"
-
+          first="$(build_and_push "$KB_IMAGE" Dockerfile)"
           echo "image=$first" >> "$GITHUB_OUTPUT"
           echo "Pushed \`$first\`." >> "$GITHUB_STEP_SUMMARY"
+
+          if [ -z "${KB_MCP_IMAGE:-}" ]; then
+            exit 0
+          fi
+
+          # The index URL travels as a BuildKit secret: it may carry credentials,
+          # and a build argument would be recorded in the image history.
+          secret=()
+          if [ -n "${KB_PYTHON_INDEX:-}" ]; then
+            case "$KB_PYTHON_INDEX" in
+              *[[:space:]]*|*@*)
+                echo "::error::python-index must be a single URL without credentials; pass them as secrets"
+                exit 1 ;;
+              http://*|https://*) ;;
+              *)
+                echo "::error::python-index must be an http(s) URL, got '$KB_PYTHON_INDEX'"
+                exit 1 ;;
+            esac
+            index="$KB_PYTHON_INDEX"
+            if [ -n "${KB_PYTHON_INDEX_TOKEN:-}" ]; then
+              user="$(jq -rn --arg v "${KB_PYTHON_INDEX_USERNAME:-__token__}" '$v|@uri')"
+              token="$(jq -rn --arg v "$KB_PYTHON_INDEX_TOKEN" '$v|@uri')"
+              index="${index%%://*}://${user}:${token}@${index#*://}"
+            fi
+            export KB_PYTHON_INDEX_URL="$index"
+            secret=(--secret id=python-index,env=KB_PYTHON_INDEX_URL)
+            echo "The MCP image installs from ${KB_PYTHON_INDEX}${KB_PYTHON_INDEX_TOKEN:+ (authenticated)}"
+          fi
+
+          mcp_first="$(build_and_push "$KB_MCP_IMAGE" mcp-server/Dockerfile "${secret[@]}")"
+          echo "mcp-image=$mcp_first" >> "$GITHUB_OUTPUT"
+          echo "Pushed \`$mcp_first\`." >> "$GITHUB_STEP_SUMMARY"
 
       # kb-build.json records which release of which repo produced each app. An
       # image is opaque once pushed; this is how "the docs are wrong" becomes an

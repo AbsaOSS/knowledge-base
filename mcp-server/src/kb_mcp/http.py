@@ -53,9 +53,12 @@ def create_app(
         info = kb.info()
         return JSONResponse({"status": "ok", "indexedAt": info.indexed_at, "contentHash": info.content_hash})
 
-    async def browser_page(request: Request) -> HTMLResponse:
-        url = escape(str(request.url.replace(query=None, fragment=None)))
-        return HTMLResponse(_BROWSER_PAGE.format(url=url), status_code=405, headers={"Allow": "POST"})
+    # Behind nginx the request URL is the loopback upstream's, so the page names the public endpoint instead.
+    public_path = f"/{kb.info().path_prefix}{MCP_PATH}"
+    endpoint = escape(kb.public_url(public_path) or f"https://<this host>{public_path}")
+
+    async def browser_page(_: Request) -> HTMLResponse:
+        return HTMLResponse(_BROWSER_PAGE.format(url=endpoint), status_code=405, headers={"Allow": "POST"})
 
     @contextlib.asynccontextmanager
     async def lifespan(_: Starlette) -> AsyncIterator[None]:

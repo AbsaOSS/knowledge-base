@@ -103,7 +103,10 @@ class SqliteIndex:
                 f"Search index schema version {meta.get('schema_version')}, this server reads {SCHEMA_VERSION}"
             )
         self.info = IndexInfo(
-            content_hash=meta["content_hash"], indexed_at=meta["indexed_at"], generator=meta["generator"]
+            content_hash=meta["content_hash"],
+            indexed_at=meta["indexed_at"],
+            generator=meta["generator"],
+            path_prefix=meta["path_prefix"],
         )
 
     def connection(self) -> sqlite3.Connection:
