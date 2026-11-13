@@ -27,6 +27,6 @@ tsconfig.json
 package-lock.json
 apps.json
 
-# The MCP search index is runtime data for the MCP server, not public static
-# content: keep it out of the nginx web root.
-dist/_mcp
+# The page manifest is build metadata for the MCP indexer, not site content:
+# keep it out of the nginx web root. mcp-server/Dockerfile.dockerignore lets it in.
+dist/_kb

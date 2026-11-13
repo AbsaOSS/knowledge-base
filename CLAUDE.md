@@ -49,6 +49,7 @@ apps.json (registry)
   → [3] astro build: [...path].astro enumerates all HTML via getStaticPaths
          → transformSubAppHtml() rewrites URLs + splits the document,
            which Base.astro then re-hosts (masthead + head/body)
+  → [3b] Page manifest → dist/_kb/pages.json (every published page + its app)
   → dist/
 ```
 
@@ -81,6 +82,7 @@ Orchestrator: `scripts/build-vite.js`. Flags: `--local`, `--headless`.
 - `src/utils/config.js` — `PATH_PREFIX`/`BASE_PATH`, `isHeadlessBuild()` and `REGISTRY_FILE` — the build-wide constants
 - `src/utils/registry.js` — Registry validation, manifest reading/validation, expansion map. Shared by the build and by Astro so both resolve the same registry
 - `scripts/build-vite.js` — Build orchestrator (4 steps: prepare, hoist, copy assets, astro build)
+- `scripts/page-manifest.js` — Build step 3b: writes `dist/_kb/pages.json` (shape: `scripts/page-manifest.schema.json`), the pages Astro published with their app's name, description, tags, kind and source version. It and the HTML under `dist/` are the whole interface for consumers that do not run Node (the MCP indexer); they never read the registry. `.dockerignore` keeps `dist/_kb` out of the nginx image
 - `scripts/fetch-apps.js` — GitHub Release artifact downloader. Only *obtains* an artifact; installing it is one shared path in `build-vite.js`
 - `scripts/artifacts.js` — Safe tarball extraction + tree copy, shared by both fetch paths. Validates archive members (no traversal, no absolute paths, no symlinks) before anything is written, and replaces the old `cp -r`/`tar` shell-outs so the build runs on Windows
 - `scripts/check-artifact.js` — Runs the publish action's contract checker (`actions/lib/check.js`) on every installed artifact, before hoisting; logs findings grouped by rule, and fails a strict build on an error. `check.js` resolves its parsers from `actions/node_modules` or the root; the two may pin different versions, and `tests/artifact-checks.spec.js` runs the checker self-test against whichever the build resolves

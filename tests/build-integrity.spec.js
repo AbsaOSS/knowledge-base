@@ -15,6 +15,7 @@ import { readFileSync, existsSync, readdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join, relative } from 'node:path';
 import { parse } from 'parse5';
+import Ajv from 'ajv';
 import { isThemeBootstrap } from '../src/utils/transform.js';
 import { LAYER_ORDER, SUB_APP_LAYER } from '../src/utils/css-layers.js';
 
@@ -600,5 +601,40 @@ test.describe('stylesheet emission', () => {
         expect(u, `${file}: relative URL left in a sub-app stylesheet`).toMatch(/^\/knowledge-base\//);
       }
     }
+  });
+});
+
+test.describe('Page manifest (dist/_kb/pages.json)', () => {
+  const manifest = () => JSON.parse(read('_kb/pages.json'));
+
+  test('matches its schema', () => {
+    const schema = JSON.parse(readFileSync(join(ROOT, 'scripts', 'page-manifest.schema.json'), 'utf8'));
+    const validate = new Ajv({ allErrors: true, strict: false }).compile(schema);
+    expect(validate(manifest()), JSON.stringify(validate.errors)).toBe(true);
+  });
+
+  test('describes every registered app, with its kind and source version', () => {
+    const apps = Object.fromEntries(manifest().apps.map((app) => [app.slug, app]));
+    expect(Object.keys(apps)).toEqual(expect.arrayContaining(['user-guide', 'guide-mirror', 'platform-overview', 'release-process', 'external-docs']));
+    expect(apps['external-docs']).toMatchObject({ kind: 'iframe', url: 'https://example.com/docs' });
+    expect(apps['user-guide']).toMatchObject({ kind: 'artifact', url: null, sourceVersion: 'prebuilt' });
+  });
+
+  test('lists every published page once, each pointing at HTML that was built', () => {
+    const { pages } = manifest();
+    const routes = pages.map((page) => page.route);
+    expect(new Set(routes).size, 'a route is listed twice').toBe(routes.length);
+    expect(routes).toEqual([...routes].sort());
+    expect(routes).toEqual(expect.arrayContaining(['/knowledge-base/user-guide/', '/knowledge-base/user-guide/docs/']));
+    for (const page of pages) {
+      expect(existsSync(join(DIST, page.file)), `${page.file} missing`).toBe(true);
+      expect(page.route).toBe(`/knowledge-base/${page.file.replace(/index\.html$/, '')}`);
+    }
+  });
+
+  test('carries the manifest title and section of a page that declares them', () => {
+    const declared = manifest().pages.filter((page) => page.app === 'guide-mirror' && page.section);
+    expect(declared.length, 'guide-mirror declares sectioned pages').toBeGreaterThan(0);
+    for (const page of declared) expect(page.title).toBeTruthy();
   });
 });

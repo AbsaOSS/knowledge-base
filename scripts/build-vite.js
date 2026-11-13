@@ -29,7 +29,7 @@ import { PATH_PREFIX, REGISTRY_FILE } from '../src/utils/config.js';
 import { layerSubAppCss } from '../src/utils/css-layers.js';
 import { rewriteCssUrls } from '../src/utils/transform.js';
 import { checkApp, reportFindings } from './check-artifact.js';
-import { buildMcpArtifacts } from './build-mcp.js';
+import { PAGE_MANIFEST_FILE, writePageManifest } from './page-manifest.js';
 import {
   ARTIFACT_NAME, MANIFEST, expandManifest, findManifestRoot, isIframe,
   readManifest, resolveRegistry, sourceKey, stagingName, toRegistryEntry,
@@ -457,9 +457,11 @@ async function build() {
     ok('Knowledge base CSS (' + blocks[0].length + ' bytes, inlined into every page) published → dist/style.css');
   }
 
-  // 3b. Build runtime-only MCP assets after Astro has published every page.
-  step('3b/4  Generating MCP search index → dist/_mcp/');
-  await buildMcpArtifacts({ root: ROOT, headless: HEADLESS, provenance, log: { ok, warn, step } });
+  // 3b. Describe what Astro published, for consumers that read dist/ without
+  // running this build (the MCP indexer).
+  step('3b/4  Writing the page manifest → dist/' + PAGE_MANIFEST_FILE.replace(/\\/g, '/'));
+  const pageManifest = writePageManifest({ root: ROOT, headless: HEADLESS, provenance, warn });
+  ok('Page manifest: ' + pageManifest.pages.length + ' page(s) in ' + pageManifest.apps.length + ' app(s)');
 
   // 4. Summary
   step('4/4  Build complete');
