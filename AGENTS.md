@@ -92,10 +92,11 @@ that is the bug — fix the change, not the test.
 A fourth suite needs Docker and is therefore **not** part of `npm test`:
 
 ```bash
-npm run test:container   # integration tests against the real nginx image
+npm run test:container   # integration tests against the real nginx + MCP images
 ```
 
-Run it when touching `nginx.conf`, `nginx.headers.conf` or the `Dockerfile`. It
+Run it when touching `nginx.conf`, `nginx.headers.conf`, `nginx.security-headers.conf`,
+either `Dockerfile` (the site's or `mcp-server/`'s) or the MCP server's HTTP behaviour. It
 is the only place the shipped config is executed — the other suites run against
 `tests/fragment-server.mjs`, an Express mirror of the nginx rewrites. That mirror
 is a second implementation of the same contract and it has drifted twice

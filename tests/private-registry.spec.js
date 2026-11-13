@@ -113,6 +113,25 @@ test.describe('the private-registry inputs exist on every shared CI piece', () =
     expect(text).toContain('} >> .npmrc');
     expect(read('actions/lib/npm-registry.sh')).toContain('} >> "${dir}/.npmrc"');
   });
+
+  // uv.lock records PyPI's URLs, and `uv sync --locked` refuses another index,
+  // so the MCP image installs from requirements exported with their hashes and
+  // no index: the mirror serves the files, the hashes still decide.
+  test(`${WORKFLOW} hands the MCP image build its Python index as a BuildKit secret`, () => {
+    const text = read(WORKFLOW);
+    expect(text).toContain('\n      python-index:\n');
+    for (const secret of ['python-index-username', 'python-index-token']) {
+      expect(text).toContain(`\n      ${secret}:\n`);
+    }
+    expect(text).toContain('--secret id=python-index,env=KB_PYTHON_INDEX_URL');
+    expect(text, 'a build argument is recorded in the image history').not.toMatch(/--build-arg[^\n]*PYTHON_INDEX/);
+
+    const dockerfile = read('mcp-server/Dockerfile');
+    expect(dockerfile).toContain('--mount=type=secret,id=python-index,env=UV_DEFAULT_INDEX');
+    expect(dockerfile).toContain('uv export --quiet --frozen');
+    expect(dockerfile).toContain('uv pip install --require-hashes --no-deps');
+    expect(dockerfile).toContain('ARG TRUSTED_SSL_CERTS=./trusted_certs');
+  });
 });
 
 /**

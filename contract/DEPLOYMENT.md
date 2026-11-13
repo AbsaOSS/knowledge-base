@@ -13,7 +13,7 @@ copy-paste skeleton is in [`examples/deployment-repo/`](../examples/deployment-r
 
 | | Knowledge base (public) | Deployment repo (private) |
 |---|---|---|
-| The build | ✅ `scripts/`, `src/`, `Dockerfile`, `nginx.conf` | — |
+| The build | ✅ `scripts/`, `src/`, `Dockerfile`, `nginx.conf`, `mcp-server/` | — |
 | The publishing actions | ✅ `actions/` | — |
 | The contract | ✅ `contract/` | — |
 | **Which docs are published** | ❌ its `apps.json` is a CI fixture | ✅ `apps.json` |
@@ -127,6 +127,86 @@ registry itself.
 
 ---
 
+## The MCP server
+
+The knowledge base can also be searched and read by AI agents over the
+[Model Context Protocol](https://modelcontextprotocol.io) at
+`/knowledge-base/mcp`. The server is a second image, built from the same
+`dist/` in the same run, and it runs **beside the site image in one task**.
+Why it is shaped this way: [`docs/adr/0001-mcp-server.md`](../docs/adr/0001-mcp-server.md).
+What agents and operators see: [`docs/mcp.md`](../docs/mcp.md).
+
+It is opt-in. Name the image and the workflow builds and pushes it with the
+same tags as the site image:
+
+```yaml
+    with:
+      image-name: ghcr.io/absaoss/knowledge-base
+      mcp-image-name: ghcr.io/absaoss/knowledge-base-mcp
+```
+
+The workflow's `mcp-image` output is the first reference it pushed. Deploy the
+two images **together, at the same tag**: the MCP image carries the search index
+of the very build the site image serves.
+
+### The task
+
+| | Site container | MCP container |
+|---|---|---|
+| Image | `image-name` | `mcp-image-name` |
+| Listens on | `8080` (published) | `127.0.0.1:8081` (never published) |
+| Health check | built in: `GET /healthz` | built in: `GET /healthz` |
+| Essential | yes | yes |
+| Starts after | the MCP container is `HEALTHY` | — |
+
+Both containers must share a network namespace: nginx proxies the endpoint to
+`127.0.0.1:8081`. ECS tasks in `awsvpc` mode (Fargate) and Kubernetes pods share
+one already. In ECS:
+
+```json
+"containerDefinitions": [
+  { "name": "mcp", "image": "…/knowledge-base-mcp:<tag>", "essential": true,
+    "environment": [
+      { "name": "KB_MCP_PUBLIC_ORIGIN", "value": "https://docs.example.com" }
+    ] },
+  { "name": "site", "image": "…/knowledge-base:<tag>", "essential": true,
+    "portMappings": [{ "containerPort": 8080 }],
+    "dependsOn": [{ "containerName": "mcp", "condition": "HEALTHY" }] }
+]
+```
+
+A task that runs the site image alone still serves every page; only
+`/knowledge-base/mcp` answers `502`.
+
+### Settings
+
+All optional; set on the MCP container.
+
+| Variable | Default | What it does |
+|---|---|---|
+| `KB_MCP_PUBLIC_ORIGIN` | unset | The origin the site is served from, e.g. `https://docs.example.com`. Results then carry absolute links an agent can hand to a person; without it they carry the route only. |
+| `KB_MCP_ALLOWED_ORIGINS` | none | Comma-separated browser origins allowed to call the endpoint. Agents send no `Origin` and always pass; a browser page from any origin not listed gets `403`. |
+| `KB_MCP_MAX_CONCURRENCY` | `32` | Requests handled at once; beyond it the server answers `503`. |
+| `KB_MCP_LOG_LEVEL` | `info` | uvicorn's log level. |
+
+`KB_MCP_INDEX`, `KB_MCP_HOST`, `KB_MCP_PORT` and `KB_MCP_ALLOWED_HOSTS` are set
+by the image and match the nginx upstream; leave them alone.
+
+### In front of the task
+
+nginx already limits each client to 20 requests a second (burst 40), all
+clients together to 200 (burst 400), and a request body to 64 KiB. The per-client
+limit keys on the address in `X-Forwarded-For` when the hop that sent it is in a
+private range (`10/8`, `172.16/12`, `192.168/16`) — a load balancer in the VPC.
+
+Whatever sits in front — a load balancer, the web-fragments gateway, an API
+gateway — must forward `POST`, `GET` and `OPTIONS /knowledge-base/mcp`
+unchanged and **unauthenticated**: MCP clients call it directly, not through a
+browser session. The endpoint is read-only and serves exactly what the site
+serves; restrict it at the network level if the site itself is restricted.
+
+---
+
 ## Reading the docs repos: a GitHub App
 
 Create a GitHub App — `knowledge-base-builder` — installed on every registered
@@ -181,24 +261,38 @@ three more things and changes nothing else:
       ca-certificates: ${{ secrets.CORP_CA_PEM }}   # behind a TLS-intercepting proxy
 ```
 
+With an MCP image (`mcp-image-name`), its Python dependencies need a mirror too:
+
+```yaml
+    with:
+      python-index: https://artifactory.example.com/artifactory/api/pypi/pypi-remote/simple
+    secrets:
+      python-index-username: ${{ secrets.ARTIFACTORY_USER }}
+      python-index-token: ${{ secrets.ARTIFACTORY_TOKEN }}
+```
+
 | Input | What it covers |
 |---|---|
 | `runs-on` | A single label as it is; a JSON array or object for several labels or a runner group. Default `ubuntu-latest`. |
 | `npm-registry`, `npm-token` (secret) | The `npm ci` of the build's own dependencies. Empty means whatever npm resolves on the runner. |
 | `node-mirror`, `node-mirror-token` (secret) | Where `setup-node` downloads Node when it can reach neither the github.com release assets it tries first nor nodejs.org. A mirror of `https://nodejs.org` — an Artifactory generic remote. Not needed when the runner image carries Node 24 in its tool cache. |
+| `python-index`, `python-index-username` / `python-index-token` (secrets) | The MCP image's Python dependencies: a PyPI simple index, an Artifactory PyPI remote, say. Empty means PyPI. The URL goes without credentials; the workflow adds the secrets to it and hands the result to `docker build` as a BuildKit secret, so it is in no layer and no image history. The username defaults to `__token__`. |
 | `ca-certificates` (secret) | Extra CA certificates (PEM) for the image build's `apk upgrade`, which otherwise fails behind a TLS-intercepting proxy with `TLS: server certificate not trusted` (exit 99): the base image trusts public CAs only. Written to `trusted_certs/` before `docker build`; the Dockerfile appends every `*.pem`/`*.crt` there to the system CA bundle. A pipeline running `docker build` itself drops the files into `trusted_certs/`, or passes `--build-arg TRUSTED_SSL_CERTS=<dir>`. The certificates stay in the image. |
 
 The publishing actions take the same four inputs, so docs repos on the same
 runners publish the same way (`actions/publish-docs/README.md`,
 `SINGLE_PAGE.md`).
 
-**Why the lockfile needs no change.** The lockfile names no registry: the
+**Why the lockfiles need no change.** The npm lockfile names no registry: the
 `.npmrc` committed beside it sets `omit-lockfile-registry-resolved=true`, so
 each package carries a version and an `integrity` hash but no `resolved` URL.
 npm fetches it from whichever registry is configured at install time, and the
 hash still verifies because the mirror serves the same tarballs. That is what
 lets one lockfile, one workflow and one action ref serve GitHub-hosted and
 internal runners alike. CI fails if a lockfile gains a registry URL.
+`mcp-server/uv.lock` does name PyPI, so the MCP image never installs from it
+directly: it exports the lock to requirements with every hash and no index URL,
+and installs those with `--require-hashes` from whichever index is configured.
 
 **What the registry input does not touch.** It is appended to the project-level npm
 config next to the lockfile being installed, for that install only. The
@@ -210,10 +304,11 @@ disk.
 
 **What no workflow input can cover.**
 
-- `docker build` pulls the nginx base image from Docker Hub by digest. On a
+- `docker build` pulls the nginx base image from Docker Hub by digest (and,
+  for the MCP image, `python` from Docker Hub and `uv` from `ghcr.io`). On a
   private network that is a *daemon* setting — Artifactory's Docker remote as a
   `registry-mirrors` entry in the runner's `/etc/docker/daemon.json` — and the
-  digest pin in the `Dockerfile` verifies the mirror served the same image.
+  digest pins in the Dockerfiles verify the mirror served the same image.
 - `setup-node`'s npm cache uses GitHub's cache service, and the App token comes
   from `api.github.com`. Both are on GitHub's published list of hosts a
   self-hosted runner must reach.
@@ -285,3 +380,7 @@ alone cannot give once `latest` has moved.
 - [ ] On runners without a route to `registry.npmjs.org`: `runs-on`,
       `npm-registry` and the `npm-token` secret set; `node-mirror` if Node is
       neither preinstalled nor downloadable; the Docker daemon's mirror configured
+- [ ] With the MCP server: `mcp-image-name` set; both containers in one task,
+      the site `dependsOn` the MCP container `HEALTHY`; `KB_MCP_PUBLIC_ORIGIN`
+      set; the gateway forwards `/knowledge-base/mcp` unauthenticated;
+      `python-index` and its secrets on a private network

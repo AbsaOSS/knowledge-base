@@ -1,5 +1,6 @@
-# The Docker image only needs nginx.conf, nginx.headers.conf and the prebuilt
-# dist/ (see Dockerfile).
+# The Docker image only needs nginx.conf, the two nginx.*headers.conf files and
+# the prebuilt dist/ (see Dockerfile). mcp-server/Dockerfile has its own
+# Dockerfile.dockerignore.
 # Keep the build context small and avoid leaking source/secrets into the image.
 node_modules
 .git
@@ -26,6 +27,7 @@ vite.config.js
 tsconfig.json
 package-lock.json
 apps.json
+mcp-server
 
 # The page manifest is build metadata for the MCP indexer, not site content:
 # keep it out of the nginx web root. mcp-server/Dockerfile.dockerignore lets it in.

@@ -145,7 +145,8 @@ Unicode code points (Python `str` indices), and that is the unit `read_document`
 
 | Concern | Owner | Mechanism |
 |---|---|---|
-| Per-client and global rate limit | nginx | `limit_req_zone` on the real client address (`real_ip` from the trusted proxy hops) |
+| Per-client and global rate limit | nginx | `limit_req_zone` on the real client address (`real_ip` from private-range hops) |
+| CORS | server | Starlette's CORS middleware for `KB_MCP_ALLOWED_ORIGINS`; nginx adds security headers but no CORS of its own on this route |
 | Body size | nginx and SDK | `client_max_body_size 64k`; the SDK's `max_request_body_size` as a second line |
 | Request timeout | nginx | `proxy_read_timeout`; every tool is a local, bounded SQLite query |
 | Concurrency | uvicorn | `--limit-concurrency` answers 503 beyond the cap |
@@ -167,16 +168,19 @@ read-only.
      filesystem friendly, `HEALTHCHECK` on `/healthz`, `CMD ["kb-mcp", "serve"]`.
 
   The image therefore contains exactly the index built from the same `dist/` as the site image.
-- **The site image stays nginx-only.** It proxies `POST`/`OPTIONS /knowledge-base/mcp` to
-  `127.0.0.1:8081`, the MCP container in the same task.
+- **The site image stays nginx-only.** It proxies `/knowledge-base/mcp` (`POST`, the `OPTIONS`
+  preflight and the browser `GET`) to `127.0.0.1:8081`, the MCP container in the same task.
 - **`build-image.yml` builds and pushes both images from one `dist/`, with the same tags.** One
-  run, one version, never a site from one build and an index from another.
+  run, one version, never a site from one build and an index from another. The MCP image is opt-in
+  (`mcp-image-name`), so an existing deployment does not start pushing to a repository it never
+  created.
 - **Deployment:** both containers in **one task** (ECS task definition, or Kubernetes pod): nginx
   essential, the MCP container essential, nginx `dependsOn` the MCP container `HEALTHY`, shared
   task network so the upstream is loopback. Scaling the task scales both, which is right: the
   index is small, read-only and in each task.
-- **Private networks:** `build-image.yml` gains `python-index` / `python-index-token` inputs passed to
-  the image build as `UV_DEFAULT_INDEX` and a BuildKit secret, mirroring `npm-registry`. `uv.lock`
+- **Private networks:** `build-image.yml` gains a `python-index` input and
+  `python-index-username` / `python-index-token` secrets, composed into one URL and passed to the
+  image build as a BuildKit secret that becomes `UV_DEFAULT_INDEX`, mirroring `npm-registry`. `uv.lock`
   records PyPI's URL, and `uv sync --locked` refuses another index; the hash-pinned export carries
   no URL, and the hashes still verify whatever mirror serves the files.
 

@@ -182,6 +182,10 @@ class KnowledgeBase:
     def link(self, document: Document) -> str:
         return self._link(document)
 
+    def public_url(self, path: str) -> str | None:
+        """`path` on the site's public origin, or None when the origin is not configured."""
+        return urljoin(self._public_origin, path) if self._public_origin else None
+
     def _require(self, uri: str) -> Document:
         document = self._documents.get(uri)
         if document is None:
@@ -191,11 +195,8 @@ class KnowledgeBase:
     def _app_name(self, document: Document) -> str:
         return self._app_names.get(document.app, document.app)
 
-    def _absolute_url(self, document: Document) -> str | None:
-        return urljoin(self._public_origin, document.route) if self._public_origin else None
-
     def _link(self, document: Document) -> str:
-        return self._absolute_url(document) or document.route
+        return self.public_url(document.route) or document.route
 
     def _public(self, document: Document) -> PublicDocument:
         return PublicDocument(
@@ -204,5 +205,5 @@ class KnowledgeBase:
             app=document.app,
             app_name=self._app_name(document),
             route=document.route,
-            url=self._absolute_url(document),
+            url=self.public_url(document.route),
         )
