@@ -110,6 +110,22 @@ anything there, rebuild, then run it.
 
 `npm audit --omit=dev --audit-level=high` must also stay clean; it gates CI.
 
+Touching `mcp-server/` (the Python MCP server)? From that directory, all five must
+pass — CI's `mcp` job runs the same:
+
+```bash
+uv run ruff format --check .    # format
+uv run ruff check .             # lint
+uv run mypy                     # strict types
+uv run lint-imports             # layering contracts in pyproject.toml
+uv run pytest                   # unit + protocol tests, 90% branch coverage
+```
+
+A change to the page manifest (`scripts/page-manifest.js`) is a change to the
+indexer's input: update `scripts/page-manifest.schema.json`,
+`mcp-server/src/kb_mcp/indexer/manifest.py` and `mcp-server/tests/fixtures/pages.json`
+together.
+
 ## Repository conventions
 
 ### Hermetic by construction
