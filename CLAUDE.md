@@ -36,6 +36,12 @@ npm run test:debug                   # debug mode
 # Docker
 docker build -t knowledge-base .
 docker run -p 8080:8080 knowledge-base
+
+# MCP server (Python, mcp-server/; needs uv) — run from mcp-server/
+uv sync --all-extras                                   # runtime + indexer + dev tools
+uv run kb-mcp index --dist ../dist --out index.sqlite  # index a build's dist/
+KB_MCP_INDEX=index.sqlite uv run kb-mcp serve          # http://127.0.0.1:8081/mcp
+uv run ruff format --check . && uv run ruff check . && uv run mypy && uv run lint-imports && uv run pytest
 ```
 
 ## Build Pipeline
@@ -83,6 +89,7 @@ Orchestrator: `scripts/build-vite.js`. Flags: `--local`, `--headless`.
 - `src/utils/registry.js` — Registry validation, manifest reading/validation, expansion map. Shared by the build and by Astro so both resolve the same registry
 - `scripts/build-vite.js` — Build orchestrator (4 steps: prepare, hoist, copy assets, astro build)
 - `scripts/page-manifest.js` — Build step 3b: writes `dist/_kb/pages.json` (shape: `scripts/page-manifest.schema.json`), the pages Astro published with their app's name, description, tags, kind and source version. It and the HTML under `dist/` are the whole interface for consumers that do not run Node (the MCP indexer); they never read the registry. `.dockerignore` keeps `dist/_kb` out of the nginx image
+- `mcp-server/` — the MCP server: a self-contained Python project (uv, `src/kb_mcp`, pytest) on the official MCP SDK. It shares no code with the site; it reads `dist/_kb/pages.json` and the HTML under `dist/`. `kb-mcp index` builds a SQLite FTS5 index, `kb-mcp serve` serves it over stateless Streamable HTTP. Layering (ports and adapters, the indexer never imported at run time) is enforced by import-linter. See `docs/mcp-development.md` and `docs/adr/0001-mcp-server.md`
 - `scripts/fetch-apps.js` — GitHub Release artifact downloader. Only *obtains* an artifact; installing it is one shared path in `build-vite.js`
 - `scripts/artifacts.js` — Safe tarball extraction + tree copy, shared by both fetch paths. Validates archive members (no traversal, no absolute paths, no symlinks) before anything is written, and replaces the old `cp -r`/`tar` shell-outs so the build runs on Windows
 - `scripts/check-artifact.js` — Runs the publish action's contract checker (`actions/lib/check.js`) on every installed artifact, before hoisting; logs findings grouped by rule, and fails a strict build on an error. `check.js` resolves its parsers from `actions/node_modules` or the root; the two may pin different versions, and `tests/artifact-checks.spec.js` runs the checker self-test against whichever the build resolves

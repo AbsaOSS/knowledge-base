@@ -1,0 +1,102 @@
+[project]
+name = "kb-mcp"
+version = "1.0.0"
+description = "Read-only MCP server for the knowledge base documentation"
+license = "Apache-2.0"
+requires-python = ">=3.14"
+dependencies = [
+    "mcp==2.3.0",
+    "pydantic>=2.12",
+    "pydantic-settings>=2.11",
+    "uvicorn>=0.54",
+]
+
+[project.optional-dependencies]
+# Build time only: the runtime image never parses HTML.
+indexer = ["selectolax>=1.0.2"]
+
+[project.scripts]
+kb-mcp = "kb_mcp.__main__:main"
+
+[dependency-groups]
+dev = [
+    "httpx2>=2.16.0",
+    "import-linter>=2.5",
+    "mypy>=1.19",
+    "pytest>=9.0",
+    "pytest-cov>=7.0",
+    "ruff>=0.14",
+]
+
+[build-system]
+requires = ["uv_build>=0.13,<0.14"]
+build-backend = "uv_build"
+
+[tool.uv]
+default-groups = ["dev"]
+
+[tool.ruff]
+line-length = 120
+target-version = "py314"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "N", "UP", "B", "A", "C4", "SIM", "RET", "PTH", "PL", "RUF", "S", "T20"]
+ignore = ["PLR2004"]
+
+[tool.ruff.lint.per-file-ignores]
+# Queries are module constants assembled from fixed fragments; every value is a bound parameter.
+"src/kb_mcp/adapters/sqlite.py" = ["S608"]
+"tests/**" = ["S101", "PLR0913", "PLC0415"]
+
+[tool.mypy]
+strict = true
+plugins = ["pydantic.mypy"]
+files = ["src", "tests"]
+
+[[tool.mypy.overrides]]
+module = ["selectolax.*"]
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+addopts = "--strict-markers --import-mode=importlib --cov=kb_mcp --cov-report=term-missing --cov-fail-under=90"
+testpaths = ["tests"]
+filterwarnings = ["error"]
+
+[tool.coverage.run]
+branch = true
+
+[tool.importlinter]
+root_package = "kb_mcp"
+include_external_packages = true
+
+[[tool.importlinter.contracts]]
+name = "The runtime never imports the build-time indexer"
+type = "forbidden"
+source_modules = [
+    "kb_mcp.service",
+    "kb_mcp.ports",
+    "kb_mcp.domain",
+    "kb_mcp.adapters",
+    "kb_mcp.protocol",
+    "kb_mcp.http",
+    "kb_mcp.compose",
+    "kb_mcp.config",
+]
+forbidden_modules = ["kb_mcp.indexer", "selectolax"]
+
+[[tool.importlinter.contracts]]
+name = "Protocol and HTTP layers reach storage only through the facade"
+type = "forbidden"
+source_modules = ["kb_mcp.protocol", "kb_mcp.http"]
+forbidden_modules = ["kb_mcp.adapters"]
+
+[[tool.importlinter.contracts]]
+name = "Layers"
+type = "layers"
+layers = [
+    "kb_mcp.http",
+    "kb_mcp.protocol",
+    "kb_mcp.service",
+    "kb_mcp.ports",
+    "kb_mcp.domain",
+]

@@ -1,5 +1,5 @@
-# Dependabot keeps npm dependencies, pinned GitHub Actions and the Docker base
-# image up to date.
+# Dependabot keeps npm and uv dependencies, pinned GitHub Actions and the Docker
+# base images up to date.
 # Action updates land as SHA bumps with the human-readable tag in a comment.
 version: 2
 updates:
@@ -38,6 +38,18 @@ updates:
     groups:
       actions-dependencies:
         update-types: [minor, patch]
+
+  # The MCP server's own lockfile (mcp-server/uv.lock). The SDK is pinned
+  # exactly, so an SDK bump is a PR of its own and runs the protocol tests.
+  - package-ecosystem: uv
+    directory: /mcp-server
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      mcp-server-dependencies:
+        update-types: [minor, patch]
+        exclude-patterns: [mcp]
 
   - package-ecosystem: github-actions
     directory: /
