@@ -1,0 +1,63 @@
+{
+  "family": "knowledge-base",
+  "networkMode": "awsvpc",
+  "requiresCompatibilities": ["FARGATE"],
+  "cpu": "512",
+  "memory": "1024",
+  "runtimePlatform": { "operatingSystemFamily": "LINUX", "cpuArchitecture": "X86_64" },
+  "executionRoleArn": "arn:aws:iam::123456789012:role/knowledge-base-execution",
+  "containerDefinitions": [
+    {
+      "name": "mcp",
+      "image": "123456789012.dkr.ecr.eu-west-1.amazonaws.com/knowledge-base-mcp:IMAGE_TAG",
+      "essential": true,
+      "cpu": 256,
+      "memoryReservation": 256,
+      "memory": 512,
+      "readonlyRootFilesystem": true,
+      "environment": [
+        { "name": "KB_MCP_PUBLIC_ORIGIN", "value": "https://docs.example.com" }
+      ],
+      "healthCheck": {
+        "command": ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8081/healthz', timeout=3)"],
+        "interval": 15,
+        "timeout": 5,
+        "retries": 3,
+        "startPeriod": 10
+      },
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-group": "/ecs/knowledge-base",
+          "awslogs-region": "eu-west-1",
+          "awslogs-stream-prefix": "mcp"
+        }
+      }
+    },
+    {
+      "name": "site",
+      "image": "123456789012.dkr.ecr.eu-west-1.amazonaws.com/knowledge-base:IMAGE_TAG",
+      "essential": true,
+      "cpu": 256,
+      "memoryReservation": 128,
+      "memory": 256,
+      "portMappings": [{ "containerPort": 8080, "protocol": "tcp" }],
+      "dependsOn": [{ "containerName": "mcp", "condition": "HEALTHY" }],
+      "healthCheck": {
+        "command": ["CMD-SHELL", "wget -qO- http://localhost:8080/healthz || exit 1"],
+        "interval": 15,
+        "timeout": 5,
+        "retries": 3,
+        "startPeriod": 10
+      },
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-group": "/ecs/knowledge-base",
+          "awslogs-region": "eu-west-1",
+          "awslogs-stream-prefix": "site"
+        }
+      }
+    }
+  ]
+}

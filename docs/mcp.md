@@ -56,6 +56,9 @@ container proxies `/knowledge-base/mcp` to it on `127.0.0.1:8081`; nothing else 
 
 ### Health
 
+The steps to turn it on in a running deployment, and a request to check it from outside, are in
+[contract/DEPLOYMENT.md](../contract/DEPLOYMENT.md#enabling-it-in-an-existing-deployment).
+
 - `GET /healthz` on the MCP container (its Docker `HEALTHCHECK` uses it) answers
   `{"status": "ok", "indexedAt": …, "contentHash": …}`. `contentHash` changes exactly when the
   indexed content does, so it tells which build a running container serves.
@@ -91,6 +94,9 @@ state to keep: a container is replaced, never updated.
 
 | Symptom | Cause |
 |---|---|
+| `500` with `RequestInit: duplex option is required when sending a body` | The request went through the web-fragments gateway, which cannot forward a request body. Route `/knowledge-base/mcp` around it: [contract/DEPLOYMENT.md](../contract/DEPLOYMENT.md#in-front-of-the-task). |
+| The URL opens the host application's page instead of "MCP client required" | Same cause: the gateway answered a browser's document request with the app shell. |
+| The site container never starts; the MCP container is running | ECS ignores the images' Docker `HEALTHCHECK`. Without a `healthCheck` in the task definition the MCP container never becomes `HEALTHY`, so `dependsOn` waits for ever. |
 | `502` from `/knowledge-base/mcp` | The MCP container is not running in the same task, or not yet healthy. Check the task definition (`dependsOn` … `HEALTHY`) and the container's log. |
 | `403` for every call from a browser-based client | Its origin is not in `KB_MCP_ALLOWED_ORIGINS`. Agents that send no `Origin` are unaffected. |
 | `421 Misdirected Request` | Something in front rewrote the `Host` header to the public one on the hop to the MCP container. nginx must keep the upstream's own (`proxy_pass` without `proxy_set_header Host`). |

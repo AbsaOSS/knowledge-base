@@ -24,6 +24,7 @@
 import { defineConfig, devices } from '@playwright/test';
 
 const PORT = process.env.KB_CONTAINER_PORT || '8099';
+const GATEWAY_PORT = process.env.KB_GATEWAY_PORT || '8098';
 
 export default defineConfig({
   testDir: './tests',
@@ -37,17 +38,30 @@ export default defineConfig({
     baseURL: `http://localhost:${PORT}`,
   },
 
-  webServer: {
-    command: 'node tests/container/serve.mjs',
-    // /healthz is the container's own health endpoint — the same one the
-    // Dockerfile HEALTHCHECK uses.
-    url: `http://localhost:${PORT}/healthz`,
-    reuseExistingServer: !process.env.CI,
-    // A cold `docker build` pulls the base image; give it room.
-    timeout: 300_000,
-    stdout: 'pipe',
-    stderr: 'pipe',
-  },
+  webServer: [
+    {
+      command: 'node tests/container/serve.mjs',
+      // /healthz is the container's own health endpoint — the same one the
+      // Dockerfile HEALTHCHECK uses.
+      url: `http://localhost:${PORT}/healthz`,
+      reuseExistingServer: !process.env.CI,
+      // A cold `docker build` pulls the base image; give it room.
+      timeout: 300_000,
+      stdout: 'pipe',
+      stderr: 'pipe',
+    },
+    {
+      // The reference web-fragments host in front of the container, as a
+      // production gateway sits in front of the task: the MCP endpoint must
+      // work through it too (see its MCP proxy).
+      command: 'node tests/host/server.mjs',
+      url: `http://localhost:${GATEWAY_PORT}/healthz`,
+      env: { HOST_PORT: GATEWAY_PORT, KB_ENDPOINT: `http://localhost:${PORT}` },
+      reuseExistingServer: !process.env.CI,
+      stdout: 'pipe',
+      stderr: 'pipe',
+    },
+  ],
 
   // Most assertions are plain HTTP requests against nginx, but the CSP ones need
   // a real browser: a policy that blocks something the page needs fails

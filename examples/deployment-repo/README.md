@@ -10,6 +10,7 @@ The reasoning behind each piece is in
 ```
 .
 ├─ apps.json                     # the production registry
+├─ ecs-task-definition.json      # example: site + MCP server in one Fargate task
 └─ .github/workflows/
    ├─ build.yml                  # build + push on publish, on registry change, nightly
    └─ registry-check.yml         # dry run on PRs that touch the registry
@@ -28,6 +29,10 @@ The reasoning behind each piece is in
 5. If the build has to run on self-hosted runners inside a private network,
    uncomment `runs-on`, `npm-registry` and `npm-token` in `build.yml` — the
    "Private networks" section of `contract/DEPLOYMENT.md` explains each.
+6. For the MCP server, uncomment `mcp-image-name` in `build.yml` and follow
+   "Enabling it in an existing deployment" in `contract/DEPLOYMENT.md`.
+   `ecs-task-definition.json` shows the task it needs; it is an example for your
+   own deploy step, not something this skeleton deploys.
 
 ## What is deliberately not here
 
