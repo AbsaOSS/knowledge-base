@@ -224,7 +224,10 @@ Every embedded test runs twice, as Playwright projects `chromium` (:4201) and
 - `container.spec.js` — the real images (`playwright.config.docker.js`, needs Docker): the MCP
   container owns the network namespace and the port, nginx joins it once the MCP container is
   healthy — a task's shape. MCP through nginx: initialize, search links on the public origin,
-  the browser page, CORS from the server alone, Origin refusal, 413, 429.
+  the browser page, CORS from the server alone, Origin refusal, 413, 429 — and the same calls
+  through the reference web-fragments host (`tests/host/server.mjs` on :8098), which proxies
+  `/knowledge-base/mcp` itself, ahead of the gateway: the gateway's Node middleware cannot forward
+  a request body.
 - `support/fragment.js` — shadow-DOM traversal + reframed-body wait/query helpers.
 
 Two build-pipeline pieces support this: `apps.json` entries may carry a `prebuilt` path

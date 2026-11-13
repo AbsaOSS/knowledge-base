@@ -174,6 +174,9 @@ read-only.
   run, one version, never a site from one build and an index from another. The MCP image is opt-in
   (`mcp-image-name`), so an existing deployment does not start pushing to a repository it never
   created.
+- **The web-fragments gateway is bypassed for this path.** Its Node middleware cannot forward a
+  request body (web-fragments 0.8.2), so the load balancer or the host application routes
+  `/knowledge-base/mcp` to the task directly; the site keeps going through the gateway.
 - **Deployment:** both containers in **one task** (ECS task definition, or Kubernetes pod): nginx
   essential, the MCP container essential, nginx `dependsOn` the MCP container `HEALTHY`, shared
   task network so the upstream is loopback. Scaling the task scales both, which is right: the

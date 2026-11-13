@@ -155,25 +155,31 @@ of the very build the site image serves.
 |---|---|---|
 | Image | `image-name` | `mcp-image-name` |
 | Listens on | `8080` (published) | `127.0.0.1:8081` (never published) |
-| Health check | built in: `GET /healthz` | built in: `GET /healthz` |
+| Health check | `GET /healthz` on `8080` | `GET /healthz` on `8081` |
 | Essential | yes | yes |
 | Starts after | the MCP container is `HEALTHY` | — |
+| CPU / memory | 0.25 vCPU / 128–256 MiB | 0.25 vCPU / 256–512 MiB |
+| Root filesystem | — | read-only is fine |
 
 Both containers must share a network namespace: nginx proxies the endpoint to
 `127.0.0.1:8081`. ECS tasks in `awsvpc` mode (Fargate) and Kubernetes pods share
-one already. In ECS:
+one already; ECS `bridge` mode does not.
 
-```json
-"containerDefinitions": [
-  { "name": "mcp", "image": "…/knowledge-base-mcp:<tag>", "essential": true,
-    "environment": [
-      { "name": "KB_MCP_PUBLIC_ORIGIN", "value": "https://docs.example.com" }
-    ] },
-  { "name": "site", "image": "…/knowledge-base:<tag>", "essential": true,
-    "portMappings": [{ "containerPort": 8080 }],
-    "dependsOn": [{ "containerName": "mcp", "condition": "HEALTHY" }] }
-]
-```
+A complete Fargate task definition is in
+[`examples/deployment-repo/ecs-task-definition.json`](../examples/deployment-repo/ecs-task-definition.json).
+Two things in it are easy to miss:
+
+- **The health checks are in the task definition.** Both images carry a Docker
+  `HEALTHCHECK`, but ECS ignores it: a container without a `healthCheck` in the
+  task definition never becomes `HEALTHY`, and a `dependsOn` waiting for that
+  never lets the site container start.
+- **One tag for both images.** The MCP image holds the search index of the build
+  the site image serves; deploy them as a pair, from the same workflow run.
+
+Sizing: the MCP container idles at about 60 MiB, plus the index, which the
+operating system caches as it is read. Its CPU goes to search queries, a few
+milliseconds each. Raise the memory with the size of the content, not with
+traffic; scale with traffic by running more tasks.
 
 A task that runs the site image alone still serves every page; only
 `/knowledge-base/mcp` answers `502`.
@@ -189,8 +195,8 @@ All optional; set on the MCP container.
 | `KB_MCP_MAX_CONCURRENCY` | `32` | Requests handled at once; beyond it the server answers `503`. |
 | `KB_MCP_LOG_LEVEL` | `info` | uvicorn's log level. |
 
-`KB_MCP_INDEX`, `KB_MCP_HOST`, `KB_MCP_PORT` and `KB_MCP_ALLOWED_HOSTS` are set
-by the image and match the nginx upstream; leave them alone.
+`KB_MCP_INDEX`, `KB_MCP_HOST`, `KB_MCP_PORT` and `KB_MCP_ALLOWED_HOSTS` default
+to what the image and the nginx upstream expect; leave them alone.
 
 ### In front of the task
 
@@ -199,11 +205,71 @@ clients together to 200 (burst 400), and a request body to 64 KiB. The per-clien
 limit keys on the address in `X-Forwarded-For` when the hop that sent it is in a
 private range (`10/8`, `172.16/12`, `192.168/16`) — a load balancer in the VPC.
 
-Whatever sits in front — a load balancer, the web-fragments gateway, an API
-gateway — must forward `POST`, `GET` and `OPTIONS /knowledge-base/mcp`
-unchanged and **unauthenticated**: MCP clients call it directly, not through a
-browser session. The endpoint is read-only and serves exactly what the site
-serves; restrict it at the network level if the site itself is restricted.
+Whatever sits in front must forward `POST`, `GET` and `OPTIONS
+/knowledge-base/mcp` to the task unchanged and **unauthenticated**: MCP clients
+call it directly, not through a browser session. The endpoint is read-only and
+serves exactly what the site serves; restrict it at the network level if the
+site itself is restricted.
+
+**The web-fragments gateway cannot carry it.** The gateway's Node middleware
+(`getNodeMiddleware`, web-fragments 0.8.2) rebuilds every request that has a
+body without `duplex: 'half'`, so every MCP call and every preflight fails with
+a `500` (`RequestInit: duplex option is required when sending a body`). It
+also answers a browser opening the URL with the app shell. The pattern
+`/knowledge-base/:_*` that routes the site to the fragment matches the MCP path
+too, so the path has to be taken out of the gateway's hands, in one of two
+ways:
+
+1. **At the load balancer (preferred).** A listener rule for the exact path
+   `/knowledge-base/mcp`, at a higher priority than the gateway's, forwarding
+   to the knowledge base target group. No host code, and the gateway never sees
+   the request.
+2. **In the host application, before the gateway middleware.** A plain reverse
+   proxy for that one path, mounted ahead of `getNodeMiddleware`. In an Angular
+   SSR host's `server.ts`, with `http-proxy-middleware`:
+
+   ```ts
+   import { createProxyMiddleware } from 'http-proxy-middleware';
+
+   // Before app.use(getNodeMiddleware(gateway)): the gateway cannot forward a request body.
+   app.use(createProxyMiddleware({
+     pathFilter: '/knowledge-base/mcp',
+     target: KNOWLEDGE_BASE_ENDPOINT,   // the same endpoint the fragment is registered with
+     changeOrigin: true,
+     xfwd: true,                        // X-Forwarded-For, for nginx's per-client limit
+   }));
+   ```
+
+   `tests/host/server.mjs`, the reference host the test suites use, does the
+   same without the dependency, and `npm run test:container` calls a tool
+   through it.
+
+### Enabling it in an existing deployment
+
+The site image from the same release works with or without the MCP container,
+so nothing has to happen at once:
+
+1. Pin `kb-ref` to a release that has `mcp-image-name`.
+2. Create the MCP image repository (ECR does not create one on push), set
+   `mcp-image-name`, and let a build push both images.
+3. Route `/knowledge-base/mcp` to the task, around the gateway (above). Until
+   the next step it answers `502`; nothing else changes.
+4. Add the MCP container to the task definition: its health check, the site's
+   `dependsOn`, `KB_MCP_PUBLIC_ORIGIN`, and the same tag as the site image.
+   Deploy.
+5. Check it from outside:
+
+   ```sh
+   curl -s https://docs.example.com/knowledge-base/mcp \
+     -H 'Content-Type: application/json' -H 'Accept: application/json, text/event-stream' \
+     -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"search_documents","arguments":{"query":"release"}}}'
+   ```
+
+   A JSON result with `"total"` is the whole path working. Then connect an agent
+   ([`docs/mcp.md`](../docs/mcp.md)).
+
+Rolling back is removing the MCP container from the task definition; the site
+is unaffected.
 
 ---
 
@@ -380,7 +446,9 @@ alone cannot give once `latest` has moved.
 - [ ] On runners without a route to `registry.npmjs.org`: `runs-on`,
       `npm-registry` and the `npm-token` secret set; `node-mirror` if Node is
       neither preinstalled nor downloadable; the Docker daemon's mirror configured
-- [ ] With the MCP server: `mcp-image-name` set; both containers in one task,
-      the site `dependsOn` the MCP container `HEALTHY`; `KB_MCP_PUBLIC_ORIGIN`
-      set; the gateway forwards `/knowledge-base/mcp` unauthenticated;
-      `python-index` and its secrets on a private network
+- [ ] With the MCP server: `mcp-image-name` set and its image repository
+      created; both containers in one `awsvpc` task with `healthCheck`s in the
+      task definition and the site `dependsOn` the MCP container `HEALTHY`;
+      `KB_MCP_PUBLIC_ORIGIN` set; `/knowledge-base/mcp` routed to the task
+      around the web-fragments gateway, unauthenticated; `python-index` and its
+      secrets on a private network

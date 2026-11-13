@@ -398,13 +398,53 @@ test.describe('MCP endpoint', () => {
     expect(res.status()).toBe(413);
   });
 
+  // Production puts a web-fragments gateway in front of the task. Its fragment
+  // middleware cannot forward a request body, so the reference host proxies
+  // the MCP path itself, before the gateway — what contract/DEPLOYMENT.md asks
+  // of a real host. These go through that host, not straight to nginx.
+  test.describe('through the web-fragments host', () => {
+    const GATEWAY = `http://localhost:${process.env.KB_GATEWAY_PORT || '8098'}`;
+
+    test('an agent can call a tool', async ({ request }) => {
+      const res = await request.post(`${GATEWAY}${ENDPOINT}`, {
+        headers: JSON_HEADERS,
+        data: rpc('tools/call', { name: 'search_documents', arguments: { query: 'release' } }),
+      });
+      expect(res.status()).toBe(200);
+      expect((await res.json()).result.structuredContent.total).toBeGreaterThan(0);
+    });
+
+    test('a browser preflight reaches the MCP server', async ({ request }) => {
+      const res = await request.fetch(`${GATEWAY}${ENDPOINT}`, {
+        method: 'OPTIONS',
+        headers: { Origin: SITE_ORIGIN, 'Access-Control-Request-Method': 'POST', 'Sec-Fetch-Dest': 'empty' },
+      });
+      expect(res.status()).toBe(200);
+      expect(res.headers()['access-control-allow-origin']).toBe(SITE_ORIGIN);
+    });
+
+    test('a browser opening the endpoint gets the explanation page, not the app shell', async ({ request }) => {
+      const res = await request.get(`${GATEWAY}${ENDPOINT}`, { headers: { 'Sec-Fetch-Dest': 'document' } });
+      expect(res.status()).toBe(405);
+      expect(await res.text()).toContain('MCP client required');
+    });
+
+    test('the site itself still goes through the gateway', async ({ request }) => {
+      const res = await request.get(`${GATEWAY}/knowledge-base/`);
+      expect(res.status()).toBe(200);
+      expect(res.headers()['x-web-fragment-id']).toBe('knowledge-base');
+    });
+  });
+
   test('a burst beyond the per-client limit is answered 429', async ({ request }) => {
     const statuses = await Promise.all(
       Array.from({ length: 80 }, () => request.post(ENDPOINT, { headers: JSON_HEADERS, data: INITIALIZE })
         .then((res) => res.status())),
     );
     expect(statuses).toContain(429);
-    expect(statuses.filter((status) => status !== 200 && status !== 429)).toEqual([]);
+    // The burst nginx lets through can still exceed the server's concurrency
+    // cap; that is answered 503, the server's own backstop. Nothing else.
+    expect(statuses.filter((status) => ![200, 429, 503].includes(status))).toEqual([]);
   });
 });
 
