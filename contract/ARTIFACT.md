@@ -66,7 +66,7 @@ At the archive root. UTF-8, no BOM.
 
 | Field | Required | Rules |
 |---|---|---|
-| `slug` | ✅ | `^[a-z0-9]+(-[a-z0-9]+)*$`, 2–32 characters. Names the directory in the archive **and** the public URL `/knowledge-base/{slug}/`. Must be unique across the entire knowledge base, not just within your bundle — prefix it with your service name. |
+| `slug` | ✅ | `^[a-z0-9]+(-[a-z0-9]+)*$`, 2–32 characters. Names the directory in the archive **and** the public URL `/knowledge-base/{slug}/`. Must be unique across the entire knowledge base, not just within your bundle — prefix it with your service name. `mcp` is reserved: `/knowledge-base/mcp` is the MCP endpoint. |
 | `name` | ✅ | 2–64 characters. Shown on the catalog card and in the masthead. |
 | `description` | ✅ | 10–280 characters. One sentence, shown on the catalog card. |
 | `entryPoint` | ☐ | Path to the landing page, relative to `<slug>/`. Default `index.html`. |

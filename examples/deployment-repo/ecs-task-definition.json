@@ -10,7 +10,8 @@
     {
       "name": "mcp",
       "image": "123456789012.dkr.ecr.eu-west-1.amazonaws.com/knowledge-base-mcp:IMAGE_TAG",
-      "essential": true,
+      "essential": false,
+      "restartPolicy": { "enabled": true },
       "cpu": 256,
       "memoryReservation": 256,
       "memory": 512,
@@ -42,7 +43,6 @@
       "memoryReservation": 128,
       "memory": 256,
       "portMappings": [{ "containerPort": 8080, "protocol": "tcp" }],
-      "dependsOn": [{ "containerName": "mcp", "condition": "HEALTHY" }],
       "healthCheck": {
         "command": ["CMD-SHELL", "wget -qO- http://localhost:8080/healthz || exit 1"],
         "interval": 15,

@@ -45,11 +45,15 @@ COPY mcp-server/pyproject.toml mcp-server/uv.lock ./
 COPY mcp-server/src ./src
 RUN uv export --quiet --frozen --no-dev --no-emit-project -o requirements.txt \
  && uv export --quiet --frozen --no-dev --no-emit-project --extra indexer -o requirements-indexer.txt
+# `set -e` and `;`, not `&&`: a loop's status is its last iteration's, and
+# set -e ignores a failure inside an && list, so either would let a failed
+# runtime install through when the indexer's succeeds.
 RUN --mount=type=secret,id=python-index,env=UV_DEFAULT_INDEX \
+    set -e; \
     for VENV in runtime:requirements.txt indexer:requirements-indexer.txt; do \
-      uv venv "/opt/${VENV%%:*}" \
-      && VIRTUAL_ENV="/opt/${VENV%%:*}" uv pip install --require-hashes --no-deps -r "${VENV#*:}" \
-      && VIRTUAL_ENV="/opt/${VENV%%:*}" uv pip install --no-deps . ; \
+      uv venv "/opt/${VENV%%:*}"; \
+      VIRTUAL_ENV="/opt/${VENV%%:*}" uv pip install --require-hashes --no-deps -r "${VENV#*:}"; \
+      VIRTUAL_ENV="/opt/${VENV%%:*}" uv pip install --no-deps .; \
     done
 
 # ── Index: the site build, reduced to one SQLite file ────────────────────────
@@ -68,6 +72,8 @@ ENV PATH=/opt/runtime/bin:$PATH \
     KB_MCP_INDEX=/srv/kb-mcp/index.sqlite \
     KB_MCP_HOST=127.0.0.1 \
     KB_MCP_PORT=8081
+# An incomplete install fails the build here, not the container at start.
+RUN kb-mcp --help > /dev/null
 USER 10001
 EXPOSE 8081
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \

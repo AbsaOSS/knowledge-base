@@ -1,12 +1,14 @@
 """Both ports over the SQLite index the indexer wrote (`kb_mcp.index_format`).
 
 The file is opened read-only and immutable: nothing at run time writes to it, and SQLite can
-skip locking. The SDK runs tools in worker threads; they share one connection, which SQLite
-serialises (queries take milliseconds, and nothing ever writes).
+skip locking. The SDK runs tools in worker threads, and each thread gets a connection of its
+own: SQLite serialises its own calls on a shared one, but the sqlite3 module's cursors and
+statement cache are not safe to share.
 """
 
 import json
 import sqlite3
+import threading
 from collections import defaultdict
 from pathlib import Path
 from typing import Self
@@ -27,7 +29,6 @@ from kb_mcp.domain import (
 )
 from kb_mcp.index_format import SCHEMA_VERSION, SEARCH_WEIGHTS
 
-_SERIALIZED = 3
 _EXCERPT_LEAD = 120
 _EXCERPT_LENGTH = 400
 _FUZZY_LENGTH_SPREAD = 2
@@ -50,12 +51,14 @@ _DOCUMENT_COLUMNS = ", ".join(
     )
 )
 
+# SQLite's own lower() folds ASCII only; kb_fold is registered on every connection.
 _FILTERS = """
     (:app IS NULL OR d.app = :app)
-    AND (:tag IS NULL OR EXISTS (SELECT 1 FROM json_each(d.tags) WHERE lower(value) = lower(:tag)))
+    AND (:tag IS NULL OR EXISTS (SELECT 1 FROM json_each(d.tags) WHERE kb_fold(value) = kb_fold(:tag)))
 """
 _GET = f"SELECT {_DOCUMENT_COLUMNS} FROM documents d WHERE d.uri = :uri"
-_LIST_WHERE = f"{_FILTERS} AND (:title IS NULL OR instr(lower(d.title), lower(:title)) > 0)"
+_BY_IDS = f"SELECT {_DOCUMENT_COLUMNS} FROM documents d WHERE d.id IN (SELECT value FROM json_each(:ids))"
+_LIST_WHERE = f"{_FILTERS} AND (:title IS NULL OR instr(kb_fold(d.title), kb_fold(:title)) > 0)"
 _LIST_COUNT = f"SELECT count(*) FROM documents d WHERE {_LIST_WHERE}"
 _LIST_PAGE = (
     f"SELECT {_DOCUMENT_COLUMNS} FROM documents d WHERE {_LIST_WHERE} "
@@ -63,8 +66,10 @@ _LIST_PAGE = (
 )
 _SEARCH_MATCHES = f"FROM search JOIN documents d ON d.id = search.rowid WHERE search MATCH :match AND {_FILTERS}"
 _SEARCH_COUNT = f"SELECT count(*) {_SEARCH_MATCHES}"
+# Ranks ids only: the sort keeps limit + offset rows, and with each document's text in them it
+# spilled to a temporary file.
 _SEARCH_PAGE = (
-    f"SELECT {_DOCUMENT_COLUMNS}, bm25(search, {', '.join(map(str, SEARCH_WEIGHTS))}) AS rank {_SEARCH_MATCHES} "
+    f"SELECT d.id, bm25(search, {', '.join(map(str, SEARCH_WEIGHTS))}) AS rank {_SEARCH_MATCHES} "
     "ORDER BY rank, d.uri LIMIT :limit OFFSET :offset"
 )
 _SECTIONS = (
@@ -83,17 +88,16 @@ class SqliteIndex:
     def __init__(self, path: Path) -> None:
         if not path.is_file():
             raise IndexUnavailableError(f"Search index not found: {path}")
-        if sqlite3.threadsafety != _SERIALIZED:
-            raise IndexUnavailableError("This SQLite build cannot share a connection between threads")
+        self._uri = f"{path.resolve().as_uri()}?mode=ro&immutable=1"
+        self._local = threading.local()
+        self._lock = threading.Lock()
+        self._connections: list[sqlite3.Connection] = []
         try:
-            self._connection = sqlite3.connect(
-                f"{path.resolve().as_uri()}?mode=ro&immutable=1", uri=True, check_same_thread=False
-            )
+            connection = self.connection()
         except sqlite3.Error as error:
             raise IndexUnavailableError(f"Cannot open search index: {error}") from error
-        self._connection.row_factory = sqlite3.Row
         try:
-            meta = dict(self._connection.execute("SELECT key, value FROM meta").fetchall())
+            meta = dict(connection.execute("SELECT key, value FROM meta").fetchall())
         except sqlite3.DatabaseError as error:
             self.close()
             raise IndexUnavailableError(f"Unreadable search index: {error}") from error
@@ -110,10 +114,29 @@ class SqliteIndex:
         )
 
     def connection(self) -> sqlite3.Connection:
-        return self._connection
+        """The calling thread's connection, opened on its first call."""
+        connection: sqlite3.Connection | None = getattr(self._local, "connection", None)
+        if connection is None:
+            connection = self._open()
+            self._local.connection = connection
+            with self._lock:
+                self._connections.append(connection)
+        return connection
+
+    def _open(self) -> sqlite3.Connection:
+        # check_same_thread=False only so that close() can close every thread's connection.
+        connection = sqlite3.connect(self._uri, uri=True, check_same_thread=False)
+        connection.row_factory = sqlite3.Row
+        # A sort too big for the cache would otherwise go to a file, and the root filesystem is read-only.
+        connection.execute("PRAGMA temp_store = MEMORY")
+        connection.create_function("kb_fold", 1, _fold_filter, deterministic=True)
+        return connection
 
     def close(self) -> None:
-        self._connection.close()
+        with self._lock:
+            for connection in self._connections:
+                connection.close()
+            self._connections.clear()
 
     def __enter__(self) -> Self:
         return self
@@ -172,17 +195,21 @@ class SqliteSearch:
         parameters = {"match": " OR ".join(f'"{term}"' for term in terms), "app": query.app, "tag": query.tag}
         connection = self._index.connection()
         total = connection.execute(_SEARCH_COUNT, parameters).fetchone()[0]
-        rows = connection.execute(_SEARCH_PAGE, {**parameters, "limit": page.limit, "offset": offset}).fetchall()
-        hits = [
-            _hit(document, terms, -row["rank"])
-            for document, row in zip(_documents(connection, rows), rows, strict=True)
-        ]
+        ranked = connection.execute(_SEARCH_PAGE, {**parameters, "limit": page.limit, "offset": offset}).fetchall()
+        rows = connection.execute(_BY_IDS, {"ids": json.dumps([row["id"] for row in ranked])}).fetchall()
+        documents = {row["id"]: document for row, document in zip(rows, _documents(connection, rows), strict=True)}
+        hits = [_hit(documents[row["id"]], terms, -row["rank"]) for row in ranked]
         return Page(hits, total, next_cursor(offset, page.limit, total, print_))
 
     def _near(self, word: str) -> list[str]:
         """Known words of about the same length: the only candidates a misspelling can be close to."""
         lengths = range(len(word) - _FUZZY_LENGTH_SPREAD, len(word) + _FUZZY_LENGTH_SPREAD + 1)
         return [term for length in lengths for term in self._by_length.get(length, ())]
+
+
+def _fold_filter(value: str | None) -> str | None:
+    """Case- and accent-insensitive comparison key for the tag and title filters."""
+    return None if value is None else query_terms.fold(value).casefold()
 
 
 def _app(row: sqlite3.Row) -> App:
@@ -234,7 +261,7 @@ def _hit(document: Document, terms: list[str], score: float) -> SearchHit:
 
 def _excerpt(content: str, terms: list[str]) -> str:
     """About 400 characters of `content` around the first occurrence of any term."""
-    lower = content.lower()
+    lower = query_terms.fold_lower(content)
     first = min((index for term in terms if (index := lower.find(term)) >= 0), default=0)
     start = max(0, first - _EXCERPT_LEAD)
     excerpt = " ".join(content[start : start + _EXCERPT_LENGTH].split())

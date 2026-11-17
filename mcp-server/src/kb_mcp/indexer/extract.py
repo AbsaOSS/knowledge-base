@@ -16,6 +16,8 @@ MAX_TEXT_LENGTH = 500_000
 MAX_TITLE_LENGTH = 200
 MAX_DESCRIPTION_LENGTH = 300
 MIN_DESCRIPTION_LENGTH = 40
+MAX_NESTING = 100
+"""Elements deeper than this are read as plain text: rendering recurses, and nothing bounds an HTML tree's depth."""
 
 DROPPED = frozenset(
     [
@@ -134,9 +136,20 @@ def _content_root(tree: LexborHTMLParser) -> LexborNode:
 @dataclass
 class _Extractor:
     root: LexborNode
-    output: str = ""
+    parts: list[str] = field(default_factory=list)
+    """The text so far, joined once at the end: appending to one string is quadratic."""
+    length: int = 0
+    nesting: int = 0
     paragraphs: list[str] = field(default_factory=list)
     headings: list[tuple[str, str | None, int, int]] = field(default_factory=list)
+
+    @property
+    def text(self) -> str:
+        return "".join(self.parts)
+
+    def write(self, value: str) -> None:
+        self.parts.append(value)
+        self.length += len(value)
 
     def hidden(self, node: LexborNode) -> bool:
         tag = node.tag
@@ -149,8 +162,19 @@ class _Extractor:
         )
 
     def render(self, node: LexborNode, depth: int = 0) -> None:
-        if self.hidden(node):
+        # Past the limit the text is cut anyway, so the rest of the page is not rendered.
+        if self.hidden(node) or self.length > MAX_TEXT_LENGTH:
             return
+        if self.nesting >= MAX_NESTING:
+            self.flush([node.text(deep=True)])
+            return
+        self.nesting += 1
+        try:
+            self.render_element(node, depth)
+        finally:
+            self.nesting -= 1
+
+    def render_element(self, node: LexborNode, depth: int) -> None:
         tag = node.tag or ""
         if heading := _HEADING.match(tag):
             self.render_heading(node, int(heading[1]))
@@ -173,11 +197,20 @@ class _Extractor:
         if node.tag == "img":
             alt = node.attributes.get("alt")
             return f"[{alt}]" if alt else ""
-        value = "".join(self.inline(child) for child in node.iter(include_text=True))
+        value = self.inline_children(node)
         if node.tag == "code":
             return f"`{value}`"
         # A block nested where only inline text is wanted (a <p> in a list item or a cell) still separates words.
         return f" {value} " if node.tag in BLOCK_LEVEL else value
+
+    def inline_children(self, node: LexborNode) -> str:
+        if self.nesting >= MAX_NESTING:
+            return node.text(deep=True)
+        self.nesting += 1
+        try:
+            return "".join(self.inline(child) for child in node.iter(include_text=True))
+        finally:
+            self.nesting -= 1
 
     def render_children(self, node: LexborNode, depth: int) -> None:
         """Join each run of adjacent inline nodes into one paragraph."""
@@ -197,19 +230,19 @@ class _Extractor:
             self.append_block(value)
 
     def append_block(self, value: str) -> None:
-        if self.output:
-            self.output += "\n\n"
-        self.output += value
+        if self.length:
+            self.write("\n\n")
+        self.write(value)
 
     def render_heading(self, node: LexborNode, level: int) -> None:
         heading = one_line(self.inline(node))
         if not heading:
             return
-        if self.output:
-            self.output += "\n\n"
+        if self.length:
+            self.write("\n\n")
         anchor = node.attributes.get("id") or ""
-        self.headings.append((heading, anchor if _SAFE_ANCHOR.match(anchor) else None, level, len(self.output)))
-        self.output += f"{'#' * level} {heading}"
+        self.headings.append((heading, anchor if _SAFE_ANCHOR.match(anchor) else None, level, self.length))
+        self.write(f"{'#' * level} {heading}")
 
     def render_code(self, node: LexborNode) -> None:
         """Code keeps its whitespace: highlighter token spans join as they are and indentation survives."""
@@ -245,10 +278,10 @@ class _Extractor:
                 "".join(self.inline(child) for child in item.iter(include_text=True) if child.mem_id not in nested_ids)
             )
             if label:
-                if self.output:
-                    self.output += "\n\n" if number == 1 and depth == 0 else "\n"
+                if self.length:
+                    self.write("\n\n" if number == 1 and depth == 0 else "\n")
                 marker = f"{number}. " if ordered else "- "
-                self.output += f"{'  ' * depth}{marker}{label}"
+                self.write(f"{'  ' * depth}{marker}{label}")
             for child in nested:
                 self.render(child, depth + 1)
 
@@ -263,8 +296,8 @@ def extract_document(html: str, *, page_title: str | None = None, fallback_title
     root = _content_root(tree)
     extractor = _Extractor(root)
     extractor.render(root)
-    truncated = len(extractor.output) > MAX_TEXT_LENGTH
-    text = extractor.output[:MAX_TEXT_LENGTH]
+    truncated = extractor.length > MAX_TEXT_LENGTH
+    text = extractor.text[:MAX_TEXT_LENGTH]
 
     # Each section runs to the next heading, or to the end of the (possibly truncated) text.
     starts = [start for *_, start in extractor.headings] + [len(text)]

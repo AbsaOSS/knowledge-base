@@ -89,7 +89,7 @@ That is the entire onboarding on your side. Multiple docs go in the same list:
 | `md` | ✅ | Path to the markdown file, relative to the repo root. Must exist in the checkout. |
 | `title` | ✅ | Shown on the catalog card and in the masthead. ≤ 128 characters. |
 | `description` | ✅ | One sentence for the catalog card. 10–280 characters. |
-| `slug` | ✅ | Lowercase kebab-case (`^[a-z0-9]+(-[a-z0-9]+)*$`), 2–32 characters. **Becomes the public URL** `/knowledge-base/{slug}/` and must be unique across the *whole* knowledge base, so prefix it with your service name. |
+| `slug` | ✅ | Lowercase kebab-case (`^[a-z0-9]+(-[a-z0-9]+)*$`), 2–32 characters. **Becomes the public URL** `/knowledge-base/{slug}/` and must be unique across the *whole* knowledge base, so prefix it with your service name. `mcp` is reserved. |
 | `icon` | ☐ | One of `book-open`, `cube`, `chip`, `chart-bar`, `shield`, `cog`, `terminal`, `globe`, `layers`, `lightning-bolt`, `document`, `collection`, `puzzle`, `database`. Default `book-open`. |
 | `tags` | ☐ | Up to 5 short strings, shown as pills on the card. |
 

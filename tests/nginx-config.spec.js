@@ -15,9 +15,11 @@
  */
 
 import { test, expect } from '@playwright/test';
-import { readFileSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
+import { chmodSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
-import { dirname, join } from 'node:path';
+import { delimiter, dirname, join } from 'node:path';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const CONF = readFileSync(join(ROOT, 'nginx.conf'), 'utf8');
@@ -204,6 +206,14 @@ test.describe('nginx.conf MCP endpoint', () => {
     expect(uncomment(CONF)).toMatch(/limit_req_zone\s+\$binary_remote_addr\s+zone=kb_mcp_client:/);
   });
 
+  test('keys the per-client limit on the address the last trusted hop appended', () => {
+    // Recursion walks past every private-range entry, so a client inside those
+    // ranges could pick a new address per request and dodge its own limit.
+    const conf = uncomment(CONF);
+    expect(conf).toMatch(/real_ip_header\s+X-Forwarded-For;/);
+    expect(conf).toMatch(/real_ip_recursive\s+off;/);
+  });
+
   test('its OPTIONS preflight reaches the MCP server instead of the static 204', () => {
     const conf = uncomment(CONF);
     expect(conf, 'the server-level 204 must not key on the method alone')
@@ -230,8 +240,57 @@ test.describe('Dockerfile', () => {
     for (const from of froms) expect(from).toMatch(/@sha256:[a-f0-9]{64}/);
   });
 
+  // A loop's exit status is its last iteration's: without set -e a failed
+  // runtime install hid behind a successful indexer install, and the image
+  // shipped without its server.
+  test('the MCP image install stops at the first failed virtual environment', () => {
+    const dockerfile = readFileSync(join(ROOT, 'mcp-server', 'Dockerfile'), 'utf8').replace(/\r\n/g, '\n');
+    // The RUN after its --mount line, continuation lines joined as Docker joins them.
+    const run = dockerfile
+      .match(/^RUN --mount=type=secret[^\n]*\\\n((?:.*\\\n)*.*)$/m)?.[1]
+      ?.replace(/\\\n/g, ' ');
+    expect(run, 'the RUN that installs the virtual environments').toBeTruthy();
+
+    const dir = mkdtempSync(join(tmpdir(), 'kb-uv-'));
+    try {
+      const uv = join(dir, 'uv');
+      writeFileSync(
+        uv,
+        [
+          '#!/bin/sh',
+          'echo "$VIRTUAL_ENV $*" >> "$UV_LOG"',
+          '[ "$VIRTUAL_ENV" = /opt/runtime ] && [ "$1 $2" = "pip install" ] && exit 1',
+          'exit 0',
+          '',
+        ].join('\n'),
+      );
+      chmodSync(uv, 0o755);
+      const log = join(dir, 'uv.log');
+      writeFileSync(log, '');
+      const result = spawnSync(findSh(), ['-c', run], {
+        cwd: dir,
+        encoding: 'utf8',
+        env: { ...process.env, PATH: `${dir}${delimiter}${process.env.PATH}`, UV_LOG: log },
+      });
+
+      expect(result.status, 'a failed runtime install must fail the RUN').not.toBe(0);
+      expect(readFileSync(log, 'utf8'), 'nothing runs after the failure').not.toContain('/opt/indexer');
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   test('ships the shared header snippet the config includes', () => {
     expect(DOCKERFILE).toContain('nginx.headers.conf /etc/nginx/kb-headers.conf');
     expect(DOCKERFILE).toContain('nginx.security-headers.conf /etc/nginx/kb-security-headers.conf');
   });
 });
+
+/** A POSIX sh: Git for Windows' on Windows, where System32 has none. */
+function findSh() {
+  if (process.platform === 'win32') {
+    const gitSh = join(process.env.ProgramFiles ?? 'C:\\Program Files', 'Git', 'bin', 'sh.exe');
+    if (existsSync(gitSh)) return gitSh;
+  }
+  return 'sh';
+}

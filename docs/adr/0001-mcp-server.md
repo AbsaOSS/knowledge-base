@@ -145,7 +145,7 @@ Unicode code points (Python `str` indices), and that is the unit `read_document`
 
 | Concern | Owner | Mechanism |
 |---|---|---|
-| Per-client and global rate limit | nginx | `limit_req_zone` on the real client address (`real_ip` from private-range hops) |
+| Per-client and global rate limit | nginx | `limit_req_zone` on the real client address (`real_ip`: the last address a private-range hop appended) |
 | CORS | server | Starlette's CORS middleware for `KB_MCP_ALLOWED_ORIGINS`; nginx adds security headers but no CORS of its own on this route |
 | Body size | nginx and SDK | `client_max_body_size 64k`; the SDK's `max_request_body_size` as a second line |
 | Request timeout | nginx | `proxy_read_timeout`; every tool is a local, bounded SQLite query |
@@ -171,15 +171,17 @@ read-only.
 - **The site image stays nginx-only.** It proxies `/knowledge-base/mcp` (`POST`, the `OPTIONS`
   preflight and the browser `GET`) to `127.0.0.1:8081`, the MCP container in the same task.
 - **`build-image.yml` builds and pushes both images from one `dist/`, with the same tags.** One
-  run, one version, never a site from one build and an index from another. The MCP image is opt-in
+  run, one version, never a site from one build and an index from another: both images are built
+  before either is pushed, so a failed MCP build moves neither one's tags. The MCP image is opt-in
   (`mcp-image-name`), so an existing deployment does not start pushing to a repository it never
   created.
 - **The web-fragments gateway is bypassed for this path.** Its Node middleware cannot forward a
   request body (web-fragments 0.8.2), so the load balancer or the host application routes
   `/knowledge-base/mcp` to the task directly; the site keeps going through the gateway.
 - **Deployment:** both containers in **one task** (ECS task definition, or Kubernetes pod): nginx
-  essential, the MCP container essential, nginx `dependsOn` the MCP container `HEALTHY`, shared
-  task network so the upstream is loopback. Scaling the task scales both, which is right: the
+  essential, the MCP container not essential and restarting on its own, no `dependsOn` between them,
+  shared task network so the upstream is loopback. The site never depends on the MCP server: while
+  it is down only `/knowledge-base/mcp` answers `502`. Scaling the task scales both, which is right: the
   index is small, read-only and in each task.
 - **Private networks:** `build-image.yml` gains a `python-index` input and
   `python-index-username` / `python-index-token` secrets, composed into one URL and passed to the

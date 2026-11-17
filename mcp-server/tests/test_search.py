@@ -6,9 +6,10 @@ from pathlib import Path
 
 import pytest
 
-from kb_mcp.adapters.query import expand, words
+from kb_mcp.adapters.cursor import encode_cursor, fingerprint
+from kb_mcp.adapters.query import MAX_FUZZY_WORDS, expand, words
 from kb_mcp.adapters.sqlite import IndexUnavailableError, SqliteIndex, SqliteSearch
-from kb_mcp.domain import PageRequest, SearchHit, SearchQuery
+from kb_mcp.domain import InvalidCursorError, PageRequest, SearchHit, SearchQuery
 from kb_mcp.indexer.build import build_index
 
 from .conftest import Site
@@ -58,6 +59,74 @@ def test_excerpt_is_cut_around_the_first_match(tmp_path: Path) -> None:
 
 def test_query_words_split_camel_case_and_drop_single_letters() -> None:
     assert words("Rotate the EventBus v2 x 7") == ["rotate", "the", "event", "bus", "v2", "7"]
+
+
+def test_a_one_letter_camel_case_head_stays_part_of_the_word() -> None:
+    assert words("gRPC iOS eBPF mTLS jQuery") == ["grpc", "ios", "ebpf", "mtls", "jquery"]
+
+
+def test_query_words_lose_their_diacritics_as_the_index_does() -> None:
+    assert words("Café über Résumé Köln") == ["cafe", "uber", "resume", "koln"]
+
+
+@pytest.mark.parametrize(
+    ("query", "body"),
+    [
+        ("gRPC", "<main><h1>Transport</h1><p>Services talk gRPC to each other.</p></main>"),
+        ("café", "<main><h1>Breaks</h1><p>The café opens at eight.</p></main>"),
+        ("Köln", "<main><h1>Offices</h1><p>The office in Köln moved.</p></main>"),
+    ],
+)
+def test_finds_words_the_tokenizer_indexed_as_one(tmp_path: Path, query: str, body: str) -> None:
+    site = Site(tmp_path / "dist").app("a", "A").app("b", "B")
+    site.page("a", "", body)
+    site.page("b", "", "<main><h1>Other</h1><p>Remote procedure calls and operating systems.</p></main>")
+    out = tmp_path / "index.sqlite"
+    build_index(site.write(), out)
+
+    hit = top(out, query)
+
+    assert hit.document.uri == "kb://a"
+    assert query.lower() in hit.excerpt.lower()
+
+
+def test_only_a_few_unknown_words_are_matched_against_the_vocabulary() -> None:
+    looked_up: list[str] = []
+
+    def near(word: str) -> list[str]:
+        looked_up.append(word)
+        return []
+
+    unknown = " ".join(f"qz{chr(97 + i // 26)}{chr(97 + i % 26)}x" for i in range(40))
+    expand(unknown, lambda _: False, near)
+
+    assert len(looked_up) == MAX_FUZZY_WORDS
+
+
+def test_a_cursor_with_an_offset_no_page_could_reach_is_refused(index_path: Path) -> None:
+    with SqliteIndex(index_path) as index:
+        print_ = fingerprint(index.info.content_hash, "search", "vault", None, None)
+        search = SqliteSearch(index)
+        with pytest.raises(InvalidCursorError):
+            search.search(SearchQuery("vault"), PageRequest(limit=5, cursor=encode_cursor(2**63, print_)))
+
+
+def test_pages_through_results_whose_documents_are_large(tmp_path: Path) -> None:
+    site = Site(tmp_path / "dist").app("big", "Big")
+    for i in range(30):
+        site.page("big", f"p{i:02}", f"<main><h1>Page {i}</h1><p>{'needle ' * (i + 1)}{'filler ' * 40_000}</p></main>")
+    out = tmp_path / "index.sqlite"
+    build_index(site.write(), out)
+
+    with SqliteIndex(out) as index:
+        search = SqliteSearch(index)
+        first = search.search(SearchQuery("needle"), PageRequest(limit=25))
+        rest = search.search(SearchQuery("needle"), PageRequest(limit=25, cursor=first.next_cursor))
+
+    uris = [hit.document.uri for hit in first.items + rest.items]
+    assert sorted(uris) == sorted(f"kb://big/p{i:02}" for i in range(30))
+    assert [hit.score for hit in first.items] == sorted((hit.score for hit in first.items), reverse=True)
+    assert all(len(hit.document.text) > 200_000 for hit in first.items)
 
 
 def test_expansion_keeps_stop_words_only_when_nothing_else_is_left() -> None:

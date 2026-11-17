@@ -210,6 +210,9 @@ Every embedded test runs twice, as Playwright projects `chromium` (:4201) and
   Host, security headers without CORS, rate and body limits, its preflight not short-circuited).
   The site's static locations include `nginx.headers.conf` (CORS + the security file); the MCP
   location includes only the security file, because the MCP server answers CORS itself.
+- `build-image-workflow.spec.js` — runs `build-image.yml`'s build-and-push script under bash with a
+  stub `docker`: a failed build fails the step, and both images are built before either is pushed,
+  so a failed MCP build or a refused MCP push leaves the site's tags where they were.
 - `private-registry.spec.js` — both lockfiles name no registry (no `resolved` URL, an
   integrity hash on every package; the committed `.npmrc` sets
   `omit-lockfile-registry-resolved`), the `npm-registry`/`npm-token`/`node-mirror` inputs

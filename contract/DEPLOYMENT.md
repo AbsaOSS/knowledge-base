@@ -156,8 +156,7 @@ of the very build the site image serves.
 | Image | `image-name` | `mcp-image-name` |
 | Listens on | `8080` (published) | `127.0.0.1:8081` (never published) |
 | Health check | `GET /healthz` on `8080` | `GET /healthz` on `8081` |
-| Essential | yes | yes |
-| Starts after | the MCP container is `HEALTHY` | — |
+| Essential | yes | no; restarts on its own (`restartPolicy`) |
 | CPU / memory | 0.25 vCPU / 128–256 MiB | 0.25 vCPU / 256–512 MiB |
 | Root filesystem | — | read-only is fine |
 
@@ -167,19 +166,25 @@ one already; ECS `bridge` mode does not.
 
 A complete Fargate task definition is in
 [`examples/deployment-repo/ecs-task-definition.json`](../examples/deployment-repo/ecs-task-definition.json).
-Two things in it are easy to miss:
+Three things in it are easy to miss:
 
+- **The MCP container is not essential, and nothing waits for it.** A task stops
+  when an essential container stops, so an essential MCP container would take
+  the whole site down with it: on a crash, an out-of-memory kill, or a burst of
+  searches that keeps its health check from answering. Instead it has a
+  `restartPolicy`, and the site container has no `dependsOn`: while the MCP
+  container is down or starting, only `/knowledge-base/mcp` answers `502`.
 - **The health checks are in the task definition.** Both images carry a Docker
-  `HEALTHCHECK`, but ECS ignores it: a container without a `healthCheck` in the
-  task definition never becomes `HEALTHY`, and a `dependsOn` waiting for that
-  never lets the site container start.
+  `HEALTHCHECK`, but ECS ignores it: without a `healthCheck` in the task
+  definition a container's health is never reported.
 - **One tag for both images.** The MCP image holds the search index of the build
   the site image serves; deploy them as a pair, from the same workflow run.
 
 Sizing: the MCP container idles at about 60 MiB, plus the index, which the
 operating system caches as it is read. Its CPU goes to search queries, a few
-milliseconds each. Raise the memory with the size of the content, not with
-traffic; scale with traffic by running more tasks.
+milliseconds each for typical ones; a query is cut to 12 distinct words, and at
+most 3 unknown ones are spell-corrected. Raise the memory with the size of the
+content, not with traffic; scale with traffic by running more tasks.
 
 A task that runs the site image alone still serves every page; only
 `/knowledge-base/mcp` answers `502`.
@@ -191,7 +196,7 @@ All optional; set on the MCP container.
 | Variable | Default | What it does |
 |---|---|---|
 | `KB_MCP_PUBLIC_ORIGIN` | unset | The origin the site is served from, e.g. `https://docs.example.com`. Results then carry absolute links an agent can hand to a person; without it they carry the route only. |
-| `KB_MCP_ALLOWED_ORIGINS` | none | Comma-separated browser origins allowed to call the endpoint. Agents send no `Origin` and always pass; a browser page from any origin not listed gets `403`. |
+| `KB_MCP_ALLOWED_ORIGINS` | none | Comma-separated browser origins allowed to call the endpoint. Agents send no `Origin` and always pass; a browser page from any origin not listed gets `403`. Exact origins only (`https://portal.example.com`); a wildcard stops the server at start. |
 | `KB_MCP_MAX_CONCURRENCY` | `32` | Requests handled at once; beyond it the server answers `503`. |
 | `KB_MCP_LOG_LEVEL` | `info` | uvicorn's log level. |
 
@@ -201,9 +206,13 @@ to what the image and the nginx upstream expect; leave them alone.
 ### In front of the task
 
 nginx already limits each client to 20 requests a second (burst 40), all
-clients together to 200 (burst 400), and a request body to 64 KiB. The per-client
-limit keys on the address in `X-Forwarded-For` when the hop that sent it is in a
-private range (`10/8`, `172.16/12`, `192.168/16`) — a load balancer in the VPC.
+clients together to 200 (burst 400), and a request body to 64 KiB. When the hop
+that sent the request is in a private range (`10/8`, `172.16/12`,
+`192.168/16`) — a load balancer in the VPC — the per-client limit keys on the
+**last** address in `X-Forwarded-For`, the one that hop appended. Earlier
+entries are whatever the client sent, and are ignored. So the hop in front of
+nginx must append the client's address itself, and nothing between it and nginx
+may append another.
 
 Whatever sits in front must forward `POST`, `GET` and `OPTIONS
 /knowledge-base/mcp` to the task unchanged and **unauthenticated**: MCP clients
@@ -233,12 +242,18 @@ ways:
 
    // Before app.use(getNodeMiddleware(gateway)): the gateway cannot forward a request body.
    app.use(createProxyMiddleware({
-     pathFilter: '/knowledge-base/mcp',
+     // A function, not the string: a string is a prefix match and would also take
+     // /knowledge-base/mcp-anything, an app's pages, away from the gateway.
+     pathFilter: (pathname) => pathname === '/knowledge-base/mcp',
      target: KNOWLEDGE_BASE_ENDPOINT,   // the same endpoint the fragment is registered with
      changeOrigin: true,
-     xfwd: true,                        // X-Forwarded-For, for nginx's per-client limit
    }));
    ```
+
+   Behind a load balancer this forwards its `X-Forwarded-For` unchanged, which
+   is what nginx's per-client limit needs. Add `xfwd: true` only when the host
+   itself faces the clients; behind a load balancer it would append the load
+   balancer's address, and every client would share one limit.
 
    `tests/host/server.mjs`, the reference host the test suites use, does the
    same without the dependency, and `npm run test:container` calls a tool
@@ -254,9 +269,9 @@ so nothing has to happen at once:
    `mcp-image-name`, and let a build push both images.
 3. Route `/knowledge-base/mcp` to the task, around the gateway (above). Until
    the next step it answers `502`; nothing else changes.
-4. Add the MCP container to the task definition: its health check, the site's
-   `dependsOn`, `KB_MCP_PUBLIC_ORIGIN`, and the same tag as the site image.
-   Deploy.
+4. Add the MCP container to the task definition, not essential and with its
+   `restartPolicy` and health check, `KB_MCP_PUBLIC_ORIGIN`, and the same tag as
+   the site image. Deploy.
 5. Check it from outside:
 
    ```sh
@@ -448,7 +463,8 @@ alone cannot give once `latest` has moved.
       neither preinstalled nor downloadable; the Docker daemon's mirror configured
 - [ ] With the MCP server: `mcp-image-name` set and its image repository
       created; both containers in one `awsvpc` task with `healthCheck`s in the
-      task definition and the site `dependsOn` the MCP container `HEALTHY`;
+      task definition, the MCP container not essential and restarting on its
+      own, and no `dependsOn` on it;
       `KB_MCP_PUBLIC_ORIGIN` set; `/knowledge-base/mcp` routed to the task
       around the web-fragments gateway, unauthenticated; `python-index` and its
       secrets on a private network

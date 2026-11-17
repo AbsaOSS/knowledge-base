@@ -33,3 +33,19 @@ def test_a_public_origin_must_be_an_origin(monkeypatch: pytest.MonkeyPatch, orig
 
     with pytest.raises(ValidationError, match="origin without a path"):
         Settings()
+
+
+@pytest.mark.parametrize("origins", ["*", "http://localhost:*", "https://*.example.com"])
+def test_allowed_origins_must_be_exact(monkeypatch: pytest.MonkeyPatch, origins: str) -> None:
+    # The CORS answer and the server's own Origin check would disagree on a wildcard.
+    monkeypatch.setenv("KB_MCP_ALLOWED_ORIGINS", origins)
+
+    with pytest.raises(ValidationError, match="wildcards are not supported"):
+        Settings()
+
+
+def test_an_allowed_origin_must_be_an_origin(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("KB_MCP_ALLOWED_ORIGINS", "https://portal.example.com/app")
+
+    with pytest.raises(ValidationError, match="origin without a path"):
+        Settings()

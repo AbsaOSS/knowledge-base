@@ -1,3 +1,5 @@
+import time
+
 from kb_mcp.indexer.extract import MAX_TEXT_LENGTH, extract_document
 
 
@@ -97,3 +99,24 @@ def test_a_page_without_text_extracts_nothing() -> None:
     document = extract_document("<main><img src='x.png'><script>x()</script></main>")
 
     assert (document.text, document.sections) == ("", ())
+
+
+def test_deeply_nested_markup_is_read_as_text() -> None:
+    blocks = "<div>" * 2_000 + "deep block" + "</div>" * 2_000
+    spans = "<p>" + "<span>" * 2_000 + "deep inline" + "</span>" * 2_000 + "</p>"
+
+    document = extract_document(f"<main><h1>Nested</h1>{blocks}{spans}</main>")
+
+    assert "deep block" in document.text
+    assert "deep inline" in document.text
+
+
+def test_a_page_far_past_the_text_limit_is_cut_quickly() -> None:
+    paragraphs = "".join(f"<p>Paragraph {i} {'word ' * 40}</p>" for i in range(20_000))
+
+    started = time.perf_counter()
+    document = extract_document(f"<main><h1>Huge</h1>{paragraphs}</main>")
+
+    assert document.truncated
+    assert len(document.text) == MAX_TEXT_LENGTH
+    assert time.perf_counter() - started < 5

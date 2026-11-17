@@ -96,11 +96,10 @@ state to keep: a container is replaced, never updated.
 |---|---|
 | `500` with `RequestInit: duplex option is required when sending a body` | The request went through the web-fragments gateway, which cannot forward a request body. Route `/knowledge-base/mcp` around it: [contract/DEPLOYMENT.md](../contract/DEPLOYMENT.md#in-front-of-the-task). |
 | The URL opens the host application's page instead of "MCP client required" | Same cause: the gateway answered a browser's document request with the app shell. |
-| The site container never starts; the MCP container is running | ECS ignores the images' Docker `HEALTHCHECK`. Without a `healthCheck` in the task definition the MCP container never becomes `HEALTHY`, so `dependsOn` waits for ever. |
-| `502` from `/knowledge-base/mcp` | The MCP container is not running in the same task, or not yet healthy. Check the task definition (`dependsOn` … `HEALTHY`) and the container's log. |
+| `502` from `/knowledge-base/mcp` | The MCP container is not running in the same task: missing from the task definition, still starting, or restarting after a crash. Check the container's log and its restart count. |
 | `403` for every call from a browser-based client | Its origin is not in `KB_MCP_ALLOWED_ORIGINS`. Agents that send no `Origin` are unaffected. |
 | `421 Misdirected Request` | Something in front rewrote the `Host` header to the public one on the hop to the MCP container. nginx must keep the upstream's own (`proxy_pass` without `proxy_set_header Host`). |
-| `429` under normal use | Several clients share one address the limit sees — the load balancer's, because it is not in a private range nginx trusts for `X-Forwarded-For`. |
+| `429` under normal use | Several clients share one address the limit sees: the load balancer's, because it is not in a private range nginx trusts for `X-Forwarded-For`, or a proxy between it and nginx appended its own address last (`xfwd: true` behind a load balancer). |
 | Results link to `/knowledge-base/…` routes, not full URLs | `KB_MCP_PUBLIC_ORIGIN` is not set. |
 | Search misses a page the site shows | The MCP image is from a different build than the site image. Compare `contentHash` on the MCP `/healthz` across the two deployments, and deploy both images at the same tag. |
 | The MCP container exits at start with `IndexUnavailableError` | The image's index is missing or from an incompatible version — the image was not built by `mcp-server/Dockerfile`, or `KB_MCP_INDEX` was overridden. |

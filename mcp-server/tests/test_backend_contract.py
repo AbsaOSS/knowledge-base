@@ -4,6 +4,7 @@ No ranking is pinned here, so a vector backend can pass it too.
 """
 
 from collections.abc import Callable, Iterator
+from concurrent.futures import ThreadPoolExecutor
 from contextlib import AbstractContextManager, contextmanager
 from pathlib import Path
 
@@ -17,6 +18,7 @@ from kb_mcp.domain import (
     PageRequest,
     SearchQuery,
 )
+from kb_mcp.indexer.build import build_index
 from kb_mcp.ports import DocumentRepository, SearchBackend
 
 from .conftest import Site
@@ -153,3 +155,40 @@ def test_a_query_without_words_is_an_error_and_unknown_words_match_nothing(backe
         search.search(SearchQuery("!!! ?"), PageRequest(limit=5))
     page = search.search(SearchQuery("zzyzx"), PageRequest(limit=5))
     assert (page.items, page.total, page.next_cursor) == ([], 0, None)
+
+
+def test_concurrent_calls_each_get_their_own_results(backend: Backend) -> None:
+    # The server runs tools in a pool of worker threads.
+    documents, search = backend
+
+    def searched(text: str) -> Callable[[], list[str]]:
+        return lambda: [hit.document.uri for hit in search.search(SearchQuery(text), PageRequest(limit=5)).items]
+
+    def listed(app: str) -> Callable[[], list[str]]:
+        return lambda: [doc.uri for doc in documents.list_documents(DocumentFilter(app=app), PageRequest(10)).items]
+
+    calls = [searched("rotation"), searched("retention"), listed("ops-guide"), listed("dev-handbook")]
+    expected = [call() for call in calls]
+
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        futures = [(i, pool.submit(calls[i])) for _ in range(500) for i in range(len(calls))]
+        results = [(i, future.result()) for i, future in futures]
+
+    assert [result for i, result in results if result != expected[i]] == []
+
+
+@pytest.mark.parametrize("name", BACKENDS)
+def test_title_and_tag_filters_ignore_case_beyond_ascii(name: str, tmp_path: Path) -> None:
+    site = Site(tmp_path / "dist").app("intern", "Intern", "Internal docs.", ["Öffentlich"])
+    site.page("intern", "", "<main><h1>Übersicht</h1><p>Everything at a glance.</p></main>")
+    out = tmp_path / "index.sqlite"
+    build_index(site.write(), out)
+
+    with BACKENDS[name](out) as (documents, search):
+        by_title = documents.list_documents(DocumentFilter(title="übersicht"), PageRequest(limit=5))
+        by_tag = documents.list_documents(DocumentFilter(tag="öffentlich"), PageRequest(limit=5))
+        searched = search.search(SearchQuery("glance", tag="ÖFFENTLICH"), PageRequest(limit=5))
+
+    assert [document.uri for document in by_title.items] == ["kb://intern"]
+    assert [document.uri for document in by_tag.items] == ["kb://intern"]
+    assert [hit.document.uri for hit in searched.items] == ["kb://intern"]

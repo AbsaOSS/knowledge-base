@@ -8,8 +8,8 @@
  * image (mcp-server/Dockerfile) owns the network namespace and the published
  * port, and nginx joins it (`--network container:`), so nginx reaches the MCP
  * server on 127.0.0.1:8081 exactly as it does in a shared-namespace task. nginx
- * starts only once the MCP container reports healthy — the deployment's
- * `dependsOn: HEALTHY`.
+ * starts only once the MCP container reports healthy, so no test meets a server
+ * that is still starting (a deployment does not wait: nginx answers 502 meanwhile).
  *
  * WHY A REAL CONTAINER
  *

@@ -35,9 +35,20 @@ class Settings(BaseSettings):
     @field_validator("public_origin")
     @classmethod
     def _origin_only(cls, value: str | None) -> str | None:
-        if not value:
-            return None
-        parts = urlsplit(value)
-        if parts.scheme not in ("http", "https") or not parts.netloc or parts.path not in ("", "/") or parts.query:
-            raise ValueError("must be an http(s) origin without a path, e.g. https://docs.example.com")
-        return f"{parts.scheme}://{parts.netloc}"
+        return _origin(value) if value else None
+
+    @field_validator("allowed_origins")
+    @classmethod
+    def _exact_origins(cls, value: list[str]) -> list[str]:
+        # The CORS middleware reads "*" as any origin and the SDK's Origin check as a literal, and
+        # only the SDK accepts a ":*" port: a wildcard would pass one check and fail the other.
+        if any("*" in origin for origin in value):
+            raise ValueError("wildcards are not supported; list each origin, e.g. http://localhost:3000")
+        return [_origin(origin) for origin in value]
+
+
+def _origin(value: str) -> str:
+    parts = urlsplit(value)
+    if parts.scheme not in ("http", "https") or not parts.netloc or parts.path not in ("", "/") or parts.query:
+        raise ValueError("must be an http(s) origin without a path, e.g. https://docs.example.com")
+    return f"{parts.scheme}://{parts.netloc}"

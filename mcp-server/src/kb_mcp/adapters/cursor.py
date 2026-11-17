@@ -11,6 +11,8 @@ import json
 from kb_mcp.domain import InvalidCursorError
 
 _VERSION = 1
+_MAX_OFFSET = 2**31 - 1
+"""Far past any real result list, and well inside SQLite's 64-bit integers."""
 
 
 def fingerprint(*parts: str | None) -> str:
@@ -34,7 +36,12 @@ def decode_cursor(cursor: str | None, print_: str) -> int:
     if not isinstance(data, dict):
         raise InvalidCursorError
     offset = data.get("o")
-    if data.get("v") != _VERSION or data.get("h") != print_ or type(offset) is not int or offset < 0:
+    if (
+        data.get("v") != _VERSION
+        or data.get("h") != print_
+        or type(offset) is not int
+        or not 0 <= offset <= _MAX_OFFSET
+    ):
         raise InvalidCursorError
     return offset
 
