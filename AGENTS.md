@@ -67,7 +67,8 @@ Closes #43
 
 ### Size
 
-**Maximum 50 changed files per PR.** Split larger work.
+**Aim for at most 50 changed files per PR**, and split larger work where practical. The PR
+check reports a bigger PR as a warning; it does not fail it.
 
 ## Commits
 
