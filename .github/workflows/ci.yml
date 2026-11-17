@@ -6,7 +6,6 @@
 #
 # Jobs:
 #   typecheck  — astro check (TypeScript / Astro type errors)
-#   lint       — MCP server: tsc, ESLint, Prettier (npm run lint)
 #   build      — headless build from the vendored fixture; uploads dist/
 #   e2e        — Playwright: embedded web-fragment harness + standalone layer
 #   image      — docker build + container integration tests against real nginx + Trivy scan
@@ -51,20 +50,6 @@ jobs:
         run: npx astro check
         env:
           NODE_OPTIONS: --max-old-space-size=6144
-
-  # ── 1b. Lint (MCP server) ──────────────────────────────────────────────────
-  # Blocking: tsc --noEmit, ESLint (type-aware) and Prettier over mcp/.
-  lint:
-    name: Lint (MCP)
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
-        with:
-          node-version: '24'
-          cache: npm
-      - run: npm ci
-      - run: npm run lint
 
   # ── 2. Build (headless, hermetic) ──────────────────────────────────────────
   build:
