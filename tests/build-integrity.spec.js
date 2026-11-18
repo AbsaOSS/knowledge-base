@@ -23,6 +23,28 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const DIST = join(ROOT, 'dist');
 const read = (rel) => readFileSync(join(DIST, rel), 'utf8');
 
+test('telemetry configuration and trusted page identity use escaped metadata, not inline scripts', () => {
+  const metadata = (html) => {
+    const metas = [];
+    const walk = (node) => {
+      if (node.tagName === 'meta') {
+        const attrs = Object.fromEntries(node.attrs.map(({ name, value }) => [name, value]));
+        if (attrs.name?.startsWith('kb-telemetry')) metas.push(attrs);
+      }
+      for (const child of node.childNodes ?? []) walk(child);
+    };
+    walk(parse(html));
+    return Object.fromEntries(metas.map(({ name, content }) => [name, JSON.parse(content)]));
+  };
+  expect(metadata(read('index.html'))['kb-telemetry-page']).toEqual({ kind: 'catalog' });
+  expect(metadata(read('user-guide/index.html'))['kb-telemetry-page'])
+    .toEqual({ kind: 'packaged', slug: 'user-guide' });
+  const config = metadata(read('index.html'))['kb-telemetry'];
+  expect(Object.keys(config).sort()).toEqual(['application', 'enabled', 'environment', 'eventNamespace', 'version']);
+  expect(config.application).toBe('knowledge-base');
+  expect(config.version).toMatch(/^1\.0\.0\+[a-f0-9]{12}$/);
+});
+
 /** Every file with the extension under dir, recursively. */
 function filesWithExt(dir, ext, acc = []) {
   for (const entry of readdirSync(dir, { withFileTypes: true })) {

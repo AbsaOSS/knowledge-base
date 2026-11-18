@@ -9,6 +9,116 @@ copy-paste skeleton is in [`examples/deployment-repo/`](../examples/deployment-r
 
 ---
 
+## Optional telemetry
+
+Telemetry is excluded from builds by default: UI Watchtower, the shell adapter
+and the telemetry metadata are left out, and the files below are not read. Set
+the reusable workflow input `telemetry: true` (or `KB_TELEMETRY=true` locally)
+to include it. Any value other than `true`, `false` or empty fails the build.
+
+The enabled build reads a sidecar beside the registry: `apps/dev.json` →
+`apps/dev.telemetry.json`, `apps.json` → `apps.telemetry.json`.
+`KB_TELEMETRY_CONFIG` overrides the path (absolute or relative to the
+application root).
+
+```json
+{
+  "enabled": true,
+  "application": "documentation",
+  "environment": "TEST",
+  "eventNamespace": "com.example"
+}
+```
+
+| Field | Contract |
+|---|---|
+| `enabled` | Boolean. Enable only in environments approved for telemetry. |
+| `application` | Non-empty string; the fragment's identity, distinct from the host's. |
+| `environment` | Non-empty string; the deployment label. |
+| `eventNamespace` | Non-empty string; the host's Watchtower event namespace. |
+
+KB adds `version` itself: its package version plus the source commit.
+
+Unknown fields, wrong types, invalid JSON and an explicit path that does not
+exist fail the build. An absent sidecar disables event forwarding. The values
+are emitted into the page, so **they are readable by users**: never put
+credentials, monitor IDs or private endpoints in them.
+
+### Shell adapter
+
+The knowledge base does not know which host shell embeds it. The deployment
+supplies that knowledge as an ES module, `kb-shell.mjs`, beside its registry
+(`apps/kb-shell.mjs` for `apps/dev.json`); `KB_SHELL_ADAPTER` overrides
+discovery (absolute or relative to the application root, and must exist).
+Without one, the built-in `src/scripts/no-shell.js` is used and the knowledge
+base runs shell-less. The adapter is bundled into the page script at build time
+(so `script-src 'self'` holds), must be self-contained — no imports — and
+applies to every registry in its directory. It is trusted build input: only the
+deployment that owns the registry may supply it.
+
+```js
+/** @returns {null | { channelName?: string, ready(): void, failed(): void, dispose?(): void }} */
+export function connectShell(window) {
+  if (!insideMyShell(window)) return null;
+  return {
+    channelName: /* the shell's per-page Watchtower channel, if it has one */,
+    ready() { /* page initialized: tell the shell */ },
+    failed() { /* page has no knowledge base shell: tell the shell */ },
+    dispose() { /* remove listeners and timers */ },
+  };
+}
+```
+
+`connectShell` is called once per page realm. Returning `null` means "not in
+my shell": nothing is forwarded or reported. `ready()` (or `failed()`, when no
+knowledge base masthead rendered) is called on each page activation — the
+initial load and each internal navigation — regardless of `enabled`, so a
+shell's readiness protocol keeps working with event forwarding off. An adapter
+whose shell expects a single answer deduplicates the calls itself. Events are
+forwarded only when `enabled` is true and `channelName` is a non-empty string;
+the shared default channel is never used. A throwing adapter is contained and
+the page falls back to running shell-less.
+
+The shell provides a Watchtower BroadcastChannel receiver
+(`UwtTelemetryBroadcastHost`, or `ngx-ui-watchtower` 0.4.0+) on that channel
+and the same event namespace. The shell owns RUM, credentials, session/user
+identity and page views; KB never calls a credential endpoint or changes user
+identity.
+
+Events:
+
+- `kb-catalog-viewed` and `kb-document-opened` under `{namespace}.bi`: one per
+  page activation, including deliberate revisits and new mounts. Metadata is
+  limited to page kind and the registered documentation slug.
+- `kb-route-navigate` under `{namespace}.scenario`: one terminal record for
+  internal Astro navigation, with a catalog or `:app/*` route template.
+  Outcomes distinguish success, observed failure (`reason: navigation-error`),
+  abandonment (`reason: superseded` or `fragment-destroyed`), browser fallback
+  (`incomplete`, `reason: browser-fallback`) and the 30,000 ms deadline
+  (`timeout`, settled by the Watchtower core without a `reason`). No separate
+  step events.
+
+No document text/title, query/hash, full URL, search text or raw errors are
+captured by KB. The shell's own SDK may attach its standard RUM envelope; the shell's
+privacy and retention policy still applies. `debugBI` and `debugScenario`
+localStorage flags enable safe local diagnostics. The integration creates no
+cookies or persistent telemetry storage.
+
+For local verification, use a non-production configuration:
+
+```bash
+KB_TELEMETRY=true KB_TELEMETRY_CONFIG=/path/to/local.telemetry.json \
+KB_SHELL_ADAPTER=/path/to/deployment/apps/kb-shell.mjs npm run build:headless
+npm run serve:test   # then run the host shell against :3000
+```
+
+Verify initial access, Library -> document -> Library, deep links, retry/remount,
+two tabs, disabled/bad configuration and standalone behavior. Inspect actual
+receiver traffic as well as sender diagnostics; a test-host receiver is not
+proof of CloudWatch ingestion. No new CSP allowlist is necessary.
+
+---
+
 ## What lives where
 
 | | Knowledge base (public) | Deployment repo (private) |
@@ -19,6 +129,7 @@ copy-paste skeleton is in [`examples/deployment-repo/`](../examples/deployment-r
 | **Which docs are published** | ❌ its `apps.json` is a CI fixture | ✅ `apps.json` |
 | **Which versions** | ❌ | ✅ `apps.json` |
 | Cloud account, image registry, schedule | ❌ | ✅ |
+| Host shell integration, telemetry identity | ❌ generic engine and adapter contract | ✅ `kb-shell.mjs`, `*.telemetry.json` |
 
 The `apps.json` committed in this repository registers a vendored test fixture
 and an optional sibling checkout. It exists so CI and `npm run preview` are

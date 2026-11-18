@@ -31,6 +31,11 @@ export default defineConfig({
 
   webServer: {
     command: 'node scripts/setup-test-apps.mjs && npm run build:headless && npm run serve:test',
+    env: {
+      KB_TELEMETRY: 'true',
+      KB_TELEMETRY_CONFIG: 'tests/fixtures/telemetry/enabled.json',
+      KB_SHELL_ADAPTER: 'tests/fixtures/shell/kb-shell.mjs',
+    },
     port: 3000,
     reuseExistingServer: !process.env.CI,
     timeout: 240_000,
