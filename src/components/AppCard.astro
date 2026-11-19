@@ -20,7 +20,7 @@ const href = `${base}/${app.slug}/`;
 const delayClass = delay > 0 && delay <= 4 ? ` delay-${delay}` : '';
 ---
 
-<a href={href} class={`kb-card animate-fade-up${delayClass}`} aria-label={app.name}>
+<a href={href} class={`kb-card animate-fade-up${delayClass}`} aria-label={app.name} data-kb-app={app.slug}>
   <div class="kb-card-icon" style="color:var(--color-kb-500)">
     <AppIcon icon={app.icon || 'book-open'} size={20} />
   </div>

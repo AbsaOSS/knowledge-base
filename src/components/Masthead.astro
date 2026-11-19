@@ -36,7 +36,7 @@ const onLibrary = !activeApp;
 
 {/* `kb-shell` is the fence in knowledge-base.css: a sub-app stylesheet that
     outlives its page inside a web fragment cannot restyle anything in here. */}
-<div id="kb-masthead" class={`kb-shell kb-masthead${onLibrary ? '' : ' kb-masthead--compact'}`}>
+<div id="kb-masthead" class={`kb-shell kb-masthead${onLibrary ? '' : ' kb-masthead--compact'}`} data-kb-app={activeApp?.slug}>
   {!onLibrary && (
     <span class="kb-masthead-brand" aria-hidden="true">Knowledge base</span>
   )}
