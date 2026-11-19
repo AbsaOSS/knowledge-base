@@ -43,7 +43,6 @@ const atAppRoot = !props.fileRelDir;
   headless={appHeadless}
   bodyClass={parts?.bodyClass ?? ''}
   flexBody={!!props.iframe || !!props.singlePage}
-  telemetryPage={{ kind: props.iframe ? 'iframe' : props.singlePage ? 'single-page' : 'packaged', slug }}
 >
   {parts && <Fragment slot="head" set:html={parts.headHtml} />}
 

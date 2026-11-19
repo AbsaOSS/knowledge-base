@@ -3,6 +3,9 @@
 // adapter reaches the output. Its `telemetry` has the shape of the real engine
 // and behaves like it does when inert, so Knowledge Base code calling it works
 // unchanged; tests/telemetry-runtime.spec.js holds it to the library's public API.
+// This is a distribution switch, kept on purpose against the ui-watchtower-setup
+// skill's one-switch rule: inside a telemetry build, the sidecar's `enabled` is the
+// one runtime switch, on the same wiring (src/scripts/telemetry.js).
 
 const noop = () => {};
 

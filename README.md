@@ -49,10 +49,10 @@ reframes the markup into a shadow root — no full page reload between pages.
 ### Optional UI Watchtower forwarding
 
 Telemetry is excluded from builds by default. With `KB_TELEMETRY=true` the
-build includes UI Watchtower (`@absaoss-cps/ui-watchtower`) and forwards
-catalog/document visits and internal-navigation scenarios to a host shell's
-Watchtower receiver. The deployment supplies which shell that is and the
-telemetry identity; see
+build includes UI Watchtower (`@absaoss-cps/ui-watchtower`), connects to a host
+shell's Watchtower receiver and reports readiness to the shell. The knowledge
+base sends no events of its own yet. The deployment supplies which shell that
+is and the telemetry identity; see
 [deployment configuration](contract/DEPLOYMENT.md#optional-telemetry).
 
 Knowledge Base scripts can use the same engine for additional instrumentation:
@@ -70,8 +70,9 @@ telemetry.logging.getLogger('kb-example').warn('Example warning');
 Import it from `kb-telemetry`, never from a file directly: without
 `KB_TELEMETRY=true` that name resolves to a dependency-free stub with the same
 API, so the call works and nothing is recorded. The API is likewise inert
-outside a host shell. Use low-cardinality names, keep page content out of
-telemetry, and never dispose the shared engine.
+outside a host shell. Declare each name in `src/telemetry.schema.ts` first,
+use low-cardinality names, keep page content out of telemetry, and never
+dispose the shared engine.
 
 ---
 

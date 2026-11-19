@@ -23,7 +23,7 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const DIST = join(ROOT, 'dist');
 const read = (rel) => readFileSync(join(DIST, rel), 'utf8');
 
-test('telemetry configuration and trusted page identity use escaped metadata, not inline scripts', () => {
+test('telemetry configuration uses escaped metadata, not inline scripts', () => {
   const metadata = (html) => {
     const metas = [];
     const walk = (node) => {
@@ -36,9 +36,6 @@ test('telemetry configuration and trusted page identity use escaped metadata, no
     walk(parse(html));
     return Object.fromEntries(metas.map(({ name, content }) => [name, JSON.parse(content)]));
   };
-  expect(metadata(read('index.html'))['kb-telemetry-page']).toEqual({ kind: 'catalog' });
-  expect(metadata(read('user-guide/index.html'))['kb-telemetry-page'])
-    .toEqual({ kind: 'packaged', slug: 'user-guide' });
   const config = metadata(read('index.html'))['kb-telemetry'];
   expect(Object.keys(config).sort()).toEqual(['application', 'enabled', 'environment', 'eventNamespace', 'version']);
   expect(config.application).toBe('knowledge-base');

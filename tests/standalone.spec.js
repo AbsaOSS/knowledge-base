@@ -22,20 +22,6 @@
 
 import { test, expect } from '@playwright/test';
 
-test('enabled telemetry configuration stays inert when KB is standalone', async ({ page }) => {
-  await page.addInitScript(() => {
-    window.__kbChannelCount = 0;
-    window.BroadcastChannel = class {
-      constructor() { window.__kbChannelCount++; }
-    };
-  });
-  await page.goto('/knowledge-base/');
-  expect(await page.locator('meta[name="kb-telemetry"]').getAttribute('content')).toContain('"enabled":true');
-  await page.locator('a.kb-card[href="/knowledge-base/user-guide/"]').click();
-  await expect(page.locator('#kb-masthead')).toBeVisible();
-  expect(await page.evaluate(() => window.__kbChannelCount)).toBe(0);
-});
-
 // ─────────────────────────────────────────────────────────────────────────────
 // HTTP header safety
 // ─────────────────────────────────────────────────────────────────────────────

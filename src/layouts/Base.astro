@@ -42,7 +42,6 @@ interface Props {
   bodyClass?: string;
   /** Full-height flex column body. Off for sub-app content, which brings its own layout. */
   flexBody?: boolean;
-  telemetryPage?: { kind: 'catalog' | 'packaged' | 'single-page' | 'iframe'; slug?: string };
 }
 
 const {
@@ -50,10 +49,8 @@ const {
   headless,
   bodyClass = '',
   flexBody = true,
-  telemetryPage = { kind: 'catalog' },
 } = Astro.props;
-const telemetryBuild = isTelemetryBuild();
-const telemetry = telemetryBuild ? loadTelemetryConfig() : null;
+const telemetry = isTelemetryBuild() ? loadTelemetryConfig() : null;
 
 // `??`, not `||`: an app pinned "headless": false in apps.json must be able to
 // opt out of a headless build. With `||` the prop could only ever turn headless
@@ -73,7 +70,6 @@ const bodyClasses = [
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta name="description" content="Documentation knowledge base — browse all doc sites in one place." />
   {telemetry && <meta name="kb-telemetry" content={JSON.stringify(telemetry)} />}
-  {telemetryBuild && <meta name="kb-telemetry-page" content={JSON.stringify(telemetryPage)} />}
   <title>{title}</title>
   {/*
     Cascade layer order — must be the first stylesheet the browser parses.

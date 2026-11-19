@@ -32,7 +32,7 @@ application root).
 
 | Field | Contract |
 |---|---|
-| `enabled` | Boolean. Enable only in environments approved for telemetry. |
+| `enabled` | Boolean. Enable only in environments approved for telemetry, and keep it in step with the shell's own telemetry switch. |
 | `application` | Non-empty string; the fragment's identity, distinct from the host's. |
 | `environment` | Non-empty string; the deployment label. |
 | `eventNamespace` | Non-empty string; the host's Watchtower event namespace. |
@@ -85,18 +85,8 @@ and the same event namespace. The shell owns RUM, credentials, session/user
 identity and page views; KB never calls a credential endpoint or changes user
 identity.
 
-Events:
-
-- `kb-catalog-viewed` and `kb-document-opened` under `{namespace}.bi`: one per
-  page activation, including deliberate revisits and new mounts. Metadata is
-  limited to page kind and the registered documentation slug.
-- `kb-route-navigate` under `{namespace}.scenario`: one terminal record for
-  internal Astro navigation, with a catalog or `:app/*` route template.
-  Outcomes distinguish success, observed failure (`reason: navigation-error`),
-  abandonment (`reason: superseded` or `fragment-destroyed`), browser fallback
-  (`incomplete`, `reason: browser-fallback`) and the 30,000 ms deadline
-  (`timeout`, settled by the Watchtower core without a `reason`). No separate
-  step events.
+The knowledge base sends no events of its own yet. Future events are declared
+in `src/telemetry.schema.ts`.
 
 No document text/title, query/hash, full URL, search text or raw errors are
 captured by KB. The shell's own SDK may attach its standard RUM envelope; the shell's
