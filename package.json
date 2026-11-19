@@ -36,10 +36,10 @@
   },
   "devDependencies": {
     "@astrojs/check": "^0.9.12",
-    "@playwright/test": "^1.65.0",
+    "@playwright/test": "^1.65.1",
     "@tailwindcss/vite": "^4.3.5",
     "@types/node": "^26.6.6",
-    "astro": "^7.4.7",
+    "astro": "^7.4.12",
     "chokidar": "^6.0.0",
     "express": "^5.3.0",
     "mermaid": "12.3.0",
