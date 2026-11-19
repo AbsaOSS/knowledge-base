@@ -34,6 +34,23 @@ The reasoning behind each piece is in
    `ecs-task-definition.json` shows the task it needs; it is an example for your
    own deploy step, not something this skeleton deploys.
 
+## Operating the MCP sidecar
+
+- **The sidecar is not essential.** If it fails at startup, ECS does not restart
+  it until it has run for `restartAttemptPeriod` (300 s by default), so the site
+  keeps serving while `/mcp` answers `502` indefinitely. Alarm on the container
+  being stopped or `UNHEALTHY` (the ECS `RunningTaskCount` and container health
+  events, or a synthetic check of `/mcp`) and have the alarm replace the task.
+- **Deploy the pair by its first tag.** The build workflow pushes the first tag
+  of both images before the other tags and reports it as an output. Deploy that
+  one; a mutable alias such as `latest` may point at different builds in the two
+  repositories after a failed run.
+- **Keep the nginx listener private.** nginx trusts `X-Forwarded-For` from the
+  private ranges set in `nginx.conf`, which is only sound when security groups
+  let nothing but the load balancer reach it. A client that can connect directly
+  can pick its own address and sidestep the per-client MCP rate limit. Narrow
+  `set_real_ip_from` to your load balancer's subnets if you can.
+
 ## What is deliberately not here
 
 `deploy.yml`. Getting a pushed image running — ECS, Kubernetes, anything else —

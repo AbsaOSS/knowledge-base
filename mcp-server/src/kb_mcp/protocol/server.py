@@ -1,7 +1,5 @@
 """Assembles the MCP server over a KnowledgeBase."""
 
-import re
-
 from mcp.server import MCPServer
 
 from kb_mcp.domain import App
@@ -12,7 +10,6 @@ from kb_mcp.service import KnowledgeBase
 NAME = "knowledge-base"
 TITLE = "Knowledge Base"
 MAX_INSTRUCTIONS = 4_096
-MAX_APP_FIELD = 160
 
 _GUIDANCE = (
     "Knowledge Base documentation server (read-only). To answer a question: call search_documents with key "
@@ -22,17 +19,14 @@ _GUIDANCE = (
 )
 
 
-def _single_line(value: str, cap: int) -> str:
-    return re.sub(r"\s+", " ", re.sub(r"[\x00-\x1f\x7f]", " ", value)).strip()[:cap]
-
-
 def instructions(apps: list[App]) -> str:
-    """App names and descriptions come from third-party artifacts, so they are flattened and capped."""
-    catalogue = "; ".join(
-        f"{_single_line(app.name, MAX_APP_FIELD)} ({app.slug}) — {_single_line(app.description, MAX_APP_FIELD)}"
-        for app in apps
-    )
-    return _single_line(f"{_GUIDANCE} Apps: {catalogue}", MAX_INSTRUCTIONS)
+    """Static guidance plus app slugs, which the manifest restricts to `[a-z0-9-]`.
+
+    Names and descriptions come from third-party artifacts, so they are not put in the channel that
+    clients treat as the server's own instructions; documents carry their app's name.
+    """
+    slugs = ", ".join(app.slug for app in apps)
+    return f"{_GUIDANCE} Apps (usable as the app filter): {slugs}"[:MAX_INSTRUCTIONS]
 
 
 def create_server(kb: KnowledgeBase, version: str) -> MCPServer:

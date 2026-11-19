@@ -5,7 +5,7 @@ import json
 import logging
 import sqlite3
 from collections.abc import Iterator
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from datetime import UTC, datetime
 from importlib.metadata import version
 from pathlib import Path
@@ -38,6 +38,19 @@ class _Row:
         return hashlib.sha256(self.extracted.text.encode()).hexdigest()
 
 
+def _fingerprint_row(row: _Row) -> list[object]:
+    """Everything that decides what a search or listing returns, so a changed title also invalidates cursors."""
+    extracted = row.extracted
+    return [
+        row.uri,
+        row.sha256,
+        row.page.model_dump(mode="json"),
+        extracted.title,
+        extracted.description,
+        [asdict(section) for section in extracted.sections],
+    ]
+
+
 def document_uri(manifest: PageManifest, page: ManifestPage) -> str:
     """`kb://<app>/<path>`; `kb://<app>` for the app's root page."""
     path = manifest.path_within_app(page)
@@ -50,7 +63,11 @@ def build_index(dist: Path, out: Path, now: datetime | None = None) -> IndexStat
     rows = sorted(_rows(manifest, dist), key=lambda row: (row.page.app, row.page.route))
     content_hash = hashlib.sha256(
         json.dumps(
-            [[app.model_dump(mode="json") for app in manifest.apps], [[row.uri, row.sha256] for row in rows]],
+            [
+                manifest.path_prefix,
+                [app.model_dump(mode="json") for app in manifest.apps],
+                [_fingerprint_row(row) for row in rows],
+            ],
             sort_keys=True,
         ).encode()
     ).hexdigest()

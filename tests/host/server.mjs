@@ -69,16 +69,28 @@ const app = express();
 // with a 500, and a browser opening the URL gets the app shell. A production
 // host does the same as this, or routes the path around the gateway at the
 // load balancer — see "The MCP server" in contract/DEPLOYMENT.md.
-const HOP_BY_HOP = new Set(['host', 'connection', 'content-length', 'transfer-encoding', 'keep-alive', 'expect']);
+const HOP_BY_HOP = new Set([
+  'host', 'connection', 'content-length', 'transfer-encoding', 'keep-alive', 'expect',
+  'te', 'trailer', 'upgrade', 'proxy-authenticate', 'proxy-authorization', 'proxy-connection',
+]);
 const MCP_MAX_BODY_BYTES = 64 * 1024;
 
 app.all('/knowledge-base/mcp', async (req, res) => {
   const chunks = [];
   let size = 0;
-  for await (const chunk of req) {
-    size += chunk.length;
-    if (size > MCP_MAX_BODY_BYTES) return res.status(413).end();
-    chunks.push(chunk);
+  try {
+    for await (const chunk of req) {
+      size += chunk.length;
+      if (size > MCP_MAX_BODY_BYTES) {
+        // The rest of the body is never read, so the connection must not be reused.
+        res.set('connection', 'close');
+        return res.status(413).end();
+      }
+      chunks.push(chunk);
+    }
+  } catch (error) {
+    console.error('MCP proxy: the request body could not be read:', error);
+    return res.status(400).end();
   }
   const headers = Object.fromEntries(Object.entries(req.headers).filter(([name]) => !HOP_BY_HOP.has(name)));
   headers['x-forwarded-for'] = [req.headers['x-forwarded-for'], req.socket.remoteAddress].filter(Boolean).join(', ');
@@ -95,7 +107,8 @@ app.all('/knowledge-base/mcp', async (req, res) => {
       if (!HOP_BY_HOP.has(name) && name !== 'content-encoding') res.append(name, value);
     });
     res.end(Buffer.from(await upstream.arrayBuffer()));
-  } catch {
+  } catch (error) {
+    console.error('MCP proxy: the MCP server could not be reached:', error);
     res.status(502).end();
   }
 });

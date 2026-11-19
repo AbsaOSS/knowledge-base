@@ -325,7 +325,10 @@ jobs:
             if [ -n "${KB_PYTHON_INDEX_TOKEN:-}" ]; then
               user="$(jq -rn --arg v "${KB_PYTHON_INDEX_USERNAME:-__token__}" '$v|@uri')"
               token="$(jq -rn --arg v "$KB_PYTHON_INDEX_TOKEN" '$v|@uri')"
+              # GitHub masks the raw secret; the percent-encoded form is not guaranteed to match.
+              echo "::add-mask::${token}"
               index="${index%%://*}://${user}:${token}@${index#*://}"
+              echo "::add-mask::${index}"
             fi
             export KB_PYTHON_INDEX_URL="$index"
             secret=(--secret id=python-index,env=KB_PYTHON_INDEX_URL)
@@ -342,13 +345,32 @@ jobs:
             done <<< "$tags"
             docker build -f "$dockerfile" "${args[@]}" "$@" .
           }
-          push() {
-            local tag
+          # Only the first tag goes out before both images are in place; it is
+          # the one reported as an output, so a consumer never sees a pair in
+          # which one image is missing. The other tags (aliases such as
+          # `latest`) are promoted afterwards: if that fails the pair is
+          # published and the aliases can be re-run on their own.
+          publish() {
+            local images=() outputs=() tag i
+            if [ -n "${KB_MCP_IMAGE:-}" ]; then
+              images+=("$KB_MCP_IMAGE")
+              outputs+=(mcp-image)
+            fi
+            images+=("$KB_IMAGE")
+            outputs+=(image)
+            for i in "${!images[@]}"; do
+              docker push "${images[$i]}:$first_tag"
+            done
+            for i in "${!images[@]}"; do
+              echo "${outputs[$i]}=${images[$i]}:$first_tag" >> "$GITHUB_OUTPUT"
+              echo "Pushed \`${images[$i]}:$first_tag\`." >> "$GITHUB_STEP_SUMMARY"
+            done
             while IFS= read -r tag; do
-              docker push "$1:$tag"
+              [ "$tag" = "$first_tag" ] && continue
+              for i in "${!images[@]}"; do
+                docker push "${images[$i]}:$tag"
+              done
             done <<< "$tags"
-            echo "${2}=$1:$first_tag" >> "$GITHUB_OUTPUT"
-            echo "Pushed \`$1:$first_tag\`." >> "$GITHUB_STEP_SUMMARY"
           }
 
           # The two images are one version: both are built before either is
@@ -357,10 +379,9 @@ jobs:
           # (a repository nobody created yet).
           build "$KB_IMAGE" Dockerfile
           if [ -n "${KB_MCP_IMAGE:-}" ]; then
-            build "$KB_MCP_IMAGE" mcp-server/Dockerfile "${secret[@]}"
-            push "$KB_MCP_IMAGE" mcp-image
+            build "$KB_MCP_IMAGE" mcp-server/Dockerfile ${secret[@]+"${secret[@]}"}
           fi
-          push "$KB_IMAGE" image
+          publish
 
       # kb-build.json records which release of which repo produced each app. An
       # image is opaque once pushed; this is how "the docs are wrong" becomes an

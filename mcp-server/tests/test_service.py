@@ -38,6 +38,7 @@ def test_reads_a_document_a_slice_at_a_time(kb: KnowledgeBase) -> None:
     assert first.text == whole.text[:10]
     assert first.next_offset == 10
     assert first.total_chars == len(whole.text)
+    assert first.truncated_in_index is False
     rest = kb.read("kb://ops-guide", offset=10, max_chars=50_000)
     assert first.text + rest.text == whole.text
     assert rest.next_offset is None
@@ -68,4 +69,4 @@ def test_a_long_resource_is_cut_and_points_to_read_document(site: Site, make_ind
 
 
 def test_all_documents_pages_through_the_whole_repository(kb: KnowledgeBase) -> None:
-    assert len(kb.all_documents()) == 6
+    assert len(list(kb.all_documents())) == 6

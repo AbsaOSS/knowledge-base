@@ -9,6 +9,7 @@ statement cache are not safe to share.
 import json
 import sqlite3
 import threading
+import weakref
 from collections import defaultdict
 from pathlib import Path
 from typing import Self
@@ -82,6 +83,13 @@ class IndexUnavailableError(Exception):
     """The index file is missing, unreadable or from another schema version."""
 
 
+class _ConnectionHandle:
+    __slots__ = ("__weakref__", "connection")
+
+    def __init__(self, connection: sqlite3.Connection) -> None:
+        self.connection = connection
+
+
 class SqliteIndex:
     """An open index file. Construct the adapters from it; close it when the server stops."""
 
@@ -91,7 +99,7 @@ class SqliteIndex:
         self._uri = f"{path.resolve().as_uri()}?mode=ro&immutable=1"
         self._local = threading.local()
         self._lock = threading.Lock()
-        self._connections: list[sqlite3.Connection] = []
+        self._closers: set[weakref.finalize[..., _ConnectionHandle]] = set()
         try:
             connection = self.connection()
         except sqlite3.Error as error:
@@ -115,13 +123,17 @@ class SqliteIndex:
 
     def connection(self) -> sqlite3.Connection:
         """The calling thread's connection, opened on its first call."""
-        connection: sqlite3.Connection | None = getattr(self._local, "connection", None)
-        if connection is None:
-            connection = self._open()
-            self._local.connection = connection
+        handle: _ConnectionHandle | None = getattr(self._local, "handle", None)
+        if handle is None:
+            handle = _ConnectionHandle(self._open())
+            self._local.handle = handle
+            # The thread's local storage is the handle's only owner: when the thread ends the handle
+            # goes, and its finalizer closes the connection instead of holding it until shutdown.
+            closer = weakref.finalize(handle, handle.connection.close)
             with self._lock:
-                self._connections.append(connection)
-        return connection
+                self._closers = {alive for alive in self._closers if alive.alive}
+                self._closers.add(closer)
+        return handle.connection
 
     def _open(self) -> sqlite3.Connection:
         # check_same_thread=False only so that close() can close every thread's connection.
@@ -134,9 +146,9 @@ class SqliteIndex:
 
     def close(self) -> None:
         with self._lock:
-            for connection in self._connections:
-                connection.close()
-            self._connections.clear()
+            for closer in self._closers:
+                closer()
+            self._closers.clear()
 
     def __enter__(self) -> Self:
         return self
@@ -250,13 +262,23 @@ def _documents(connection: sqlite3.Connection, rows: list[sqlite3.Row]) -> list[
 
 
 def _hit(document: Document, terms: list[str], score: float) -> SearchHit:
-    """The first section whose heading names a search term (else the first section), and an excerpt from it."""
+    """The first section whose heading names a search term, else the first whose body does, and an excerpt from it.
+
+    With no such section the excerpt is taken from the whole document and carries no section anchor.
+    """
     section = next(
         (section for section in document.sections if set(query_terms.words(section.heading)) & set(terms)),
-        document.sections[0] if document.sections else None,
+        None,
+    ) or next(
+        (
+            section
+            for section in document.sections
+            if any(term in query_terms.fold_lower(document.text[section.start : section.end]) for term in terms)
+        ),
+        None,
     )
     content = document.text[section.start : section.end] if section else document.text
-    return SearchHit(document=document, excerpt=_excerpt(content, terms), score=round(score, 4), section=section)
+    return SearchHit(document=document, excerpt=_excerpt(content, terms), score=score, section=section)
 
 
 def _excerpt(content: str, terms: list[str]) -> str:

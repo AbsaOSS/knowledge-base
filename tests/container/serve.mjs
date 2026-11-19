@@ -91,6 +91,15 @@ if (!process.env.KB_SKIP_BUILD) {
 
 removeContainers();
 
+// Playwright terminates this process on teardown. `docker run --rm` usually
+// cleans up on its own, but a hard kill can orphan the container, so the removal
+// is repeated here rather than relied upon. The handlers come before the
+// MCP container starts: waiting for it to become healthy can take a minute.
+const shutdown = () => { removeContainers(); process.exit(0); };
+process.on('SIGTERM', shutdown);
+process.on('SIGINT', shutdown);
+process.on('exit', removeContainers);
+
 console.log(`▶ MCP server container (${MCP_NAME})`);
 const mcpStarted = run('docker', [
   'run', '--detach', '--name', MCP_NAME,
@@ -113,13 +122,5 @@ const child = spawn(
   ['run', '--rm', '--name', NAME, '--network', `container:${MCP_NAME}`, IMAGE],
   { stdio: 'inherit' },
 );
-
-// Playwright terminates this process on teardown. `docker run --rm` usually
-// cleans up on its own, but a hard kill can orphan the container, so the removal
-// is repeated here rather than relied upon.
-const shutdown = () => { removeContainers(); process.exit(0); };
-process.on('SIGTERM', shutdown);
-process.on('SIGINT', shutdown);
-process.on('exit', removeContainers);
 
 child.on('exit', (code) => { removeContainers(); process.exit(code ?? 0); });

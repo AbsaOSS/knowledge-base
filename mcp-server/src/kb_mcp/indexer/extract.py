@@ -99,6 +99,7 @@ _SAFE_ANCHOR = re.compile(r"^[A-Za-z][\w:.-]{0,127}$")
 _CODE_LANGUAGE = re.compile(r"(?:^|\s)language-([a-z0-9+#-]{1,20})(?:\s|$)", re.IGNORECASE)
 _HEADING = re.compile(r"^h([1-6])$")
 _TEXT = "-text"
+_SAFE_HREF = re.compile(r"^(https?://|mailto:)", re.IGNORECASE)
 
 
 @dataclass(frozen=True, slots=True)
@@ -108,6 +109,19 @@ class ExtractedDocument:
     text: str
     sections: tuple[Section, ...]
     truncated: bool
+
+
+def _is_checkbox(node: LexborNode) -> bool:
+    """A task-list checkbox is content: its state is the only record of what is done."""
+    return node.tag == "input" and (node.attributes.get("type") or "").lower() == "checkbox"
+
+
+def _safe_href(href: str | None) -> str | None:
+    """An absolute web or mail link, flattened to one token; anything else (relative, javascript:, data:) is dropped."""
+    if not href:
+        return None
+    href = "".join(href.split())
+    return href if _SAFE_HREF.match(href) and ")" not in href else None
 
 
 def clean(value: str) -> str:
@@ -154,7 +168,7 @@ class _Extractor:
     def hidden(self, node: LexborNode) -> bool:
         tag = node.tag
         return (
-            tag in DROPPED
+            (tag in DROPPED and not _is_checkbox(node))
             or (tag in ("header", "footer") and node.mem_id != self.root.mem_id)
             or "hidden" in node.attributes
             or node.attributes.get("aria-hidden") == "true"
@@ -166,7 +180,7 @@ class _Extractor:
         if self.hidden(node) or self.length > MAX_TEXT_LENGTH:
             return
         if self.nesting >= MAX_NESTING:
-            self.flush([node.text(deep=True)])
+            self.flush([self.visible_text(node)])
             return
         self.nesting += 1
         try:
@@ -187,25 +201,49 @@ class _Extractor:
         elif tag != "hr":
             self.render_children(node, depth)
 
+    def visible_text(self, node: LexborNode) -> str:
+        """The text beneath `node` in document order, skipping hidden subtrees, without recursion."""
+        parts: list[str] = []
+        total = 0
+        stack = [node]
+        while stack and total <= MAX_TEXT_LENGTH:
+            current = stack.pop()
+            if current.tag == _TEXT:
+                value = current.text_content or ""
+                parts.append(value)
+                total += len(value)
+            elif (current.tag or "-").startswith("-") or self.hidden(current):
+                continue
+            else:
+                stack.extend(reversed(list(current.iter(include_text=True))))
+        return "".join(parts)
+
     def inline(self, node: LexborNode) -> str:
         if node.tag == _TEXT:
             return node.text_content or ""
         if (node.tag or "-").startswith("-") or self.hidden(node):  # comments and other non-elements
             return ""
-        if node.tag == "br":
-            return "\n"
-        if node.tag == "img":
-            alt = node.attributes.get("alt")
-            return f"[{alt}]" if alt else ""
+        if node.tag in ("br", "input", "img"):
+            return self.inline_control(node)
         value = self.inline_children(node)
         if node.tag == "code":
             return f"`{value}`"
+        if node.tag == "a" and value.strip() and (href := _safe_href(node.attributes.get("href"))):
+            return f"[{value.strip()}]({href})"
         # A block nested where only inline text is wanted (a <p> in a list item or a cell) still separates words.
         return f" {value} " if node.tag in BLOCK_LEVEL else value
 
+    def inline_control(self, node: LexborNode) -> str:
+        if node.tag == "br":
+            return "\n"
+        if node.tag == "input":
+            return "[x] " if "checked" in node.attributes else "[ ] "
+        alt = node.attributes.get("alt")
+        return f"[{alt}]" if alt else ""
+
     def inline_children(self, node: LexborNode) -> str:
         if self.nesting >= MAX_NESTING:
-            return node.text(deep=True)
+            return self.visible_text(node)
         self.nesting += 1
         try:
             return "".join(self.inline(child) for child in node.iter(include_text=True))
@@ -241,7 +279,9 @@ class _Extractor:
         if self.length:
             self.write("\n\n")
         anchor = node.attributes.get("id") or ""
-        self.headings.append((heading, anchor if _SAFE_ANCHOR.match(anchor) else None, level, self.length))
+        self.headings.append(
+            (heading[:MAX_TITLE_LENGTH], anchor if _SAFE_ANCHOR.match(anchor) else None, level, self.length)
+        )
         self.write(f"{'#' * level} {heading}")
 
     def render_code(self, node: LexborNode) -> None:
@@ -250,20 +290,30 @@ class _Extractor:
             filter(None, [node.attributes.get("class"), *(c.attributes.get("class") for c in node.css("code"))])
         )
         language = "mermaid" if "mermaid" in classes else (m[1] if (m := _CODE_LANGUAGE.search(classes)) else "")
-        code = _CONTROL.sub("", unicodedata.normalize("NFC", node.text(deep=True)).replace("\r\n", "\n"))
+        code = _CONTROL.sub("", unicodedata.normalize("NFC", self.visible_text(node)).replace("\r\n", "\n"))
         code = code.lstrip("\n").rstrip()
         if code:
             self.append_block(f"```{language}\n{code}\n```")
 
     def render_table(self, node: LexborNode) -> None:
         lines = []
-        for row in node.css("tr"):
-            if self.hidden(row):
-                continue
+        for row in self.table_rows(node):
             cells = [one_line(self.inline(cell)) for cell in row.iter() if cell.tag in ("td", "th")]
             lines.append(f"| {' | '.join(cells)} |")
         if lines:
             self.append_block("\n".join(lines))
+
+    def table_rows(self, table: LexborNode) -> list[LexborNode]:
+        """The table's own visible rows: not those of a nested table, nor of a hidden row group."""
+        rows: list[LexborNode] = []
+        for child in table.iter():
+            if self.hidden(child):
+                continue
+            if child.tag == "tr":
+                rows.append(child)
+            elif child.tag in ("thead", "tbody", "tfoot"):
+                rows.extend(row for row in child.iter() if row.tag == "tr" and not self.hidden(row))
+        return rows
 
     def render_list(self, node: LexborNode, depth: int) -> None:
         ordered = node.tag == "ol"

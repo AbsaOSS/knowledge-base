@@ -114,11 +114,11 @@ def expand(text: str, is_known: Callable[[str], bool], vocabulary_near: Callable
     """The words to search for.
 
     Stop words go unless nothing else is left. A word the index does not know is split into two
-    known words if it can be ("eventbus" → "event", "bus"), else replaced by the closest known
-    spellings. A multi-word query also tries its compact form, which catches "Event Bus" for a
-    document that writes "EventBus". Unknown words with no replacement are dropped, so a query
-    of only unknown words matches nothing. Only the first MAX_WORDS distinct words count, and only
-    the first MAX_FUZZY_WORDS unknown ones are matched against the vocabulary.
+    known words if it can be ("eventbus" → "event", "bus"), else matched to the closest known
+    spellings. The word itself is always searched too, as FTS5 stems it. A multi-word query also
+    tries its compact form, which catches "Event Bus" for a document that writes "EventBus". Only the
+    first MAX_WORDS distinct words count, and only the first MAX_FUZZY_WORDS unknown ones are matched
+    against the vocabulary.
     """
     tokens = words(text)
     distinct = list(dict.fromkeys(tokens))
@@ -127,11 +127,18 @@ def expand(text: str, is_known: Callable[[str], bool], vocabulary_near: Callable
     joined = compact(text)
     if len(tokens) > 1 and is_known(joined):
         terms.append(joined)
+    terms.extend(
+        compound
+        for raw in text.split()
+        if len(words(raw)) > 1 and (compound := compact(raw)) != joined and is_known(compound)
+    )
     fuzzy_budget = MAX_FUZZY_WORDS
     for word in meaningful:
         if is_known(word):
             terms.append(word)
-        elif halves := _split(word, is_known):
+            continue
+        terms.append(word)  # FTS5 stems it, so "run" still finds an indexed "running"
+        if halves := _split(word, is_known):
             terms.extend(halves)
         elif fuzzy_budget and _MIN_FUZZY_LENGTH <= len(word) <= _MAX_FUZZY_LENGTH:
             fuzzy_budget -= 1

@@ -1,6 +1,6 @@
 import time
 
-from kb_mcp.indexer.extract import MAX_TEXT_LENGTH, extract_document
+from kb_mcp.indexer.extract import MAX_TEXT_LENGTH, MAX_TITLE_LENGTH, extract_document
 
 
 def test_renders_headings_paragraphs_lists_tables_and_code_as_markdown() -> None:
@@ -120,3 +120,44 @@ def test_a_page_far_past_the_text_limit_is_cut_quickly() -> None:
     assert document.truncated
     assert len(document.text) == MAX_TEXT_LENGTH
     assert time.perf_counter() - started < 5
+
+
+def test_deeply_nested_markup_still_drops_hidden_subtrees() -> None:
+    nested = "<div>" * 2_000 + "<script>secret()</script><nav>menu</nav><p hidden>gone</p>kept" + "</div>" * 2_000
+
+    document = extract_document(f"<main><h1>Nested</h1>{nested}</main>")
+
+    assert "kept" in document.text
+    assert not {"secret", "menu", "gone"} & set(document.text.split())
+
+
+def test_checkbox_state_and_web_links_survive_extraction() -> None:
+    html = """<main><h1>Plan</h1>
+      <ul><li><input type="checkbox" checked> Published</li><li><input type="checkbox"> Load-tested</li></ul>
+      <p>See <a href="https://example.com/handbook">the handbook</a>, <a href="javascript:alert(1)">trap</a>
+      and <a href="/relative">local</a>.</p></main>"""
+
+    text = extract_document(html).text
+
+    assert "- [x] Published\n- [ ] Load-tested" in text
+    assert "[the handbook](https://example.com/handbook)" in text
+    assert "javascript" not in text
+    assert "trap" in text
+    assert "(/relative)" not in text
+
+
+def test_nested_table_text_is_not_duplicated_and_hidden_row_groups_are_skipped() -> None:
+    html = """<main><h1>T</h1><table>
+      <tr><td>outer<table><tr><td>inner</td></tr></table></td></tr>
+      <tbody hidden><tr><td>secret</td></tr></tbody></table></main>"""
+
+    text = extract_document(html).text
+
+    assert text.count("inner") == 1
+    assert "secret" not in text
+
+
+def test_a_heading_is_bounded_in_the_section_metadata() -> None:
+    document = extract_document(f"<main><h1>{'h' * 5_000}</h1><p>body</p></main>")
+
+    assert len(document.sections[0].heading) == MAX_TITLE_LENGTH

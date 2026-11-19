@@ -45,6 +45,16 @@ def test_points_at_the_section_whose_heading_names_the_query(index_path: Path) -
     assert hit.excerpt == "## Retention Events are kept for seven days."
 
 
+def test_points_at_the_section_whose_body_matches_when_no_heading_does(index_path: Path) -> None:
+    with SqliteIndex(index_path) as index:
+        hits = SqliteSearch(index).search(SearchQuery("passwords"), PageRequest(limit=10)).items
+    hit = next(hit for hit in hits if hit.document.uri == "kb://ops-guide")
+
+    assert hit.section is not None
+    assert hit.section.anchor == "credentials"
+    assert "passwords" in hit.excerpt
+
+
 def test_excerpt_is_cut_around_the_first_match(tmp_path: Path) -> None:
     site = Site(tmp_path / "dist").app("a", "A")
     site.page("a", "", f"<main><p>{'filler ' * 100}needle here {'filler ' * 100}</p></main>")
@@ -152,3 +162,15 @@ def test_a_missing_or_corrupt_index_is_refused(tmp_path: Path) -> None:
     corrupt.write_bytes(b"not a database" * 100)
     with pytest.raises(IndexUnavailableError, match="Unreadable"):
         SqliteIndex(corrupt)
+
+
+def test_a_stemmed_form_of_an_indexed_word_is_still_searched() -> None:
+    known = {"running"}
+
+    assert "run" in expand("run", known.__contains__, lambda _: [])
+
+
+def test_a_camel_case_identifier_inside_a_longer_question_is_kept_whole() -> None:
+    known = {"eventbus"}
+
+    assert "eventbus" in expand("how does EventBus work", known.__contains__, lambda _: [])

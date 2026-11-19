@@ -4,6 +4,8 @@ It turns backend results into what clients see (links, app names, bounded reads)
 nothing about MCP; the backends behind it know nothing about clients.
 """
 
+import re
+from collections.abc import Iterator
 from urllib.parse import urljoin
 
 from pydantic import BaseModel
@@ -78,9 +80,15 @@ class DocumentList(BaseModel):
 class DocumentSlice(PublicDocument):
     offset: int
     total_chars: int
+    truncated_in_index: bool
+    """The source page was longer than the index keeps; `total_chars` counts only the indexed prefix."""
     text: str
     next_offset: int | None
     """Pass as `offset` to continue; absent at the end of the document."""
+
+
+def _one_line(value: str) -> str:
+    return re.sub(r"\s+", " ", value).strip()
 
 
 class KnowledgeBase:
@@ -139,15 +147,14 @@ class KnowledgeBase:
         ]
         return DocumentList(total=page.total, documents=documents, next_cursor=page.next_cursor)
 
-    def all_documents(self) -> list[Document]:
-        """Every document in canonical order, for the resource listing."""
-        documents: list[Document] = []
+    def all_documents(self) -> Iterator[Document]:
+        """Every document in canonical order, a catalog page at a time so the corpus is never held whole."""
         cursor: str | None = None
         while True:
             page = self._documents.list_documents(DocumentFilter(), PageRequest(MAX_LIST_LIMIT, cursor))
-            documents.extend(page.items)
+            yield from page.items
             if page.next_cursor is None:
-                return documents
+                return
             cursor = page.next_cursor
 
     def read(self, uri: str, offset: int = 0, max_chars: int = DEFAULT_READ_CHARS) -> DocumentSlice:
@@ -160,6 +167,7 @@ class KnowledgeBase:
             **self._public(document).model_dump(),
             offset=offset,
             total_chars=total,
+            truncated_in_index=document.truncated,
             text=document.text[offset:end],
             next_offset=end if end < total else None,
         )
@@ -169,14 +177,16 @@ class KnowledgeBase:
         document = self._require(uri)
         link = self._link(document)
         header = [
-            f"Title: {document.title}",
-            f"App: {self._app_name(document)} ({document.app})",
-            f"Link: {link}",
-            f"Source version: {document.source_version or 'unknown'}",
+            f"Title: {_one_line(document.title)}",
+            f"App: {_one_line(self._app_name(document))} ({document.app})",
+            f"Link: {_one_line(link)}",
+            f"Source version: {_one_line(document.source_version or 'unknown')}",
         ]
         text = document.text[:MAX_RESOURCE_CHARS]
         if len(document.text) > MAX_RESOURCE_CHARS:
             text += f"\n\n[Truncated at {MAX_RESOURCE_CHARS} characters; continue with read_document.]"
+        if document.truncated:
+            text += "\n\n[The source page is longer than the index keeps; read the rest on the site.]"
         return "\n".join(header) + "\n\n---\n\n" + text
 
     def link(self, document: Document) -> str:
