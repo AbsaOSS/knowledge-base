@@ -1,0 +1,6 @@
+{
+  "enabled": true,
+  "application": "knowledge-base",
+  "environment": "TEST",
+  "eventNamespace": "com.kb-test"
+}

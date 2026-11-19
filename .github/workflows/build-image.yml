@@ -38,6 +38,11 @@ on:
         type: boolean
         required: false
         default: true
+      telemetry:
+        description: 'Include the UI Watchtower integration and shell adapter.'
+        type: boolean
+        required: false
+        default: false
       strict:
         description: >-
           Reject prebuilt/localPath/optional entries and any entry that produces
@@ -214,6 +219,7 @@ jobs:
         env:
           KB_REGISTRY: ${{ steps.registry.outputs.path }}
           KB_HEADLESS: ${{ inputs.headless }}
+          KB_TELEMETRY: ${{ inputs.telemetry }}
           KB_STRICT: ${{ inputs.strict }}
           # Always a token, so the fetch never falls back to the gh CLI, which a
           # self-hosted runner need not have. github.token covers public
