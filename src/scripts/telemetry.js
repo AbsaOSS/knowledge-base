@@ -130,9 +130,9 @@ export function startTelemetry(win, doc, connectShell) {
   };
   listen(doc, 'astro:before-preparation', (event) => {
     if (disposed) return;
+    preparing = event.signal;
     if (event.from.pathname === event.to.pathname && event.from.search === event.to.search) return;
     activationPending = true;
-    preparing = event.signal;
   });
   listen(doc, 'astro:before-swap', (event) => {
     if (event.signal === preparing) preparing = undefined;

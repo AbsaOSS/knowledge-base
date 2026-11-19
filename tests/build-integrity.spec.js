@@ -22,6 +22,8 @@ import { LAYER_ORDER, SUB_APP_LAYER } from '../src/utils/css-layers.js';
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const DIST = join(ROOT, 'dist');
 const read = (rel) => readFileSync(join(DIST, rel), 'utf8');
+const { version } = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8'));
+const SOURCE_VERSION = new RegExp(`^${version.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\+[a-f0-9]{12}$`);
 
 test('telemetry configuration uses escaped metadata, not inline scripts', () => {
   const metadata = (html) => {
@@ -39,7 +41,7 @@ test('telemetry configuration uses escaped metadata, not inline scripts', () => 
   const config = metadata(read('index.html'))['kb-telemetry'];
   expect(Object.keys(config).sort()).toEqual(['application', 'enabled', 'environment', 'eventNamespace', 'version']);
   expect(config.application).toBe('knowledge-base');
-  expect(config.version).toMatch(/^1\.0\.0\+[a-f0-9]{12}$/);
+  expect(config.version).toMatch(SOURCE_VERSION);
 });
 
 /** Every file with the extension under dir, recursively. */

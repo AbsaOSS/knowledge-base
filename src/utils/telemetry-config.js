@@ -2,6 +2,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { join, parse, resolve } from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
+import { REGISTRY_FILE } from './config.js';
 
 const DEFAULT_SHELL_ADAPTER = fileURLToPath(new URL('../scripts/no-shell.js', import.meta.url));
 const TELEMETRY_BOOT = fileURLToPath(new URL('../scripts/telemetry-boot.js', import.meta.url));
@@ -34,9 +35,9 @@ export function validateTelemetryConfig(value) {
   return { enabled, application, environment, eventNamespace };
 }
 
-export function telemetryConfigPath(root, env = process.env) {
+export function telemetryConfigPath(root, env = process.env, registryFile = REGISTRY_FILE) {
   if (env.KB_TELEMETRY_CONFIG?.trim()) return resolve(root, env.KB_TELEMETRY_CONFIG.trim());
-  const registry = parse(resolve(root, env.KB_REGISTRY?.trim() || 'apps.json'));
+  const registry = parse(resolve(root, registryFile));
   return join(registry.dir, `${registry.name}.telemetry.json`);
 }
 
@@ -62,14 +63,14 @@ export function telemetryModulePath(env = process.env) {
  * deployment's host shell is detected and told the page is ready. Owned by the
  * deployment, beside its registry; without one the knowledge base runs shell-less.
  */
-export function shellAdapterPath(root = process.cwd(), env = process.env) {
+export function shellAdapterPath(root = process.cwd(), env = process.env, registryFile = REGISTRY_FILE) {
   const explicit = env.KB_SHELL_ADAPTER?.trim();
   if (explicit) {
     const file = resolve(root, explicit);
     if (!existsSync(file)) throw new Error('Explicit KB_SHELL_ADAPTER file does not exist');
     return file;
   }
-  const registry = parse(resolve(root, env.KB_REGISTRY?.trim() || 'apps.json'));
+  const registry = parse(resolve(root, registryFile));
   const beside = join(registry.dir, 'kb-shell.mjs');
   return existsSync(beside) ? beside : DEFAULT_SHELL_ADAPTER;
 }

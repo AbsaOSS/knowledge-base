@@ -176,6 +176,17 @@ test('an old page-load cannot report a navigation that has not swapped yet', () 
   instance.dispose();
 });
 
+test('going back to the current page before the next one arrives still reports readiness', () => {
+  const h = harness();
+  const instance = startTelemetry(h.win, h.doc, h.connectShell);
+  h.prepare('/knowledge-base/user-guide/', '/knowledge-base/');
+  const back = h.prepare('/knowledge-base/', '/knowledge-base/');
+  h.swap(back);
+  h.pageLoad();
+  expect(h.state.readiness).toEqual(['ready', 'ready']);
+  instance.dispose();
+});
+
 for (const config of [null, { ...identity, enabled: false }, { enabled: 'malformed' }]) {
   test(`shell readiness works without active event forwarding: ${JSON.stringify(config)}`, () => {
     const h = harness({ config });

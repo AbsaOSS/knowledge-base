@@ -10,9 +10,11 @@ import {
 const identity = {
   enabled: true, application: 'knowledge-base', environment: 'TEST', eventNamespace: 'com.kb-test',
 };
+const { version } = JSON.parse(readFileSync('package.json', 'utf8'));
+const SOURCE_VERSION = new RegExp(`^${version.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\+[a-f0-9]{12}$`);
 
 test('discovers the sidecar beside an absolute deployment registry', () => {
-  expect(telemetryConfigPath('/application', { KB_REGISTRY: '/deployment/apps/dev.json' }))
+  expect(telemetryConfigPath('/application', {}, '/deployment/apps/dev.json'))
     .toBe('/deployment/apps/dev.telemetry.json');
   expect(telemetryConfigPath('/application', {})).toBe('/application/apps.telemetry.json');
   expect(telemetryConfigPath('/application', { KB_TELEMETRY_CONFIG: 'custom.json' }))
@@ -34,10 +36,10 @@ test('the shell adapter comes from the deployment, else the built-in no-shell de
   const dir = mkdtempSync(join(tmpdir(), 'kb-shell-'));
   try {
     const registry = join(dir, 'dev.json');
-    expect(shellAdapterPath('/application', { KB_REGISTRY: registry }))
+    expect(shellAdapterPath('/application', {}, registry))
       .toBe(resolve('src/scripts/no-shell.js'));
     writeFileSync(join(dir, 'kb-shell.mjs'), 'export function connectShell() { return null; }');
-    expect(shellAdapterPath('/application', { KB_REGISTRY: registry })).toBe(join(dir, 'kb-shell.mjs'));
+    expect(shellAdapterPath('/application', {}, registry)).toBe(join(dir, 'kb-shell.mjs'));
     expect(shellAdapterPath(dir, { KB_SHELL_ADAPTER: 'kb-shell.mjs' })).toBe(join(dir, 'kb-shell.mjs'));
     expect(() => shellAdapterPath(dir, { KB_SHELL_ADAPTER: 'absent.mjs' })).toThrow('does not exist');
   } finally {
@@ -50,7 +52,7 @@ test('enabled configuration derives its version from KB source, not the deployme
     KB_TELEMETRY_CONFIG: 'tests/fixtures/telemetry/enabled.json',
   });
   expect(config).toMatchObject(identity);
-  expect(config.version).toMatch(/^1\.0\.0\+[a-f0-9]{12}$/);
+  expect(config.version).toMatch(SOURCE_VERSION);
 });
 
 for (const [label, value] of [
