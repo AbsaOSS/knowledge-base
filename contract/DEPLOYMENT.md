@@ -79,14 +79,37 @@ forwarded only when `enabled` is true and `channelName` is a non-empty string;
 the shared default channel is never used. A throwing adapter is contained and
 the page falls back to running shell-less.
 
+When the shell removes the knowledge base, the knowledge base disposes its
+telemetry, the adapter's `dispose()` included, on `unload` or on a
+`web-fragment-unmount` event on its `window`. Chromium can refuse `unload`, and
+web-fragments 0.8.2 cleans up only on `unload`
+([web-fragments#302](https://github.com/web-fragments/web-fragments/issues/302)),
+so a shell should patch its web-fragments to dispatch `web-fragment-unmount` on
+the fragment's shadow root (where web-fragments delivers a fragment's `window`
+listeners) before it removes the iframe. Without that, nothing fails, but
+nothing is disposed either.
+
 The shell provides a Watchtower BroadcastChannel receiver
 (`UwtTelemetryBroadcastHost`, or `ngx-ui-watchtower` 0.4.0+) on that channel
 and the same event namespace. The shell owns RUM, credentials, session/user
 identity and page views; KB never calls a credential endpoint or changes user
 identity.
 
-The knowledge base sends no events of its own yet. Future events are declared
-in `src/telemetry.schema.ts`.
+Events (declared in `src/telemetry.schema.ts`):
+
+- `kb-app-card-clicked` under `{namespace}.bi`: a Library card was clicked.
+  Metadata is only `app`, the registered slug of the app it opens. Page views
+  are the shell's; the knowledge base records none itself.
+- `kb-page-open` under `{namespace}.scenario`: opening a page inside the
+  knowledge base, from the click to the new page being active, with steps
+  `fetch` and `render`. Not the first page of a visit, which is the shell's.
+  `route` is `/knowledge-base/` or `/knowledge-base/:app/*`; on success,
+  metadata `app` is the slug of the app that opened. Outcomes: `success`;
+  `incomplete` with `reason: browser-fallback` when the router hands the link
+  to the browser (a missing page, a non-HTML link, a failed fetch); `abandoned`
+  with `reason: superseded` when a newer click came first. A page still
+  opening when the shell removes the knowledge base is `abandoned` if the
+  shell sends `web-fragment-unmount` (see above); otherwise it is not recorded.
 
 No document text/title, query/hash, full URL, search text or raw errors are
 captured by KB. The shell's own SDK may attach its standard RUM envelope; the shell's

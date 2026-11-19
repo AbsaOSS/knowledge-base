@@ -138,8 +138,12 @@ export function startTelemetry(win, doc, connectShell) {
     if (event.signal === preparing) preparing = undefined;
   });
   listen(doc, 'astro:page-load', activate);
-  // Unlike pagehide, reframed keeps unload on the native iframe window.
+  // Unlike pagehide, reframed keeps unload on the native iframe window, but
+  // Chromium can refuse unload. A host whose web-fragments carries the fix for
+  // web-fragments#302 sends web-fragment-unmount before it removes the fragment;
+  // without that fix neither event may come, and nothing is disposed.
   listen(win, 'unload', () => controller.dispose());
+  listen(win, 'web-fragment-unmount', () => controller.dispose());
   listen(doc, 'DOMContentLoaded', () => {
     if (!activated) activate();
   });

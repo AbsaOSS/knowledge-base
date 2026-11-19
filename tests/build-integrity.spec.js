@@ -105,6 +105,21 @@ test.describe('Build integrity', () => {
     expect(html).toContain('href="/knowledge-base/guide-mirror/"');
   });
 
+  test('every app has one Library card that names its slug for telemetry', () => {
+    const cards = [];
+    const walk = (node) => {
+      const attrs = Object.fromEntries((node.attrs ?? []).map(({ name, value }) => [name, value]));
+      if (node.tagName === 'a' && attrs.class?.split(/\s+/).includes('kb-card')) cards.push(attrs);
+      for (const child of node.childNodes ?? []) walk(child);
+    };
+    walk(parse(read('index.html')));
+    for (const card of cards) {
+      expect(card['data-kb-app'], `card ${card.href}`).toBe(card.href.match(/^\/knowledge-base\/([a-z0-9-]+)\/$/)?.[1]);
+    }
+    const registered = JSON.parse(read('_kb/pages.json')).apps.map((app) => app.slug);
+    expect(cards.map((card) => card['data-kb-app']).sort()).toEqual(registered.sort());
+  });
+
   test('sub-app pages are marked headless and carry the knowledge base CSS', () => {
     const html = read('user-guide/index.html');
     expect(html).toContain('data-kb-headless="true"');

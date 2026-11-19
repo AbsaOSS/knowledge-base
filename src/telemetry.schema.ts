@@ -16,33 +16,21 @@ import type {} from '@absaoss-cps/ui-watchtower';
 
 declare module '@absaoss-cps/ui-watchtower' {
   interface UwtScenarioNames {
-    // Only with route-navigation tracking (setup Step 6, option 1):
-    // /** A router navigation, from click to activated route, under the final route template. */
-    // 'kb-route-navigate': true;
-
-    // One entry per confirmed journey, <prefix>-<thing>-<action>, with a line saying what it measures:
-    // /** Loading the customer list, from request to first render. */
-    // 'kb-customers-load': true;
+    /** Opening a page inside the knowledge base, from the click to the new page being active. */
+    'kb-page-open': true;
   }
 
-  // Add once the first journey with steps is confirmed (no prefix: <action> or
-  // <thing>-<action>; steps and aggregates share this registry):
-  // interface UwtScenarioSteps {
-  //   /** Fetching data from the API. */
-  //   fetch: true;
-  // }
+  interface UwtScenarioSteps {
+    /** Fetching the next page. */
+    fetch: true;
+    /** Swapping the fetched page in, until it is active. */
+    render: true;
+  }
 
-  // Add once the first business event is confirmed (<prefix>-<thing>-<past-tense verb>):
-  // interface UwtBIEventNames {
-  //   /** The user exported the current result set. */
-  //   'kb-export-clicked': true;
-  // }
-
-  // Only when the app has a log backend (a real log provider, not the no-op one):
-  // interface UwtLoggerNames {
-  //   /** Application lifecycle and routing (<prefix>-<area>). */
-  //   'kb-lifecycle': true;
-  // }
+  interface UwtBIEventNames {
+    /** A Library card was clicked: which apps people choose from the catalog. */
+    'kb-app-card-clicked': true;
+  }
 }
 
 export {};

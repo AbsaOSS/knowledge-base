@@ -129,6 +129,21 @@ test('disposal settles custom scenarios and closes their shared channel', () => 
   expect(h.timers.size).toBe(0);
 });
 
+test('the host\'s web-fragment-unmount disposes, sending what is still open first', () => {
+  const h = harness();
+  const instance = startTelemetry(h.win, h.doc, h.connectShell);
+  const scenario = instance.telemetry.scenarios.start({ name: 'kb-custom-operation' });
+  h.win.dispatchEvent(new Event('web-fragment-unmount'));
+  expect(scenario.status).toBe('abandoned');
+  expect(h.state.records.filter((record) => record.eventType?.endsWith('.scenario'))
+    .map((record) => record.payload.status)).toEqual(['abandoned']);
+  expect(h.state.channels[0].closed).toBe(true);
+  expect(h.state.shellDisposals).toBe(1);
+  const next = startTelemetry(h.win, h.doc, h.connectShell);
+  expect(next).not.toBe(instance);
+  next.dispose();
+});
+
 test('reports readiness once per page activation and emits nothing of its own', () => {
   const h = harness();
   const instance = startTelemetry(h.win, h.doc, h.connectShell);
