@@ -1,6 +1,7 @@
 import { defineConfig } from 'astro/config';
 import tailwindcss from '@tailwindcss/vite';
 import { BASE_PATH, PATH_PREFIX } from './src/utils/config.js';
+import { isTelemetryBuild, shellAdapterPath, telemetryModulePath } from './src/utils/telemetry-config.js';
 
 export default defineConfig({
   base: BASE_PATH,
@@ -34,6 +35,16 @@ export default defineConfig({
         },
       },
     ],
+    // `kb-telemetry` is the real engine when explicitly enabled, or a
+    // dependency-free stub by default so Watchtower is not bundled. The
+    // deployment's shell adapter is bundled like any other module, so the
+    // host-specific handshake lives with the deployment and `script-src 'self'` holds.
+    resolve: {
+      alias: {
+        'kb-telemetry': telemetryModulePath(),
+        ...(isTelemetryBuild() && { 'kb-shell-adapter': shellAdapterPath() }),
+      },
+    },
     css: { modules: false },
     build: {
       // Astro inlines a component <script> smaller than this limit straight

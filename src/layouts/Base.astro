@@ -32,6 +32,7 @@ import { ClientRouter } from 'astro:transitions';
 import { shadowCompatStyle } from '../templates/shadow-compat.js';
 import { isHeadlessBuild } from '../utils/config.js';
 import { LAYER_ORDER } from '../utils/css-layers.js';
+import { isTelemetryBuild, loadTelemetryConfig } from '../utils/telemetry-config.js';
 
 interface Props {
   title?: string;
@@ -49,6 +50,7 @@ const {
   bodyClass = '',
   flexBody = true,
 } = Astro.props;
+const telemetry = isTelemetryBuild() ? loadTelemetryConfig() : null;
 
 // `??`, not `||`: an app pinned "headless": false in apps.json must be able to
 // opt out of a headless build. With `||` the prop could only ever turn headless
@@ -67,6 +69,7 @@ const bodyClasses = [
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta name="description" content="Documentation knowledge base — browse all doc sites in one place." />
+  {telemetry && <meta name="kb-telemetry" content={JSON.stringify(telemetry)} />}
   <title>{title}</title>
   {/*
     Cascade layer order — must be the first stylesheet the browser parses.
@@ -88,6 +91,7 @@ const bodyClasses = [
       inlined, so `script-src 'self'` holds (see astro.config.mjs). */}
   <script>
     import '../scripts/embedded-transitions.js';
+    import 'kb-telemetry';
   </script>
   <ClientRouter />
 </head>

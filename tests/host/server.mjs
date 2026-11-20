@@ -67,9 +67,11 @@ app.use(getNodeMiddleware(gateway, { mode: 'development' }));
 
 // Serve the web-fragments client bundle referenced by the shell's import map.
 app.use('/_wf', express.static(join(ROOT, 'node_modules', 'web-fragments', 'dist')));
+app.use('/_uwt', express.static(join(ROOT, 'node_modules', '@absaoss-cps', 'ui-watchtower', 'fesm2022')));
 
 // The Angular Router stand-in the shell loads (see the file's header comment).
 app.get('/host-router.js', (_req, res) => res.sendFile(join(__dirname, 'host-router.js')));
+app.get('/telemetry-host.js', (_req, res) => res.sendFile(join(__dirname, 'telemetry-host.js')));
 
 /**
  * The host shell. The host's own router (tests/host/host-router.js, an Angular
@@ -91,7 +93,11 @@ function shell({ routes, fragmentSrc = null }) {
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>WF Test Host — knowledge-base</title>
-  <script type="importmap">{ "imports": { "web-fragments": "/_wf/elements.js" } }</script>
+  <script type="importmap">{ "imports": {
+    "web-fragments": "/_wf/elements.js",
+    "@absaoss-cps/ui-watchtower": "/_uwt/absaoss-cps-ui-watchtower.mjs"
+  } }</script>
+  <script type="module" src="/telemetry-host.js"></script>
   <style>
     *{box-sizing:border-box}
     body{margin:0;font-family:system-ui,sans-serif;background:#f5f6f8}
