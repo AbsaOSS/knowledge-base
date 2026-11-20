@@ -1,0 +1,157 @@
+{
+  "schemaVersion": 1,
+  "pathPrefix": "knowledge-base",
+  "apps": [
+    {
+      "slug": "user-guide",
+      "name": "User Guide",
+      "description": "Primary docs app — the vendored docs-example fixture used as the integration guinea pig.",
+      "tags": [
+        "guide",
+        "getting-started"
+      ],
+      "kind": "artifact",
+      "url": null,
+      "sourceVersion": "prebuilt"
+    },
+    {
+      "slug": "guide-mirror",
+      "name": "Guide Mirror",
+      "description": "Second app in the same artifact, with a pages manifest, for cross-app navigation tests.",
+      "tags": [
+        "mirror",
+        "cross-app"
+      ],
+      "kind": "artifact",
+      "url": null,
+      "sourceVersion": "prebuilt"
+    },
+    {
+      "slug": "external-docs",
+      "name": "External Docs",
+      "description": "Iframe-onboarded external documentation site (temporary integration path).",
+      "tags": [
+        "external"
+      ],
+      "kind": "iframe",
+      "url": "https://example.com/docs",
+      "sourceVersion": null
+    },
+    {
+      "slug": "platform-overview",
+      "name": "Platform Overview",
+      "description": "How the platform is wired together, endpoint by endpoint.",
+      "tags": [
+        "platform",
+        "reference"
+      ],
+      "kind": "artifact",
+      "url": null,
+      "sourceVersion": "prebuilt"
+    },
+    {
+      "slug": "release-process",
+      "name": "Release Process",
+      "description": "How a release is cut and how the docs bundle gets attached.",
+      "tags": [
+        "process"
+      ],
+      "kind": "artifact",
+      "url": null,
+      "sourceVersion": "prebuilt"
+    }
+  ],
+  "pages": [
+    {
+      "app": "external-docs",
+      "route": "/knowledge-base/external-docs/",
+      "file": "external-docs/index.html",
+      "title": "External Docs",
+      "section": null
+    },
+    {
+      "app": "guide-mirror",
+      "route": "/knowledge-base/guide-mirror/",
+      "file": "guide-mirror/index.html",
+      "title": "Showcase",
+      "section": null
+    },
+    {
+      "app": "guide-mirror",
+      "route": "/knowledge-base/guide-mirror/docs/",
+      "file": "guide-mirror/docs/index.html",
+      "title": "Overview",
+      "section": null
+    },
+    {
+      "app": "guide-mirror",
+      "route": "/knowledge-base/guide-mirror/docs/adding-pages/",
+      "file": "guide-mirror/docs/adding-pages/index.html",
+      "title": "Adding Pages",
+      "section": "Guide"
+    },
+    {
+      "app": "guide-mirror",
+      "route": "/knowledge-base/guide-mirror/docs/customising/",
+      "file": "guide-mirror/docs/customising/index.html",
+      "title": "Customising",
+      "section": "Guide"
+    },
+    {
+      "app": "platform-overview",
+      "route": "/knowledge-base/platform-overview/",
+      "file": "platform-overview/index.html",
+      "title": "Platform Overview",
+      "section": null
+    },
+    {
+      "app": "release-process",
+      "route": "/knowledge-base/release-process/",
+      "file": "release-process/index.html",
+      "title": "Release Process",
+      "section": null
+    },
+    {
+      "app": "user-guide",
+      "route": "/knowledge-base/user-guide/",
+      "file": "user-guide/index.html",
+      "title": null,
+      "section": null
+    },
+    {
+      "app": "user-guide",
+      "route": "/knowledge-base/user-guide/admin/",
+      "file": "user-guide/admin/index.html",
+      "title": null,
+      "section": null
+    },
+    {
+      "app": "user-guide",
+      "route": "/knowledge-base/user-guide/docs/",
+      "file": "user-guide/docs/index.html",
+      "title": null,
+      "section": null
+    },
+    {
+      "app": "user-guide",
+      "route": "/knowledge-base/user-guide/docs/adding-pages/",
+      "file": "user-guide/docs/adding-pages/index.html",
+      "title": null,
+      "section": null
+    },
+    {
+      "app": "user-guide",
+      "route": "/knowledge-base/user-guide/docs/customising/",
+      "file": "user-guide/docs/customising/index.html",
+      "title": null,
+      "section": null
+    },
+    {
+      "app": "user-guide",
+      "route": "/knowledge-base/user-guide/docs/some-new-page/",
+      "file": "user-guide/docs/some-new-page/index.html",
+      "title": null,
+      "section": null
+    }
+  ]
+}

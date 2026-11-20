@@ -92,6 +92,8 @@ test.describe('kb-docs.schema.json rejects', () => {
     ['a slug with a leading hyphen', withApp(a => { a.slug = '-my-service'; })],
     ['a one-character slug', withApp(a => { a.slug = 'x'; })],
     ['a missing slug', withApp(a => { delete a.slug; })],
+    // nginx serves /knowledge-base/mcp itself, so this app's root would never be reached.
+    ['the reserved slug mcp', withApp(a => { a.slug = 'mcp'; })],
 
     ['a missing name', withApp(a => { delete a.name; })],
     ['a missing description', withApp(a => { delete a.description; })],

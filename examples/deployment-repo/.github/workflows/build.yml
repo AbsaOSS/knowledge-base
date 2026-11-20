@@ -54,6 +54,9 @@ jobs:
       kb-ref: v1.0.0
       registry: apps.json
       image-name: ghcr.io/absaoss/knowledge-base
+      # Optional: the MCP server, pushed with the same tags. It runs beside the
+      # site image in one task — see "The MCP server" in contract/DEPLOYMENT.md.
+      # mcp-image-name: ghcr.io/absaoss/knowledge-base-mcp
       image-tags: |
         ${{ github.sha }}
         latest
@@ -63,6 +66,9 @@ jobs:
       # runs-on: '["self-hosted", "linux"]'
       # npm-registry: https://artifactory.example.com/artifactory/api/npm/npm-remote/
       # node-mirror: https://artifactory.example.com/artifactory/nodejs-remote
+      # python-index: https://artifactory.example.com/artifactory/api/pypi/pypi-remote/simple
     secrets:
       docs-token: ${{ needs.token.outputs.token }}
       # npm-token: ${{ secrets.ARTIFACTORY_TOKEN }}
+      # python-index-username: ${{ secrets.ARTIFACTORY_USER }}
+      # python-index-token: ${{ secrets.ARTIFACTORY_TOKEN }}

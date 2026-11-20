@@ -11,6 +11,7 @@ import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'no
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { expandManifest } from '../src/utils/registry.js';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const BUILD = join(ROOT, 'scripts', 'build-vite.js');
@@ -109,6 +110,39 @@ test.describe('strict mode', () => {
     expect(output).toContain('not valid in a git tag');
     expect(output, 'the iframe entry must survive strict validation')
       .not.toContain('not allowed in a strict build');
+  });
+});
+
+// The site serves every page without the MCP server; only /knowledge-base/mcp needs it.
+test.describe('the example ECS task definition', () => {
+  const task = JSON.parse(readFileSync(join(ROOT, 'examples', 'deployment-repo', 'ecs-task-definition.json'), 'utf8'));
+  const container = (name) => task.containerDefinitions.find((c) => c.name === name);
+
+  test('a failing MCP container restarts on its own instead of stopping the site', () => {
+    expect(container('mcp').essential).toBe(false);
+    expect(container('mcp').restartPolicy?.enabled).toBe(true);
+    expect(container('site').essential).toBe(true);
+  });
+
+  test('the site starts without waiting for the MCP container', () => {
+    expect(container('site').dependsOn ?? []).toEqual([]);
+  });
+});
+
+// nginx answers /knowledge-base/mcp itself: an app with that slug would lose its root.
+test.describe('the reserved slug mcp', () => {
+  test('is refused for an iframe entry', () => {
+    const { ok, output } = rejects(
+      [{ type: 'iframe', slug: 'mcp', url: 'https://example.com/docs', name: 'MCP', description: 'Docs.' }],
+      { strict: false },
+    );
+    expect(ok).toBe(false);
+    expect(output).toContain('slug "mcp" is reserved');
+  });
+
+  test('is refused for an app in an artifact manifest', () => {
+    const manifest = { kbVersion: '1', apps: [{ slug: 'mcp', name: 'MCP', description: 'What the MCP docs cover.' }] };
+    expect(() => expandManifest({ prebuilt: 'artifact.tar.gz' }, manifest, ROOT)).toThrow('reserved slug "mcp"');
   });
 });
 

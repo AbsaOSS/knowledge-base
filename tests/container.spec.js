@@ -1,7 +1,8 @@
 /**
  * tests/container.spec.js
  *
- * Integration tests against the real production image — nginx serving dist/,
+ * Integration tests against the real production images — nginx serving dist/
+ * and proxying /knowledge-base/mcp to the MCP server container beside it —
  * driven through playwright.config.docker.js.
  *
  * Everything here is a claim that only the actual nginx.conf can settle:
@@ -16,6 +17,9 @@ import { test, expect } from '@playwright/test';
 import { execFileSync } from 'node:child_process';
 
 const CONTAINER = 'kb-container-test';
+const MCP_CONTAINER = 'kb-container-test-mcp';
+const PORT = process.env.KB_CONTAINER_PORT || '8099';
+const SITE_ORIGIN = `http://localhost:${PORT}`;
 
 /** The set nginx.headers.conf defines and every location block must include. */
 const SHARED_HEADERS = {
@@ -311,6 +315,140 @@ test.describe('CSP in a browser', () => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
+// The MCP endpoint, through nginx
+//
+// nginx owns the generic limits (rate, body size), the MCP server the protocol
+// checks (Origin, Host) and CORS. Only the real pair settles how they combine:
+// the in-process Python tests never see nginx, and nginx.config.spec.js only
+// reads the config. Serial, so the rate-limit test runs last and alone.
+// ─────────────────────────────────────────────────────────────────────────────
+
+test.describe('MCP endpoint', () => {
+  test.describe.configure({ mode: 'serial' });
+
+  const ENDPOINT = '/knowledge-base/mcp';
+  const JSON_HEADERS = { 'Content-Type': 'application/json', Accept: 'application/json, text/event-stream' };
+  const rpc = (method, params = {}) => ({ jsonrpc: '2.0', id: 1, method, params });
+  const INITIALIZE = rpc('initialize', {
+    protocolVersion: '2025-11-25',
+    capabilities: {},
+    clientInfo: { name: 'container-test', version: '1' },
+  });
+
+  test('an agent can initialize through nginx', async ({ request }) => {
+    const res = await request.post(ENDPOINT, { headers: JSON_HEADERS, data: INITIALIZE });
+    expect(res.status()).toBe(200);
+    expect((await res.json()).result.serverInfo.name).toBe('knowledge-base');
+    expect(res.headers()['cache-control']).toBe('no-store');
+  });
+
+  test('search finds the fixture docs and links them on the public origin', async ({ request }) => {
+    const res = await request.post(ENDPOINT, {
+      headers: JSON_HEADERS,
+      data: rpc('tools/call', { name: 'search_documents', arguments: { query: 'release' } }),
+    });
+    expect(res.status()).toBe(200);
+    const { structuredContent } = (await res.json()).result;
+    expect(structuredContent.total).toBeGreaterThan(0);
+    for (const hit of structuredContent.results) {
+      expect(hit.url).toMatch(new RegExp(`^${SITE_ORIGIN}/knowledge-base/`));
+    }
+  });
+
+  test('a browser opening the endpoint gets the explanation page, with the security headers', async ({ request }) => {
+    const res = await request.get(ENDPOINT);
+    expect(res.status()).toBe(405);
+    expect(res.headers()['allow']).toBe('POST');
+    expect(await res.text()).toContain(`${SITE_ORIGIN}${ENDPOINT}`);
+    expect(res.headers()['x-content-type-options']).toBe('nosniff');
+    expect(res.headers()['content-security-policy']).toBeTruthy();
+  });
+
+  test('CORS comes from the MCP server alone, for its allowed origins', async ({ request }) => {
+    const preflight = await request.fetch(ENDPOINT, {
+      method: 'OPTIONS',
+      headers: {
+        Origin: SITE_ORIGIN,
+        'Access-Control-Request-Method': 'POST',
+        'Access-Control-Request-Headers': 'content-type',
+      },
+    });
+    expect(preflight.status(), 'answered by the MCP server, not the static 204').toBe(200);
+    expect(preflight.headersArray().filter((h) => h.name.toLowerCase() === 'access-control-allow-origin'))
+      .toEqual([{ name: expect.any(String), value: SITE_ORIGIN }]);
+
+    const call = await request.post(ENDPOINT, { headers: { ...JSON_HEADERS, Origin: SITE_ORIGIN }, data: INITIALIZE });
+    expect(call.status()).toBe(200);
+    expect(call.headers()['access-control-allow-origin']).toBe(SITE_ORIGIN);
+  });
+
+  test('a page from another origin is refused', async ({ request }) => {
+    const res = await request.post(ENDPOINT, {
+      headers: { ...JSON_HEADERS, Origin: 'https://evil.example' },
+      data: INITIALIZE,
+    });
+    expect(res.status()).toBe(403);
+  });
+
+  test('a body over 64 KiB is refused by nginx', async ({ request }) => {
+    const res = await request.post(ENDPOINT, {
+      headers: JSON_HEADERS,
+      data: rpc('tools/call', { name: 'search_documents', arguments: { query: 'x'.repeat(70 * 1024) } }),
+    });
+    expect(res.status()).toBe(413);
+  });
+
+  // Production puts a web-fragments gateway in front of the task. Its fragment
+  // middleware cannot forward a request body, so the reference host proxies
+  // the MCP path itself, before the gateway — what contract/DEPLOYMENT.md asks
+  // of a real host. These go through that host, not straight to nginx.
+  test.describe('through the web-fragments host', () => {
+    const GATEWAY = `http://localhost:${process.env.KB_GATEWAY_PORT || '8098'}`;
+
+    test('an agent can call a tool', async ({ request }) => {
+      const res = await request.post(`${GATEWAY}${ENDPOINT}`, {
+        headers: JSON_HEADERS,
+        data: rpc('tools/call', { name: 'search_documents', arguments: { query: 'release' } }),
+      });
+      expect(res.status()).toBe(200);
+      expect((await res.json()).result.structuredContent.total).toBeGreaterThan(0);
+    });
+
+    test('a browser preflight reaches the MCP server', async ({ request }) => {
+      const res = await request.fetch(`${GATEWAY}${ENDPOINT}`, {
+        method: 'OPTIONS',
+        headers: { Origin: SITE_ORIGIN, 'Access-Control-Request-Method': 'POST', 'Sec-Fetch-Dest': 'empty' },
+      });
+      expect(res.status()).toBe(200);
+      expect(res.headers()['access-control-allow-origin']).toBe(SITE_ORIGIN);
+    });
+
+    test('a browser opening the endpoint gets the explanation page, not the app shell', async ({ request }) => {
+      const res = await request.get(`${GATEWAY}${ENDPOINT}`, { headers: { 'Sec-Fetch-Dest': 'document' } });
+      expect(res.status()).toBe(405);
+      expect(await res.text()).toContain('MCP client required');
+    });
+
+    test('the site itself still goes through the gateway', async ({ request }) => {
+      const res = await request.get(`${GATEWAY}/knowledge-base/`);
+      expect(res.status()).toBe(200);
+      expect(res.headers()['x-web-fragment-id']).toBe('knowledge-base');
+    });
+  });
+
+  test('a burst beyond the per-client limit is answered 429', async ({ request }) => {
+    const statuses = await Promise.all(
+      Array.from({ length: 80 }, () => request.post(ENDPOINT, { headers: JSON_HEADERS, data: INITIALIZE })
+        .then((res) => res.status())),
+    );
+    expect(statuses).toContain(429);
+    // The burst nginx lets through can still exceed the server's concurrency
+    // cap; that is answered 503, the server's own backstop. Nothing else.
+    expect(statuses.filter((status) => ![200, 429, 503].includes(status))).toEqual([]);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Container posture
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -322,6 +460,11 @@ test.describe('container', () => {
     const processes = execFileSync('docker', ['exec', CONTAINER, 'ps', '-o', 'user,comm'], { encoding: 'utf8' });
     const owners = processes.trim().split('\n').slice(1).map((l) => l.trim().split(/\s+/)[0]);
     expect(owners.filter((u) => u === 'root'), 'no nginx process may run as root').toEqual([]);
+  });
+
+  test('the MCP server does not run as root', () => {
+    const id = execFileSync('docker', ['exec', MCP_CONTAINER, 'id', '-u'], { encoding: 'utf8' });
+    expect(id.trim()).not.toBe('0');
   });
 
   test('the shipped nginx config is valid', () => {
