@@ -53,4 +53,4 @@ export function isHeadlessBuild(env = process.env) {
  * same answer within one build, and an environment variable that changed
  * halfway would silently produce a dist/ assembled from two registries.
  */
-export const REGISTRY_FILE = process.env.KB_REGISTRY?.trim() || 'apps.json';
+export const REGISTRY_FILE = (typeof process !== 'undefined' && process.env.KB_REGISTRY?.trim()) || 'apps.json';

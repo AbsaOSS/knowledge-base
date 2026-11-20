@@ -10,7 +10,11 @@ window.__kbTestShell = { channelName };
 const state = window.__kbTelemetryTest = { events: [], readiness: [] };
 
 class RecordingSink extends UwtTelemetrySink {
-  record(eventType, payload, metadata) { state.events.push({ kind: 'event', eventType, payload, metadata }); }
+  record(eventType, payload, metadata) {
+    state.events.push({ kind: 'event', eventType, payload, metadata });
+    // A test that reloads the shell defines this with page.exposeFunction, which survives the reload.
+    window.__kbTelemetryRecord?.({ eventType, payload });
+  }
   recordError() {}
   getSessionId() { return undefined; }
   setUserId() {}

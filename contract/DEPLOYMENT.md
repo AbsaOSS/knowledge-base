@@ -95,8 +95,21 @@ and the same event namespace. The shell owns RUM, credentials, session/user
 identity and page views; KB never calls a credential endpoint or changes user
 identity.
 
-The knowledge base sends no events of its own yet. Future events are declared
-in `src/telemetry.schema.ts`.
+Events (declared in `src/telemetry.schema.ts`):
+
+- `kb-app-card-clicked` under `{namespace}.bi`: a Library card was clicked.
+  Metadata is only `app`, the registered slug of the app it opens. Page views
+  are the shell's; the knowledge base records none itself.
+- `kb-page-open` under `{namespace}.scenario`: opening a page inside the
+  knowledge base, from the click to the new page being active, with steps
+  `fetch` and `render`. Not the first page of a visit, which is the shell's.
+  `route` is `/knowledge-base/` or `/knowledge-base/:app/*`; on success,
+  metadata `app` is the slug of the app that opened. Outcomes: `success`;
+  `incomplete` with `reason: browser-fallback` when the router hands the link
+  to the browser (a missing page, a non-HTML link, a failed fetch); `abandoned`
+  with `reason: superseded` when a newer click came first. A page still
+  opening when the shell removes the knowledge base is `abandoned` if the
+  shell sends `web-fragment-unmount` (see above); otherwise it is not recorded.
 
 No document text/title, query/hash, full URL, search text or raw errors are
 captured by KB. The shell's own SDK may attach its standard RUM envelope; the shell's
