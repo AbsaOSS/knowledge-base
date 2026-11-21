@@ -28,6 +28,18 @@ import { isThemeBootstrap } from './theme.js';
 // ── URL rewriting ─────────────────────────────────────────────────────────────
 
 /**
+ * Percent-encodes each segment of a '/'-separated file path, turning it into
+ * the URL path it is served at. An artifact may name a directory `topics#faq`
+ * or `a?b`; unencoded, the delimiter would end the path wherever the string
+ * is used as a URL — a link, or the base a relative URL is resolved against.
+ *
+ * @param {string} path - e.g. 'docs/topics#faq'
+ */
+export function encodePath(path) {
+  return path.split('/').map(encodeURIComponent).join('/');
+}
+
+/**
  * Resolves a single URL attribute value to an absolute path.
  * Returns null for URLs that should not be rewritten (external, anchors, data:, etc.).
  */
@@ -171,7 +183,8 @@ export { isThemeBootstrap };
  * @returns {{headHtml: string, bodyHtml: string, bodyClass: string, title: string|null}}
  */
 export function transformSubAppHtml(html, slug, fileRelDir, prefix) {
-  const base = `/${prefix}/${slug}/${fileRelDir ? fileRelDir + '/' : ''}`;
+  // Encoded: the directory is a file path, and the base is used as a URL.
+  const base = `/${prefix}/${slug}/${fileRelDir ? encodePath(fileRelDir) + '/' : ''}`;
 
   // parse() always yields html > head + body, so a document that ships no
   // explicit <body> is split the same way a browser would split it — no

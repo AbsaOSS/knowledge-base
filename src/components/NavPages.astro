@@ -1,0 +1,28 @@
+---
+// src/components/NavPages.astro
+//
+// A list of manifest pages — the body of a section dropdown in the masthead
+// bar and of the same section in the compact menu. The page being viewed
+// stays a link, marked aria-current="page", so it is announced as current
+// without leaving a hole in the keyboard order.
+
+interface Props {
+  pages: { title: string; href: string }[];
+  currentPath: string;
+  label?: string;
+}
+
+const { pages, currentPath, label } = Astro.props;
+---
+
+<ul class="kb-nav-pages" role="list" aria-label={label}>
+  {pages.map((page) => (
+    <li>
+      <a
+        class={`kb-nav-page${page.href === currentPath ? ' active' : ''}`}
+        href={page.href}
+        aria-current={page.href === currentPath ? 'page' : undefined}
+      >{page.title}</a>
+    </li>
+  ))}
+</ul>
