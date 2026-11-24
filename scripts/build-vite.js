@@ -26,6 +26,7 @@ import { downloadArtifact } from './fetch-apps.js';
 import { HOIST_DIR, hoistAppInlineScripts } from './hoist-inline-scripts.js';
 import { collectHtmlFiles } from '../src/utils/apps.js';
 import { PATH_PREFIX, REGISTRY_FILE } from '../src/utils/config.js';
+import { isTelemetryBuild, loadTelemetryConfig, shellAdapterPath } from '../src/utils/telemetry-config.js';
 import { layerSubAppCss } from '../src/utils/css-layers.js';
 import { rewriteCssUrls } from '../src/utils/transform.js';
 import { checkApp, reportFindings } from './check-artifact.js';
@@ -210,8 +211,12 @@ function copyAsset(src, dest) {
 }
 
 async function build() {
+  if (isTelemetryBuild()) {
+    loadTelemetryConfig(ROOT);
+    shellAdapterPath(ROOT);
+  }
   const startMs = Date.now();
-  const modeLabel = [LOCAL_MODE && 'local', HEADLESS && 'headless', STRICT && 'strict'].filter(Boolean).join(', ');
+  const modeLabel = [LOCAL_MODE && 'local', HEADLESS && 'headless', STRICT && 'strict', !isTelemetryBuild() && 'no telemetry'].filter(Boolean).join(', ');
   console.log('\n\x1b[1m\x1b[35m▶ knowledge-base build' + (modeLabel ? ' (' + modeLabel + ')' : '') + '\x1b[0m\n');
 
   // resolve, not join: KB_REGISTRY may be absolute — a deployment repo owns its
