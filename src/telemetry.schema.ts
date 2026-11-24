@@ -14,4 +14,23 @@
 // Loads the module being augmented, even where nothing else in the program imports it.
 import type {} from '@absaoss-cps/ui-watchtower';
 
+declare module '@absaoss-cps/ui-watchtower' {
+  interface UwtScenarioNames {
+    /** Opening a page inside the knowledge base, from the click to the new page being active. */
+    'kb-page-open': true;
+  }
+
+  interface UwtScenarioSteps {
+    /** Fetching the next page. */
+    fetch: true;
+    /** Swapping the fetched page in, until it is active. */
+    render: true;
+  }
+
+  interface UwtBIEventNames {
+    /** A Library card was clicked: which apps people choose from the catalog. */
+    'kb-app-card-clicked': true;
+  }
+}
+
 export {};

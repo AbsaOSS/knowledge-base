@@ -50,9 +50,10 @@ reframes the markup into a shadow root — no full page reload between pages.
 
 Telemetry is excluded from builds by default. With `KB_TELEMETRY=true` the
 build includes UI Watchtower (`@absaoss-cps/ui-watchtower`), connects to a host
-shell's Watchtower receiver and reports readiness to the shell. The knowledge
-base sends no events of its own yet. The deployment supplies which shell that
-is and the telemetry identity; see
+shell's Watchtower receiver and reports readiness to the shell. It counts
+Library card clicks (`kb-app-card-clicked`) and times each page opened inside
+it (`kb-page-open`); page views are the shell's.
+The deployment supplies which shell that is and the telemetry identity; see
 [deployment configuration](contract/DEPLOYMENT.md#optional-telemetry).
 
 Knowledge Base scripts can use the same engine for additional instrumentation:
