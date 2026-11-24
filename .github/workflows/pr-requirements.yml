@@ -17,7 +17,7 @@ on:
 # Least privilege: read PR metadata only.
 permissions:
   contents: read
-  pull-requests: read
+  pull-requests: write
 
 jobs:
   check-pr:
@@ -50,7 +50,7 @@ jobs:
 
       - name: Check PR requirements
         if: github.event_name == 'pull_request'
-        uses: AbsaOSS/check-pr-requirements@0d4f326fcf798afc702480a68281ab5694236a57 # v0.3.0
+        uses: AbsaOSS/check-pr-requirements@40a8970bea7014f119ec34a044082ac304999873 # v0.4.0
         with:
           pr-title: ${{ github.event.pull_request.title }}
           pr-body: ${{ github.event.pull_request.body }}
@@ -65,6 +65,7 @@ jobs:
           check-description: "true"
           check-issue-reference: "true"
           check-branch-name: "true"
+          warn-checks: "branch-name"
           check-pr-size: "true"
           check-target-branch: "true"
           check-release-notes: "false" # no release-notes convention yet
