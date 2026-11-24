@@ -67,7 +67,8 @@ Closes #43
 
 ### Size
 
-**Maximum 50 changed files per PR.** Split larger work.
+**Aim for at most 50 changed files per PR**, and split larger work where practical. The PR
+check reports a bigger PR as a warning; it does not fail it.
 
 ## Commits
 
@@ -92,10 +93,11 @@ that is the bug — fix the change, not the test.
 A fourth suite needs Docker and is therefore **not** part of `npm test`:
 
 ```bash
-npm run test:container   # integration tests against the real nginx image
+npm run test:container   # integration tests against the real nginx + MCP images
 ```
 
-Run it when touching `nginx.conf`, `nginx.headers.conf` or the `Dockerfile`. It
+Run it when touching `nginx.conf`, `nginx.headers.conf`, `nginx.security-headers.conf`,
+either `Dockerfile` (the site's or `mcp-server/`'s) or the MCP server's HTTP behaviour. It
 is the only place the shipped config is executed — the other suites run against
 `tests/fragment-server.mjs`, an Express mirror of the nginx rewrites. That mirror
 is a second implementation of the same contract and it has drifted twice
@@ -109,6 +111,22 @@ Before trusting a green run: `docker ps --filter "publish=8099"`, remove
 anything there, rebuild, then run it.
 
 `npm audit --omit=dev --audit-level=high` must also stay clean; it gates CI.
+
+Touching `mcp-server/` (the Python MCP server)? From that directory, all five must
+pass — CI's `mcp` job runs the same:
+
+```bash
+uv run ruff format --check .    # format
+uv run ruff check .             # lint
+uv run mypy                     # strict types
+uv run lint-imports             # layering contracts in pyproject.toml
+uv run pytest                   # unit + protocol tests, 90% branch coverage
+```
+
+A change to the page manifest (`scripts/page-manifest.js`) is a change to the
+indexer's input: update `scripts/page-manifest.schema.json`,
+`mcp-server/src/kb_mcp/indexer/manifest.py` and `mcp-server/tests/fixtures/pages.json`
+together.
 
 ## Repository conventions
 

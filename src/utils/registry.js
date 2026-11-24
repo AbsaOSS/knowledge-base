@@ -37,6 +37,8 @@ const ICONS = [
 ];
 const DEFAULT_ICON = 'book-open';
 const SLUG_RE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+/** nginx answers /knowledge-base/mcp itself (the MCP endpoint), so an app there would lose its root. */
+const RESERVED_SLUGS = new Set(['mcp']);
 
 /** Artifact size budget from contract/ARTIFACT.md, in bytes. */
 export const SIZE_WARN  = 20 * 1024 * 1024;
@@ -95,6 +97,7 @@ export function validateEntry(app, index) {
     if (!SLUG_RE.test(app.slug)) {
       throw new Error(`${where}: slug ${JSON.stringify(app.slug)} must be lowercase kebab-case.`);
     }
+    if (RESERVED_SLUGS.has(app.slug)) throw new Error(`${where}: slug "${app.slug}" is reserved.`);
     if (!app.url) throw new Error(`${app.slug}: an iframe entry needs a "url".`);
     for (const field of SOURCES) {
       if (app[field]) throw new Error(`${app.slug}: an iframe entry must not also set "${field}".`);
@@ -210,6 +213,7 @@ export function expandManifest(entry, manifest, root) {
     if (typeof app?.slug !== 'string' || !SLUG_RE.test(app.slug)) {
       throw new Error(`${where} has an invalid slug ${JSON.stringify(app?.slug)} — expected lowercase kebab-case.`);
     }
+    if (RESERVED_SLUGS.has(app.slug)) throw new Error(`${where} uses the reserved slug "${app.slug}".`);
     if (seen.has(app.slug)) {
       throw new Error(`${where} repeats slug "${app.slug}" — slugs must be unique within an artifact.`);
     }

@@ -30,7 +30,8 @@
           "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$",
           "minLength": 2,
           "maxLength": 32,
-          "description": "Names the app's directory in the archive and its public URL prefix /knowledge-base/{slug}/. Must be unique across the whole knowledge base — prefix it with your service name."
+          "not": { "const": "mcp" },
+          "description": "Names the app's directory in the archive and its public URL prefix /knowledge-base/{slug}/. Must be unique across the whole knowledge base — prefix it with your service name. \"mcp\" is reserved: /knowledge-base/mcp is the MCP endpoint."
         },
         "name": {
           "type": "string",

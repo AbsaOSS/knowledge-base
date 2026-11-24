@@ -468,6 +468,25 @@ docker build -t knowledge-base .
 docker run -p 8080:8080 knowledge-base   # http://localhost:8080/knowledge-base/
 ```
 
+### MCP server for AI agents
+
+Agents can search and read the knowledge base over the Model Context Protocol at
+`/knowledge-base/mcp`. The server is a Python service in [`mcp-server/`](mcp-server),
+shipped as a second image from the same `dist/` and run beside the site image in
+one task; nginx proxies the endpoint to it.
+
+```bash
+docker build -f mcp-server/Dockerfile -t knowledge-base-mcp .
+docker run -d --name kb-mcp -p 8080:8080 knowledge-base-mcp
+docker run --network container:kb-mcp knowledge-base
+claude mcp add --transport http knowledge-base http://localhost:8080/knowledge-base/mcp
+```
+
+Using and operating it: [`docs/mcp.md`](docs/mcp.md). Deploying it:
+[`contract/DEPLOYMENT.md`](contract/DEPLOYMENT.md#the-mcp-server). Developing it:
+[`docs/mcp-development.md`](docs/mcp-development.md). Why it is built this way:
+[`docs/adr/0001-mcp-server.md`](docs/adr/0001-mcp-server.md).
+
 ### Deploy configuration (example — AWS ECS)
 
 | Variable | Description |
@@ -502,11 +521,13 @@ knowledge-base/
 │       ├── config.js          ← PATH_PREFIX / BASE_PATH + isHeadlessBuild()
 │       ├── registry.js         ← registry rules + manifest parsing + expansion
 │       └── transform.js       ← parse5 URL rewriting + sub-app document splitting
+├── mcp-server/                ← MCP server for AI agents (Python, uv; own Dockerfile)
 ├── scripts/
 │   ├── build-vite.js          ← Build orchestrator
 │   ├── fetch-apps.js          ← GitHub Release download + extract
 │   ├── artifacts.js           ← Safe tarball extraction + tree copy
 │   ├── hoist-inline-scripts.js ← Inline <script> → file, so the CSP can be strict
+│   ├── page-manifest.js       ← dist/_kb/pages.json, the MCP indexer's input
 │   └── setup-test-apps.mjs    ← Generates the hermetic test apps.json
 ├── tests/
 │   ├── web-fragment.spec.js   ← Embedded harness suite
@@ -516,7 +537,7 @@ knowledge-base/
 │   ├── artifact-safety.spec.js ← Tarball extraction guards
 │   ├── nginx-config.spec.js   ← nginx header-inheritance guard (static)
 │   ├── container.spec.js      ← Integration suite vs. the real nginx image
-│   ├── container/serve.mjs    ← Builds + runs the image for that suite
+│   ├── container/serve.mjs    ← Builds + runs both images for that suite
 │   ├── host/server.mjs        ← Reference web-fragments host (gateway)
 │   ├── fragment-server.mjs    ← nginx-mirroring static server
 │   ├── support/fragment.js    ← Shadow-DOM test helpers
@@ -525,9 +546,10 @@ knowledge-base/
 ├── .github/workflows/         ← ci.yml, pages.yml, pr-requirements.yml,
 │                                 validate-doc-app.yml (reusable, for doc repos)
 ├── Dockerfile
-├── nginx.conf                 ← server block (rewrites, caching, routing)
-└── nginx.headers.conf         ← shared CORS + security headers, included by
-                                 every block in nginx.conf that sets a header
+├── nginx.conf                 ← server block (rewrites, caching, routing, MCP proxy)
+├── nginx.headers.conf         ← shared CORS + security headers, included by
+│                                every block in nginx.conf that sets a header
+└── nginx.security-headers.conf ← the security half alone, for the MCP proxy
 ```
 
 ---
