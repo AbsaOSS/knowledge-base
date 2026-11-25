@@ -21,7 +21,7 @@ import Masthead from '../components/Masthead.astro';
 export function getStaticPaths() {
   return getAppPages(process.cwd(), isHeadlessBuild()).map(({ routePath, ...props }) => ({
     params: { path: routePath },
-    props,
+    props: { ...props, routePath },
   }));
 }
 
@@ -30,7 +30,7 @@ const { slug, appHeadless, app, title } = props;
 
 const parts = props.iframe
   ? null
-  : transformSubAppHtml(readFileSync(props.file, 'utf-8'), slug, props.fileRelDir, PATH_PREFIX);
+  : transformSubAppHtml(readFileSync(props.file, 'utf-8'), slug, props.fileRelDir, PATH_PREFIX, props.routePath);
 
 const pageTitle = title ?? parts?.title ?? app?.name ?? 'Knowledge base';
 

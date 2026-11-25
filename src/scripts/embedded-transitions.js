@@ -2,7 +2,8 @@
  * src/scripts/embedded-transitions.js
  *
  * Makes Astro's <ClientRouter /> behave inside a web fragment. Base.astro loads
- * it on every page; standalone it does nothing.
+ * it on every page; standalone it only preserves the current URL for
+ * fragment-only links rewritten by the build.
  *
  * Embedded, the knowledge base's scripts run in reframed's hidden iframe, whose
  * `document` is patched so that documentElement/head/body resolve to the
@@ -80,6 +81,40 @@ if (host) {
       await stylesheetsLoaded();
     });
 }
+
+// Astro retains the destination URL after a swap, even when the host router
+// removes its trailing slash from location. Use that URL for same-page links.
+let routerPath = location.pathname;
+document.addEventListener('astro:before-swap', (event) => {
+  routerPath = event.to.pathname;
+});
+
+document.addEventListener('click', (event) => {
+  const link = event.target?.closest?.('a[href]');
+  if (link?.hasAttribute('data-kb-local-fragment')) {
+    const href = link.getAttribute('href');
+    const hashAt = href.indexOf('#');
+    if (hashAt !== -1) link.setAttribute('href', routerPath + location.search + href.slice(hashAt));
+  }
+  if (window.top === window || event.defaultPrevented || event.button !== 0 ||
+      event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+  if (!link || link.hasAttribute('download') || (link.target && link.target !== '_self')) return;
+  if (!URL.canParse(link.href, location.href)) return;
+  const url = new URL(link.href, location.href);
+  if (!url.hash || url.origin !== location.origin ||
+      url.pathname.replace(/\/$/, '') !== location.pathname.replace(/\/$/, '') ||
+      url.search !== location.search) return;
+  let id;
+  try {
+    id = decodeURIComponent(url.hash.slice(1));
+  } catch {
+    return;
+  }
+  // Native fragment scrolling cannot reliably find a target inside reframed's
+  // shadow tree. Let Astro handle history, then scroll the visible element.
+  const target = document.getElementById(id);
+  if (target) setTimeout(() => target.scrollIntoView(), 0);
+}, true);
 
 /** The reframed element, or what Astro would use when the document is not reframed. */
 const pick = (doc, tag, fallback) => doc.querySelector(tag) ?? fallback;

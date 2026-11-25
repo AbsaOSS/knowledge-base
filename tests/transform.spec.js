@@ -234,7 +234,7 @@ test.describe('sub-app CSS layering', () => {
     expect(headHtml).toContain('content="/not-a-url"');
   });
 
-  test('leaves external, anchor and data URLs alone', () => {
+  test('leaves external and data URLs alone', () => {
     const { bodyHtml } = run(doc(
       '<a href="https://example.com/x">e</a>' +
       '<a href="#top">t</a>' +
@@ -243,10 +243,18 @@ test.describe('sub-app CSS layering', () => {
       '<img src="data:image/gif;base64,R0lGOD">',
     ));
     expect(bodyHtml).toContain('href="https://example.com/x"');
-    expect(bodyHtml).toContain('href="#top"');
+    expect(bodyHtml).toContain('href="/knowledge-base/demo/#top"');
     expect(bodyHtml).toContain('href="mailto:x@y.z"');
     expect(bodyHtml).toContain('href="//cdn.example.com/x"');
     expect(bodyHtml).toContain('src="data:image/gif;base64,R0lGOD"');
+  });
+
+  test('heading links use the published page route without rewriting SVG fragment references', () => {
+    const html = doc('<a href="#section%20one">section</a><svg><use href="#icon"></use></svg>');
+    expect(run(html, 'docs/deep').bodyHtml).toContain('href="/knowledge-base/demo/docs/deep/#section%20one"');
+    const { bodyHtml } = transformSubAppHtml(html, SLUG, 'nested', PREFIX, 'demo');
+    expect(bodyHtml).toContain('href="/knowledge-base/demo/#section%20one"');
+    expect(bodyHtml).toContain('<use href="#icon">');
   });
 
   test('does not rewrite markup quoted in prose or comments', () => {

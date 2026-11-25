@@ -22,6 +22,16 @@
 
 import { test, expect } from '@playwright/test';
 
+test('heading links preserve the current page and query string', async ({ page }) => {
+  await page.goto('/knowledge-base/release-process?tab=1');
+  await page.evaluate(() => { window.__headingLinkSentinel = true; });
+  await page.locator('#steps a.kb-anchor').click();
+  await expect.poll(() => new URL(page.url()).hash).toBe('#steps');
+  expect(new URL(page.url()).pathname.replace(/\/$/, '')).toBe('/knowledge-base/release-process');
+  expect(new URL(page.url()).search).toBe('?tab=1');
+  expect(await page.evaluate(() => window.__headingLinkSentinel)).toBe(true);
+});
+
 // ─────────────────────────────────────────────────────────────────────────────
 // HTTP header safety
 // ─────────────────────────────────────────────────────────────────────────────
