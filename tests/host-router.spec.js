@@ -125,6 +125,20 @@ for (const [mode, goto] of [['unbound', gotoFragment], ['bound', gotoBoundFragme
       expect(new URL(page.url()).search).toBe('?tab=1');
     }
   });
+
+  for (const [action, button] of [['middle-click', 'middle'], ['context menu', 'right']]) {
+    test(`${mode} ${action} prepares heading links with the fragment query`, async ({ page }) => {
+      await goto(page, '/knowledge-base/release-process/?tab=1');
+      const link = page.locator('#steps a.kb-anchor');
+      const newTab = button === 'middle' ? page.context().waitForEvent('page') : null;
+      await link.click({ button });
+      if (newTab) {
+        const opened = await newTab;
+        expect(opened.url()).toMatch(/\/knowledge-base\/release-process\/?\?tab=1#steps$/);
+      }
+      await expect(link).toHaveAttribute('href', /\/knowledge-base\/release-process\/?\?tab=1#steps$/);
+    });
+  }
 }
 
 test('heading links work on a nested page after a client-side navigation', async ({ page }) => {

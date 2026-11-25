@@ -86,13 +86,20 @@ if (host) {
 // removes its trailing slash from location. Use that URL for same-page links.
 let routerPath = location.pathname;
 
-document.addEventListener('click', (event) => {
+function prepareFragmentLink(event) {
   const link = event.target?.closest?.('a[href]');
   if (link?.hasAttribute('data-kb-local-fragment')) {
     const href = link.getAttribute('href');
     const hashAt = href.indexOf('#');
     if (hashAt !== -1) link.setAttribute('href', routerPath + location.search + href.slice(hashAt));
   }
+  return link;
+}
+
+document.addEventListener('auxclick', prepareFragmentLink, true);
+document.addEventListener('contextmenu', prepareFragmentLink, true);
+document.addEventListener('click', (event) => {
+  const link = prepareFragmentLink(event);
   if (window.top === window || event.defaultPrevented || event.button !== 0 ||
       event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
   if (!link || link.hasAttribute('download') || (link.target && link.target !== '_self')) return;

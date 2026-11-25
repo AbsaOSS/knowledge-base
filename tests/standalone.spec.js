@@ -32,6 +32,22 @@ test('heading links preserve the current page and query string', async ({ page }
   expect(await page.evaluate(() => window.__headingLinkSentinel)).toBe(true);
 });
 
+test('middle-click opens a heading link with the current query', async ({ page }) => {
+  await page.goto('/knowledge-base/release-process?tab=1');
+  const link = page.locator('#steps a.kb-anchor');
+  const popupPromise = page.context().waitForEvent('page');
+  await link.click({ button: 'middle' });
+  const popup = await popupPromise;
+  await expect(popup).toHaveURL(/\/knowledge-base\/release-process\/?\?tab=1#steps$/);
+});
+
+test('context menu prepares a heading link with the current query', async ({ page }) => {
+  await page.goto('/knowledge-base/release-process?tab=1');
+  const link = page.locator('#steps a.kb-anchor');
+  await link.click({ button: 'right' });
+  await expect(link).toHaveAttribute('href', '/knowledge-base/release-process?tab=1#steps');
+});
+
 // ─────────────────────────────────────────────────────────────────────────────
 // HTTP header safety
 // ─────────────────────────────────────────────────────────────────────────────
