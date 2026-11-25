@@ -126,6 +126,47 @@ for (const [mode, goto] of [['unbound', gotoFragment], ['bound', gotoBoundFragme
     }
   });
 
+  test(`${mode} cancelled fragment links do not scroll`, async ({ page }) => {
+    await goto(page, '/knowledge-base/release-process/?tab=1');
+    await page.evaluate(() => {
+      const doc = document.querySelector('web-fragment').shadowRoot
+        .querySelector('web-fragment-host').shadowRoot;
+      const heading = doc.querySelector('#steps');
+      const scroll = heading.scrollIntoView.bind(heading);
+      heading.scrollCount = 0;
+      heading.scrollIntoView = (...args) => { heading.scrollCount++; scroll(...args); };
+      for (const kind of ['target', 'bubble', 'stopped', 'accepted']) {
+        const parent = document.createElement('span');
+        const link = heading.querySelector('a').cloneNode();
+        link.id = `test-${kind}-link`;
+        link.textContent = kind;
+        if (kind === 'target') link.addEventListener('click', (event) => event.preventDefault());
+        if (kind === 'bubble') parent.addEventListener('click', (event) => event.preventDefault());
+        if (kind === 'stopped') parent.addEventListener('click', (event) => {
+          event.preventDefault();
+          event.stopPropagation();
+        });
+        parent.append(link);
+        heading.parentElement.prepend(parent);
+      }
+    });
+
+    for (const kind of ['target', 'bubble', 'stopped']) {
+      await page.locator(`#test-${kind}-link`).click();
+      await page.waitForTimeout(100);
+      expect(await page.locator('#steps').evaluate((heading) => heading.scrollCount)).toBe(0);
+      expect(await fragmentFrame(page).evaluate(() => location.hash)).toBe('');
+    }
+    await page.locator('#test-accepted-link').click();
+    await expect.poll(() => fragmentFrame(page).evaluate(() => location.hash)).toBe('#steps');
+    await expect.poll(() => page.locator('#steps').evaluate((heading) => heading.scrollCount)).toBe(1);
+    await page.locator('#test-accepted-link').click();
+    await expect.poll(() => page.locator('#steps').evaluate((heading) => heading.scrollCount)).toBe(2);
+    await page.locator('#test-target-link').click();
+    await page.waitForTimeout(100);
+    expect(await page.locator('#steps').evaluate((heading) => heading.scrollCount)).toBe(2);
+  });
+
   for (const [action, button] of [['middle-click', 'middle'], ['context menu', 'right']]) {
     test(`${mode} ${action} prepares heading links with the fragment query`, async ({ page }) => {
       await goto(page, '/knowledge-base/release-process/?tab=1');

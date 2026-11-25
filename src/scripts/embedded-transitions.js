@@ -114,10 +114,20 @@ document.addEventListener('click', (event) => {
   } catch {
     return;
   }
-  // Native fragment scrolling cannot reliably find a target inside reframed's
-  // shadow tree. Let Astro handle history, then scroll the visible element.
+  // Check after sub-app handlers bubble, but before Astro's document listener
+  // calls preventDefault() itself. Native scrolling misses the shadow tree.
   const target = document.getElementById(id);
-  if (target) setTimeout(() => target.scrollIntoView(), 0);
+  if (!target) return;
+  const root = document.documentElement;
+  const afterSubApp = (click) => {
+    if (click !== event) return;
+    root.removeEventListener('click', afterSubApp);
+    if (!click.defaultPrevented) setTimeout(() => {
+      if (target.isConnected && location.hash === url.hash) target.scrollIntoView();
+    }, 0);
+  };
+  root.addEventListener('click', afterSubApp);
+  setTimeout(() => root.removeEventListener('click', afterSubApp), 0);
 }, true);
 
 /** The reframed element, or what Astro would use when the document is not reframed. */
