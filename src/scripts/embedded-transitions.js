@@ -108,15 +108,29 @@ document.addEventListener('click', (event) => {
   if (!url.hash || url.origin !== location.origin ||
       url.pathname.replace(/\/$/, '') !== location.pathname.replace(/\/$/, '') ||
       url.search !== location.search) return;
-  let id;
+  const raw = url.hash.slice(1);
+  let decoded;
   try {
-    id = decodeURIComponent(url.hash.slice(1));
+    decoded = decodeURIComponent(raw);
   } catch {
-    return;
+    decoded = null;
   }
-  // Check after sub-app handlers bubble, but before Astro's document listener
-  // calls preventDefault() itself. Native scrolling misses the shadow tree.
-  const target = document.getElementById(id);
+  
+  // Try raw fragment first (preserves literal % and %XX escapes in IDs),
+  // then decoded version, then a[name] lookup, then #top fallback
+  let target = raw ? document.getElementById(raw) : null;
+  if (!target && decoded && decoded !== raw) {
+    target = document.getElementById(decoded);
+  }
+  if (!target && raw) {
+    target = document.querySelector(`a[name="${raw}"]`);
+  }
+  if (!target && decoded && decoded !== raw) {
+    target = document.querySelector(`a[name="${decoded}"]`);
+  }
+  if (!target && raw === 'top') {
+    target = document.documentElement;
+  }
   if (!target) return;
   const root = document.documentElement;
   const afterSubApp = (click) => {
