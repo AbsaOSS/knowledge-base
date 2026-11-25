@@ -85,9 +85,6 @@ if (host) {
 // Astro retains the destination URL after a swap, even when the host router
 // removes its trailing slash from location. Use that URL for same-page links.
 let routerPath = location.pathname;
-document.addEventListener('astro:before-swap', (event) => {
-  routerPath = event.to.pathname;
-});
 
 document.addEventListener('click', (event) => {
   const link = event.target?.closest?.('a[href]');
@@ -241,6 +238,7 @@ function adoptIntoHost(el) {
 }
 
 document.addEventListener('astro:before-swap', (event) => {
+  routerPath = event.to.pathname;
   dropPortalSnapshots();
   const newDoc = event.newDocument;
   const current = {

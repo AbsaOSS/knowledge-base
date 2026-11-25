@@ -19,9 +19,9 @@ import Base from '../layouts/Base.astro';
 import Masthead from '../components/Masthead.astro';
 
 export function getStaticPaths() {
-  return getAppPages(process.cwd(), isHeadlessBuild()).map(({ routePath, ...props }) => ({
-    params: { path: routePath },
-    props: { ...props, routePath },
+  return getAppPages(process.cwd(), isHeadlessBuild()).map((props) => ({
+    params: { path: props.routePath },
+    props,
   }));
 }
 
