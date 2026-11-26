@@ -126,6 +126,29 @@ for (const [mode, goto] of [['unbound', gotoFragment], ['bound', gotoBoundFragme
     }
   });
 
+  test(`${mode} links to a named anchor with a quote in its name still scroll`, async ({ page }) => {
+    await goto(page, '/knowledge-base/release-process/?tab=1');
+    await page.evaluate(() => {
+      const doc = document.querySelector('web-fragment').shadowRoot
+        .querySelector('web-fragment-host').shadowRoot;
+      const heading = doc.querySelector('#steps');
+      const anchor = document.createElement('a');
+      anchor.setAttribute('name', 'say"hi');
+      anchor.scrollCount = 0;
+      anchor.scrollIntoView = () => { anchor.scrollCount++; };
+      heading.before(anchor);
+      const link = heading.querySelector('a').cloneNode();
+      link.setAttribute('href', '#say%22hi');
+      link.id = 'test-quote-link';
+      link.textContent = 'quote';
+      heading.parentElement.prepend(link);
+    });
+    await page.locator('#test-quote-link').click();
+    await expect.poll(() => fragmentFrame(page).evaluate(() => location.hash)).toBe('#say%22hi');
+    await expect.poll(() => fragmentFrame(page).evaluate(() =>
+      document.querySelector('a[name="say\\"hi"]').scrollCount)).toBe(1);
+  });
+
   test(`${mode} cancelled fragment links do not scroll`, async ({ page }) => {
     await goto(page, '/knowledge-base/release-process/?tab=1');
     await page.evaluate(() => {

@@ -86,6 +86,16 @@ if (host) {
 // removes its trailing slash from location. Use that URL for same-page links.
 let routerPath = location.pathname;
 
+// Inside a fragment, reframed implements getElementById with an unescaped
+// attribute selector, which throws on an id containing a quote.
+function elementById(id) {
+  try {
+    return document.getElementById(id);
+  } catch {
+    return document.querySelector(`[id="${CSS.escape(id)}"]`);
+  }
+}
+
 function prepareFragmentLink(event) {
   const link = event.target?.closest?.('a[href]');
   if (link?.hasAttribute('data-kb-local-fragment')) {
@@ -118,15 +128,15 @@ document.addEventListener('click', (event) => {
   
   // Try raw fragment first (preserves literal % and %XX escapes in IDs),
   // then decoded version, then a[name] lookup, then #top fallback
-  let target = raw ? document.getElementById(raw) : null;
+  let target = raw ? elementById(raw) : null;
   if (!target && decoded && decoded !== raw) {
-    target = document.getElementById(decoded);
+    target = elementById(decoded);
   }
   if (!target && raw) {
-    target = document.querySelector(`a[name="${raw}"]`);
+    target = document.querySelector(`a[name="${CSS.escape(raw)}"]`);
   }
   if (!target && decoded && decoded !== raw) {
-    target = document.querySelector(`a[name="${decoded}"]`);
+    target = document.querySelector(`a[name="${CSS.escape(decoded)}"]`);
   }
   if (!target && raw === 'top') {
     target = document.documentElement;
