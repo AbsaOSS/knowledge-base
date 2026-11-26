@@ -92,6 +92,150 @@ async function expectNoLeakAcrossThreeHops(page) {
   expect(await queryInShadow(page, 'wf-html[data-kb-headless="true"]'), 'root attributes lost in the swap').not.toBeNull();
 }
 
+for (const [mode, goto] of [['unbound', gotoFragment], ['bound', gotoBoundFragment]]) {
+  test(`${mode} heading links keep the page and scroll to the section`, async ({ page }) => {
+    await goto(page, '/knowledge-base/release-process/?tab=1');
+    await armFragmentProbe(page);
+    const heading = page.locator('#steps');
+    await page.evaluate(() => {
+      const doc = document.querySelector('web-fragment').shadowRoot
+        .querySelector('web-fragment-host').shadowRoot;
+      const heading = doc.querySelector('#steps');
+      const toc = heading.querySelector('a').cloneNode();
+      toc.id = 'test-toc-link';
+      toc.textContent = 'Steps';
+      heading.parentElement.prepend(toc);
+      const spacer = document.createElement('div');
+      spacer.style.height = '1800px';
+      heading.before(spacer);
+    });
+    await page.locator('#test-toc-link').click();
+    await expect.poll(() => fragmentFrame(page)?.evaluate(() => location.hash)).toBe('#steps');
+    expect(await fragmentFrame(page).evaluate(() => location.search)).toBe('?tab=1');
+    await expect.poll(async () => {
+      const box = await heading.boundingBox();
+      return box && box.y >= 0 && box.y < 500;
+    }).toBe(true);
+    expect(await fragmentH1(page)).toBe('Release Process #');
+    expect((await fragmentProbe(page)).alive).toBe(true);
+    expect((await fragmentProbe(page)).swaps).toBe(0);
+    expect(await hostStillAlive(page)).toBe(true);
+    if (mode === 'bound') {
+      expect(new URL(page.url()).pathname.replace(/\/$/, '')).toBe('/knowledge-base/release-process');
+      expect(new URL(page.url()).search).toBe('?tab=1');
+    }
+  });
+
+  test(`${mode} links to a named anchor with a quote in its name still scroll`, async ({ page }) => {
+    await goto(page, '/knowledge-base/release-process/?tab=1');
+    await page.evaluate(() => {
+      const doc = document.querySelector('web-fragment').shadowRoot
+        .querySelector('web-fragment-host').shadowRoot;
+      const heading = doc.querySelector('#steps');
+      const anchor = document.createElement('a');
+      anchor.setAttribute('name', 'say"hi');
+      anchor.scrollCount = 0;
+      anchor.scrollIntoView = () => { anchor.scrollCount++; };
+      heading.before(anchor);
+      const link = heading.querySelector('a').cloneNode();
+      link.setAttribute('href', '#say%22hi');
+      link.id = 'test-quote-link';
+      link.textContent = 'quote';
+      heading.parentElement.prepend(link);
+    });
+    await page.locator('#test-quote-link').click();
+    await expect.poll(() => fragmentFrame(page).evaluate(() => location.hash)).toBe('#say%22hi');
+    await expect.poll(() => fragmentFrame(page).evaluate(() =>
+      document.querySelector('a[name="say\\"hi"]').scrollCount)).toBe(1);
+  });
+
+  test(`${mode} cancelled fragment links do not scroll`, async ({ page }) => {
+    await goto(page, '/knowledge-base/release-process/?tab=1');
+    await page.evaluate(() => {
+      const doc = document.querySelector('web-fragment').shadowRoot
+        .querySelector('web-fragment-host').shadowRoot;
+      const heading = doc.querySelector('#steps');
+      const scroll = heading.scrollIntoView.bind(heading);
+      heading.scrollCount = 0;
+      heading.scrollIntoView = (...args) => { heading.scrollCount++; scroll(...args); };
+      for (const kind of ['target', 'bubble', 'stopped', 'accepted']) {
+        const parent = document.createElement('span');
+        const link = heading.querySelector('a').cloneNode();
+        link.id = `test-${kind}-link`;
+        link.textContent = kind;
+        if (kind === 'target') link.addEventListener('click', (event) => event.preventDefault());
+        if (kind === 'bubble') parent.addEventListener('click', (event) => event.preventDefault());
+        if (kind === 'stopped') parent.addEventListener('click', (event) => {
+          event.preventDefault();
+          event.stopPropagation();
+        });
+        parent.append(link);
+        heading.parentElement.prepend(parent);
+      }
+    });
+
+    for (const kind of ['target', 'bubble', 'stopped']) {
+      await page.locator(`#test-${kind}-link`).click();
+      await page.waitForTimeout(100);
+      expect(await page.locator('#steps').evaluate((heading) => heading.scrollCount)).toBe(0);
+      expect(await fragmentFrame(page).evaluate(() => location.hash)).toBe('');
+    }
+    await page.locator('#test-accepted-link').click();
+    await expect.poll(() => fragmentFrame(page).evaluate(() => location.hash)).toBe('#steps');
+    await expect.poll(() => page.locator('#steps').evaluate((heading) => heading.scrollCount)).toBe(1);
+    await page.locator('#test-accepted-link').click();
+    await expect.poll(() => page.locator('#steps').evaluate((heading) => heading.scrollCount)).toBe(2);
+    await page.locator('#test-target-link').click();
+    await page.waitForTimeout(100);
+    expect(await page.locator('#steps').evaluate((heading) => heading.scrollCount)).toBe(2);
+  });
+
+  for (const [action, button] of [['middle-click', 'middle'], ['context menu', 'right']]) {
+    test(`${mode} ${action} prepares heading links with the fragment query`, async ({ page }) => {
+      await goto(page, '/knowledge-base/release-process/?tab=1');
+      const link = page.locator('#steps a.kb-anchor');
+      const newTab = button === 'middle' ? page.context().waitForEvent('page') : null;
+      await link.click({ button });
+      if (newTab) {
+        const opened = await newTab;
+        expect(opened.url()).toMatch(/\/knowledge-base\/release-process\/?\?tab=1#steps$/);
+      }
+      await expect(link).toHaveAttribute('href', /\/knowledge-base\/release-process\/?\?tab=1#steps$/);
+    });
+  }
+}
+
+test('heading links work on a nested page after a client-side navigation', async ({ page }) => {
+  await gotoBoundFragment(page, DOCS);
+  await armFragmentProbe(page);
+  await clickFragmentLink(page, LINK.customising);
+  await waitForH1(page, H1.customising);
+  await expect.poll(async () => (await fragmentProbe(page)).swaps).toBe(1);
+  await page.evaluate(() => {
+    const doc = document.querySelector('web-fragment').shadowRoot
+      .querySelector('web-fragment-host').shadowRoot;
+    const heading = doc.querySelector('#showcase-landing-page');
+    const link = document.createElement('a');
+    link.id = 'test-toc-link';
+    link.href = '/knowledge-base/user-guide/docs/customising/#showcase-landing-page';
+    link.setAttribute('data-kb-local-fragment', '');
+    link.textContent = 'Showcase landing page';
+    doc.querySelector('#content').prepend(link);
+    const spacer = document.createElement('div');
+    spacer.style.height = '1800px';
+    heading.before(spacer);
+  });
+  await page.locator('#test-toc-link').click();
+  await expect.poll(() => fragmentFrame(page)?.evaluate(() => location.hash)).toBe('#showcase-landing-page');
+  await expect.poll(async () => {
+    const box = await page.locator('#showcase-landing-page').boundingBox();
+    return box && box.y >= 0 && box.y < 500;
+  }).toBe(true);
+  expect(new URL(page.url()).pathname.replace(/\/$/, '')).toBe('/knowledge-base/user-guide/docs/customising');
+  expect((await fragmentProbe(page)).swaps).toBe(1);
+  expect(await hostStillAlive(page)).toBe(true);
+});
+
 // ─────────────────────────────────────────────────────────────────────────────
 test.describe('Unbound fragment (src set): host router owns the address bar', () => {
   test.beforeEach(async ({ page }) => {

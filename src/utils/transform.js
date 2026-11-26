@@ -168,10 +168,12 @@ export { isThemeBootstrap };
  * @param {string}   slug       - this app's slug
  * @param {string}   fileRelDir - path of this HTML file relative to the app root
  * @param {string}   prefix     - URL prefix, e.g. 'knowledge-base'
+ * @param {string}   routePath  - published route relative to the prefix
  * @returns {{headHtml: string, bodyHtml: string, bodyClass: string, title: string|null}}
  */
-export function transformSubAppHtml(html, slug, fileRelDir, prefix) {
+export function transformSubAppHtml(html, slug, fileRelDir, prefix, routePath = [slug, fileRelDir].filter(Boolean).join('/')) {
   const base = `/${prefix}/${slug}/${fileRelDir ? fileRelDir + '/' : ''}`;
+  const pagePath = `/${prefix}/${routePath}/`;
 
   // parse() always yields html > head + body, so a document that ships no
   // explicit <body> is split the same way a browser would split it — no
@@ -199,6 +201,13 @@ export function transformSubAppHtml(html, slug, fileRelDir, prefix) {
 
     for (const attr of el.attrs ?? []) {
       if (URL_ATTRS.has(attr.name) || (attr.name === 'data' && el.tagName === 'object')) {
+        if (el.tagName === 'a' && attr.name === 'href' && attr.value.startsWith('#')) {
+          attr.value = pagePath + attr.value;
+          if (!attrOf(el, 'data-kb-local-fragment')) {
+            el.attrs.push({ name: 'data-kb-local-fragment', value: '' });
+          }
+          continue;
+        }
         const abs = resolveUrl(attr.value, base, prefix, slug);
         if (abs !== null) attr.value = abs;
       } else if (SRCSET_ATTRS.has(attr.name)) {

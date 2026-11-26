@@ -84,8 +84,9 @@ const bodyClasses = [
   <slot name="head" />
   {/* Embedded as a web fragment, the ClientRouter needs two corrections — a
       view transition on the host document, and a swap that keeps reframed's
-      wf-* tree flat. Standalone the module is inert. Bundled to a file, never
-      inlined, so `script-src 'self'` holds (see astro.config.mjs). */}
+      wf-* tree flat. It also keeps same-page links on the current route.
+      Bundled to a file, never inlined, so `script-src 'self'` holds (see
+      astro.config.mjs). */}
   <script>
     import '../scripts/embedded-transitions.js';
   </script>

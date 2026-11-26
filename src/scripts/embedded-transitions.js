@@ -2,7 +2,8 @@
  * src/scripts/embedded-transitions.js
  *
  * Makes Astro's <ClientRouter /> behave inside a web fragment. Base.astro loads
- * it on every page; standalone it does nothing.
+ * it on every page; standalone it only preserves the current URL for
+ * fragment-only links rewritten by the build.
  *
  * Embedded, the knowledge base's scripts run in reframed's hidden iframe, whose
  * `document` is patched so that documentElement/head/body resolve to the
@@ -80,6 +81,78 @@ if (host) {
       await stylesheetsLoaded();
     });
 }
+
+// Astro retains the destination URL after a swap, even when the host router
+// removes its trailing slash from location. Use that URL for same-page links.
+let routerPath = location.pathname;
+
+// Inside a fragment, reframed implements getElementById with an unescaped
+// attribute selector, which throws on an id containing a quote.
+function elementById(id) {
+  try {
+    return document.getElementById(id);
+  } catch {
+    return document.querySelector(`[id="${CSS.escape(id)}"]`);
+  }
+}
+
+function prepareFragmentLink(event) {
+  const link = event.target?.closest?.('a[href]');
+  if (link?.hasAttribute('data-kb-local-fragment')) {
+    const href = link.getAttribute('href');
+    const hashAt = href.indexOf('#');
+    if (hashAt !== -1) link.setAttribute('href', routerPath + location.search + href.slice(hashAt));
+  }
+  return link;
+}
+
+document.addEventListener('auxclick', prepareFragmentLink, true);
+document.addEventListener('contextmenu', prepareFragmentLink, true);
+document.addEventListener('click', (event) => {
+  const link = prepareFragmentLink(event);
+  if (window.top === window || event.defaultPrevented || event.button !== 0 ||
+      event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+  if (!link || link.hasAttribute('download') || (link.target && link.target !== '_self')) return;
+  if (!URL.canParse(link.href, location.href)) return;
+  const url = new URL(link.href, location.href);
+  if (!url.hash || url.origin !== location.origin ||
+      url.pathname.replace(/\/$/, '') !== location.pathname.replace(/\/$/, '') ||
+      url.search !== location.search) return;
+  const raw = url.hash.slice(1);
+  let decoded;
+  try {
+    decoded = decodeURIComponent(raw);
+  } catch {
+    decoded = null;
+  }
+  
+  // Try raw fragment first (preserves literal % and %XX escapes in IDs),
+  // then decoded version, then a[name] lookup, then #top fallback
+  let target = raw ? elementById(raw) : null;
+  if (!target && decoded && decoded !== raw) {
+    target = elementById(decoded);
+  }
+  if (!target && raw) {
+    target = document.querySelector(`a[name="${CSS.escape(raw)}"]`);
+  }
+  if (!target && decoded && decoded !== raw) {
+    target = document.querySelector(`a[name="${CSS.escape(decoded)}"]`);
+  }
+  if (!target && raw === 'top') {
+    target = document.documentElement;
+  }
+  if (!target) return;
+  const root = document.documentElement;
+  const afterSubApp = (click) => {
+    if (click !== event) return;
+    root.removeEventListener('click', afterSubApp);
+    if (!click.defaultPrevented) setTimeout(() => {
+      if (target.isConnected && location.hash === url.hash) target.scrollIntoView();
+    }, 0);
+  };
+  root.addEventListener('click', afterSubApp);
+  setTimeout(() => root.removeEventListener('click', afterSubApp), 0);
+}, true);
 
 /** The reframed element, or what Astro would use when the document is not reframed. */
 const pick = (doc, tag, fallback) => doc.querySelector(tag) ?? fallback;
@@ -206,6 +279,7 @@ function adoptIntoHost(el) {
 }
 
 document.addEventListener('astro:before-swap', (event) => {
+  routerPath = event.to.pathname;
   dropPortalSnapshots();
   const newDoc = event.newDocument;
   const current = {
